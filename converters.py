@@ -360,7 +360,7 @@ def convert_media(src: Path, dst_dir: Path, stem: str, to: str, *,
 
 def convert_image(src: Path, dst_dir: Path, stem: str, to: str, *,
                   quality: int = 90, keep_metadata: bool = True,
-                  density: int = 150) -> Path:
+                  density: int = 150, resize: int = 0) -> Path:
     exe = _which("magick") or _which("convert")
     if not exe:
         raise ConvertError("ImageMagick не найден в PATH")
@@ -387,6 +387,8 @@ def convert_image(src: Path, dst_dir: Path, stem: str, to: str, *,
         cmd += ["-background", "white", "-alpha", "remove", "-alpha", "off"]
     if to in ("jpg", "jpeg", "jfif", "jpe", "webp", "avif", "heic", "jxl", "tiff", "tif"):
         cmd += ["-quality", str(max(1, min(100, quality)))]
+    if resize:
+        cmd += ["-resize", f"{resize}x{resize}>"]  # только уменьшаем, длинная сторона
     if to == "ico":
         cmd += ["-resize", "256x256>"]  # ico не больше 256 px
     cmd += ["-auto-orient", f"{fmt_prefix}:{out}"]
@@ -506,7 +508,8 @@ def convert_any(src: Path, dst_dir: Path, stem: str, to: str, opts: dict) -> Pat
         if dst_cat != "image":
             raise ConvertError(f"Из картинки нельзя сделать .{to}")
         return convert_image(src, dst_dir, stem, to, quality=int(opts.get("quality", 90)),
-                             keep_metadata=common_meta, density=int(opts.get("density", 150)))
+                             keep_metadata=common_meta, density=int(opts.get("density", 150)),
+                             resize=int(opts.get("resize", 0)))
     if cat == "doc":
         if dst_cat != "doc":
             raise ConvertError(f"Из документа нельзя сделать .{to}")

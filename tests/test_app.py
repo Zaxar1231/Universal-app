@@ -338,13 +338,112 @@ def test_universal_still_works(client, media):
     with open(media / "tone.mp3", "rb") as f:
         r = client.post("/api/universal", data={"files": (f, "tone.mp3"), "to": "flac"},
                         content_type="multipart/form-data")
-    d = r.get_json()
-    assert d["done"] == 1 and d["single_file"] == "tone.flac"
+    d = wait_task(client, r.get_json()["task"])
+    assert d["status"] == "done" and d["done"] == 1 and d["single_file"] == "tone.flac"
+
+
+@pytest.mark.skipif(not shutil.which("convert"), reason="нет ImageMagick")
+def test_universal_image_resize(client):
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (1200, 600), (10, 200, 30)).save(buf, "PNG")
+    buf.seek(0)
+    r = client.post("/api/universal", data={"files": (buf, "big.png"), "to": "jpg", "resize": "300"},
+                    content_type="multipart/form-data")
+    d = wait_task(client, r.get_json()["task"])
+    im = Image.open(io.BytesIO(client.get(f"/api/download/{d['job']}?raw=1").data))
+    assert im.size == (300, 150)
+
+
+# ---------------------------------------------------------------- PDF
+
+def make_pdf(pages=3, photo=False):
+    from PIL import Image
+    import random
+    imgs = []
+    for i in range(pages):
+        im = Image.new("RGB", (1600, 2200) if photo else (200, 300), (255, 255, 255))
+        if photo:   # шум плохо жмётся без потерь: имитация скана
+            im = Image.frombytes("RGB", (1600, 2200), bytes(random.getrandbits(8) for _ in range(1600 * 2200 * 3)))
+        imgs.append(im)
+    buf = io.BytesIO()
+    imgs[0].save(buf, "PDF", save_all=True, append_images=imgs[1:])
+    return buf.getvalue()
+
+
+def pdf_task(client, files, **form):
+    data = {"files": [(io.BytesIO(b), n) for n, b in files], **form}
+    r = client.post("/api/pdf", data=data, content_type="multipart/form-data")
+    assert r.status_code == 200, r.get_json()
+    return wait_task(client, r.get_json()["task"])
+
+
+def pages_of(client, d, name=None):
+    from pypdf import PdfReader
+    url = f"/api/file/{d['job']}/{name}" if name else f"/api/download/{d['job']}?raw=1"
+    return len(PdfReader(io.BytesIO(client.get(url).data)).pages)
+
+
+def test_pdf_ranges():
+    import pdftools
+    assert pdftools.parse_ranges("1-3, 5, 8-", 9) == [0, 1, 2, 4, 7, 8]
+    assert pdftools.parse_ranges("", 2) == [0, 1]
+    with pytest.raises(pdftools.PdfError):
+        pdftools.parse_ranges("4", 3)
+    with pytest.raises(pdftools.PdfError):
+        pdftools.parse_ranges("a-b", 3)
+
+
+def test_pdf_merge_split_extract_rotate(client):
+    a, b = make_pdf(3), make_pdf(2)
+    d = pdf_task(client, [("a.pdf", a), ("b.pdf", b)], op="merge", merge_name="all")
+    assert d["single_file"] == "all.pdf" and pages_of(client, d) == 5
+
+    d = pdf_task(client, [("a.pdf", a)], op="split")
+    assert d["names"] == ["a_p1.pdf", "a_p2.pdf", "a_p3.pdf"]
+
+    d = pdf_task(client, [("a.pdf", a)], op="extract", ranges="3,1")
+    assert pages_of(client, d) == 2
+
+    from pypdf import PdfReader
+    d = pdf_task(client, [("a.pdf", a)], op="rotate", angle="90", ranges="2")
+    r = PdfReader(io.BytesIO(client.get(f"/api/download/{d['job']}?raw=1").data))
+    assert [p.rotation for p in r.pages] == [0, 90, 0]
+
+
+def test_pdf_compress(client):
+    src = make_pdf(1, photo=True)
+    d = pdf_task(client, [("scan.pdf", src)], op="compress", quality="50", max_px="800")
+    out = client.get(f"/api/download/{d['job']}?raw=1").data
+    assert d["status"] == "done" and len(out) < len(src) / 3
+
+
+def test_pdf_password_roundtrip(client):
+    d = pdf_task(client, [("a.pdf", make_pdf(2))], op="protect", new_password="тайна1")
+    locked = client.get(f"/api/download/{d['job']}?raw=1").data
+    from pypdf import PdfReader
+    assert PdfReader(io.BytesIO(locked)).is_encrypted
+
+    d = pdf_task(client, [("x.pdf", locked)], op="rotate", angle="180")
+    assert d["status"] == "error" and "паролем" in d["failed"][0]["error"]
+    d = pdf_task(client, [("x.pdf", locked)], op="unlock", password="не тот")
+    assert "Неверный пароль" in d["failed"][0]["error"]
+    d = pdf_task(client, [("x.pdf", locked)], op="unlock", password="тайна1")
+    assert not PdfReader(io.BytesIO(client.get(f"/api/download/{d['job']}?raw=1").data)).is_encrypted
+
+
+def test_pdf_bad_requests(client):
+    one = [("a.pdf", make_pdf(1))]
+    r = client.post("/api/pdf", data={"op": "merge", "files": [(io.BytesIO(b), n) for n, b in one]},
+                    content_type="multipart/form-data")
+    assert r.status_code == 400
+    d = pdf_task(client, [("bad.pdf", b"not a pdf")], op="rotate")
+    assert d["status"] == "error"
 
 
 def test_index_renders(client):
     html = client.get("/").data.decode()
-    for mode in ("image", "edit", "dl", "qr", "topdf"):
+    for mode in ("image", "edit", "dl", "qr", "topdf", "pdft"):
         assert f'value="{mode}"' in html
 
 

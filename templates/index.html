@@ -276,6 +276,7 @@ ul.files .up { width: 40px; height: 40px; }
       'pdf': 'M360-460h40v-80h40q17 0 28.500-11.500T480-580v-40q0-17-11.500-28.500T440-660h-80v200Zm40-120v-40h40v40h-40Zm120 120h80q17 0 28.500-11.500T640-500v-120q0-17-11.500-28.500T600-660h-80v200Zm40-40v-120h40v120h-40Zm120 40h40v-80h40v-40h-40v-40h40v-40h-80v200ZM320-240q-33 0-56.500-23.500T240-320v-480q0-33 23.500-56.500T320-880h480q33 0 56.500 23.500T880-800v480q0 33-23.500 56.500T800-240H320Zm0-80h480v-480H320v480ZM160-80q-33 0-56.500-23.500T80-160v-560h80v560h560v80H160Z',
       'photo': 'M480-260q75 0 127.500-52.500T660-440q0-75-52.500-127.500T480-620q-75 0-127.500 52.500T300-440q0 75 52.500 127.500T480-260Zm0-80q-42 0-71-29t-29-71q0-42 29-71t71-29q42 0 71 29t29 71q0 42-29 71t-71 29ZM160-120q-33 0-56.500-23.500T80-200v-480q0-33 23.500-56.500T160-760h126l74-80h240l74 80h126q33 0 56.500 23.500T880-680v480q0 33-23.500 56.500T800-120H160Z',
       'topdf': 'M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.500-23.500T160-160v-640q0-33 23.500-56.500T240-880h320l240 240v480q0 33-23.500 56.500T720-80H240Zm280-520h200L520-800v200Z',
+      'pdft': 'M120-120v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80ZM240-280q-33 0-56.500-23.500T160-360v-400q0-33 23.500-56.500T240-840h480q33 0 56.500 23.500T800-760v400q0 33-23.500 56.500T720-280H240Zm0-80h480v-400H240v400Zm80-80h320v-80H320v80Zm0-160h320v-80H320v80Z',
       'edit': 'M760-120 480-400l-94 94q8 15 11 32t3 34q0 66-47 113T240-80q-66 0-113-47T80-240q0-66 47-113t113-47q18 0 34.500 3t31.500 11l94-94-94-94q-15 8-31.500 11t-34.500 3q-66 0-113-47T80-720q0-66 47-113t113-47q66 0 113 47t47 113q0 18-3 34t-11 32l494 494v40H760ZM600-520l-80-80 240-240h120v40L600-520ZM240-640q33 0 56.500-23.500T320-720q0-33-23.500-56.500T240-800q-33 0-56.500 23.500T160-720q0 33 23.500 56.500T240-640Zm240 180q8 0 14-6t6-14q0-8-6-14t-14-6q-8 0-14 6t-6 14q0 8 6 14t14 6ZM240-160q33 0 56.500-23.500T320-240q0-33-23.500-56.500T240-320q-33 0-56.500 23.500T160-240q0 33 23.500 56.500T240-160Z',
       'dl': 'M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.500-23.500T160-240v-120h80v120h480v-120h80v120q0 33-23.500 56.500T720-160H240Z',
       'qr': 'M120-520v-320h320v320H120Zm80-80h160v-160H200v160Zm-80 480v-320h320v320H120Zm80-80h160v-160H200v160Zm320-320v-320h320v320H520Zm80-80h160v-160H600v160Zm160 480v-80h80v80h-80ZM520-360v-80h80v80h-80Zm80 80v-80h80v80h-80Zm-80 80v-80h80v80h-80Zm80 80v-80h80v80h-80Zm80-80v-80h80v80h-80Zm0-160v-80h80v80h-80Zm80 80v-80h80v80h-80Z'
@@ -286,7 +287,7 @@ ul.files .up { width: 40px; height: 40px; }
       <span class="t-label-m">{{ label }}</span></label>
     {% endfor %}
     <span class="sep" role="separator"></span>
-    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF')] %}
+    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF'),('pdft','Правка PDF')] %}
     <label class="nav"><input type="radio" name="mode" value="{{ key }}">
       <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
       <span class="t-label-m">{{ label }}</span></label>
@@ -423,6 +424,9 @@ ul.files .up { width: 40px; height: 40px; }
           <p class="hint" id="dpiHint"></p>
         </div>
 
+        <label class="tf" id="resizeRow" hidden><span>Уменьшить до, px по длинной стороне</span>
+          <input type="number" id="uniResize" min="0" max="20000" step="10" placeholder="не уменьшать"></label>
+
         <div class="slider-row" id="qField" hidden>
           <div class="top"><label class="t-label-l muted" for="quality">Качество</label><span class="t-label-l" id="qVal">90</span></div>
           <input type="range" id="quality" min="10" max="100" step="1" value="90">
@@ -499,6 +503,30 @@ ul.files .up { width: 40px; height: 40px; }
             <label class="tf" id="gapRow"><span>Между фото, мм</span><input type="number" id="gap" min="0" max="30" value="5"></label>
           </div>
         </div>
+        </div>
+
+        <!-- PDF-инструменты -->
+        <div id="pdftBox" class="sect" hidden>
+          <div class="field">
+            <span class="lbl t-label-l">Что сделать</span>
+            <div class="chips" id="pOps">
+              {% for v, l in [('merge','Склеить'),('split','Разделить'),('extract','Вытащить страницы'),('rotate','Повернуть'),('compress','Сжать'),('protect','Поставить пароль'),('unlock','Снять пароль')] %}
+              <input type="radio" name="pop" id="pop-{{ v }}" value="{{ v }}" {% if v == 'merge' %}checked{% endif %}><label for="pop-{{ v }}">{{ l }}</label>
+              {% endfor %}
+            </div>
+            <p class="hint" id="pHint"></p>
+          </div>
+          <label class="tf" id="pRangesRow"><span>Страницы</span><input type="text" id="pRanges" placeholder="все" spellcheck="false" autocomplete="off"></label>
+          <label class="tf" id="pAngleRow"><span>Поворот</span><select id="pAngle"><option value="90">90° по часовой</option><option value="270">90° против</option><option value="180">180°</option></select></label>
+          <div id="pCompress" class="sect">
+            <div class="slider-row">
+              <div class="top"><label class="t-label-l muted" for="pQ">Качество картинок</label><span class="t-label-l" id="pQVal">70</span></div>
+              <input type="range" id="pQ" min="20" max="95" step="5" value="70">
+            </div>
+            <label class="tf"><span>Картинки не больше</span><select id="pMax"><option value="1000">1000 px (для экрана)</option><option value="1600" selected>1600 px (сбалансировано)</option><option value="2500">2500 px (для печати)</option><option value="0">не уменьшать</option></select></label>
+          </div>
+          <label class="tf" id="pNewPassRow"><span>Новый пароль</span><input type="text" id="pNewPass" autocomplete="off" spellcheck="false"></label>
+          <label class="tf" id="pPassRow"><span>Текущий пароль PDF</span><input type="password" id="pPass" autocomplete="off"></label>
         </div>
 
         <!-- редактор видео и аудио -->
@@ -785,9 +813,11 @@ ul.files .up { width: 40px; height: 40px; }
     image: { title: 'Картинки', kind: 'uni' }, audio: { title: 'Аудио', kind: 'uni' },
     video: { title: 'Видео', kind: 'uni' }, doc: { title: 'Документы', kind: 'uni' },
     pdf: { title: 'PDF в картинки', kind: 'pdf' }, photo: { title: 'Фото в A4', kind: 'photo' }, topdf: { title: 'Фото в PDF', kind: 'topdf' },
+    pdft: { title: 'PDF-инструменты', kind: 'pdft' },
     edit: { title: 'Редактор видео и аудио', kind: 'edit' }, dl: { title: 'Скачать видео', kind: 'dl' }, qr: { title: 'QR-коды', kind: 'qr' },
   };
-  const isNew = () => ['edit', 'dl', 'qr'].includes(MODES[mode()].kind);
+  const isNew = () => ['edit', 'dl', 'qr', 'pdft'].includes(MODES[mode()].kind);
+  const pOp = () => qs('input[name=pop]:checked').value;
   const qrKind = () => qs('input[name=qrk]:checked').value;
   const mode = () => qs('input[name=mode]:checked').value;
   const isUni = () => MODES[mode()].kind === 'uni';
@@ -806,7 +836,7 @@ ul.files .up { width: 40px; height: 40px; }
 
   function accepts(f) {
     const m = mode();
-    if (m === 'pdf') return /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+    if (m === 'pdf' || m === 'pdft') return /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
     if (isPhotoish()) return IMG_RE.test(f.name) || f.type.startsWith('image/');
     if (m === 'qr') return /\.(txt|csv|docx)$/i.test(f.name);
     if (m === 'dl') return false;
@@ -834,7 +864,7 @@ ul.files .up { width: 40px; height: 40px; }
       li.querySelector('.name').textContent = f.name; li.querySelector('.name').title = f.name;
       li.querySelector('.size').textContent = fmtSize(f.size);
       li.querySelector('button').onclick = () => { files.splice(i, 1); render(); };
-      if (mode() === 'edit' && files.length > 1 && i > 0) {
+      if ((mode() === 'edit' || (mode() === 'pdft' && pOp() === 'merge')) && files.length > 1 && i > 0) {
         const up = document.createElement('button');
         up.className = 'icon-btn state up'; up.title = up.ariaLabel = 'Поднять выше';
         up.innerHTML = '<svg viewBox="0 -960 960 960"><path d="M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z"/></svg>';
@@ -857,6 +887,7 @@ ul.files .up { width: 40px; height: 40px; }
   function updateGo() {
     const m = mode(); let ok = files.length > 0, label = 'Конвертировать';
     if (m === 'edit') label = $('eMerge').checked && files.length > 1 ? 'Склеить и сохранить' : 'Применить';
+    if (m === 'pdft') { ok = pOp() === 'merge' ? files.length > 1 : files.length > 0; label = { merge: 'Склеить', split: 'Разделить', extract: 'Вытащить', rotate: 'Повернуть', compress: 'Сжать', protect: 'Защитить', unlock: 'Снять пароль' }[pOp()]; }
     if (m === 'dl') { ok = /https?:\/\//i.test($('urls').value); label = 'Скачать'; }
     if (m === 'qr') {
       const k = qrKind();
@@ -940,7 +971,7 @@ ul.files .up { width: 40px; height: 40px; }
   function syncSettings() {
     const m = mode(), k = MODES[m].kind, uni = k === 'uni', topdf = k === 'topdf', photo = k === 'photo' || topdf, pdf = k === 'pdf';
     $('classicBox').hidden = isNew();
-    $('editBox').hidden = k !== 'edit'; $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
+    $('editBox').hidden = k !== 'edit'; $('pdftBox').hidden = k !== 'pdft'; if (k === 'pdft') syncPdft(); $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
     if (isNew()) { if (k === 'edit') syncEdit(); if (k === 'dl') syncDl(); if (k === 'qr') syncQr(); return; }
     $('uniField').hidden = !uni;
     $('formatsField').hidden = !(pdf || k === 'photo');
@@ -967,7 +998,7 @@ ul.files .up { width: 40px; height: 40px; }
     } else {
       showDpi = !vector.includes(f); showQ = !noQuality.includes(f) || topdf;
     }
-    $('dpiField').hidden = !showDpi; $('qField').hidden = !showQ;
+    $('dpiField').hidden = !showDpi; $('qField').hidden = !showQ; $('resizeRow').hidden = m !== 'image';
     $('avBox').hidden = !showAV; $('metaRow').hidden = !showMeta;
     $('nameRow').hidden = !showName; $('nameHint').hidden = !showName;
     $('grayRow').hidden = noGray.includes(f) || uni;
@@ -1002,14 +1033,15 @@ ul.files .up { width: 40px; height: 40px; }
     topdf: 'Фото раскладываются на листах A4: по одному на страницу или сеткой.',
     edit: 'Обрезка, склейка, кадрирование, поворот, скорость, громкость, сжатие до нужного размера и GIF. Работает ffmpeg.',
     dl: 'Видео и музыка с YouTube, TikTok, VK, Rutube и ещё ~1800 сайтов. Качается сюда, на этот компьютер.',
+    pdft: 'Склеить, разделить, вытащить страницы, повернуть, сжать, поставить или снять пароль.',
     qr: 'Один код для ссылки, Wi‑Fi или контакта, либо сотни кодов разом из списка.',
   };
   function applyMode() {
     const m = mode(), k = MODES[m].kind;
     $('title').textContent = MODES[m].title; $('subtitle').textContent = SUBS[m];
-    const acc = { pdf: 'application/pdf,.pdf', qr: '.txt,.csv,.docx', dl: '', edit: caps ? caps.categories.edit.inputs.map(e => '.' + e).join(',') : 'audio/*,video/*' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps && caps.categories[m] ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
+    const acc = { pdf: 'application/pdf,.pdf', pdft: 'application/pdf,.pdf', qr: '.txt,.csv,.docx', dl: '', edit: caps ? caps.categories.edit.inputs.map(e => '.' + e).join(',') : 'audio/*,video/*' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps && caps.categories[m] ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
     picker.accept = acc; dirPicker.accept = acc;
-    const what = { pdf: 'PDF', image: 'картинки', audio: 'аудиофайлы', video: 'видео', doc: 'документы', edit: 'видео или аудио', qr: 'списки ссылок' }[m] || 'фото';
+    const what = { pdf: 'PDF', image: 'картинки', audio: 'аудиофайлы', video: 'видео', doc: 'документы', pdft: 'PDF', edit: 'видео или аудио', qr: 'списки ссылок' }[m] || 'фото';
     $('dropTitle').textContent = `Перетащи ${what} сюда`;
     $('dropSub').textContent = k === 'pdf' ? 'Можно сразу сотню. Папку тоже можно перетащить.' : 'или нажми, чтобы выбрать. Папку тоже можно перетащить.';
     const d = { topdf: 200, photo: 300 }[m] || 150; $('dpi').value = d; $('dpiVal').textContent = d + ' DPI';
@@ -1023,7 +1055,7 @@ ul.files .up { width: 40px; height: 40px; }
     const pb = $('engineBanner'); pb.hidden = true;
     if (caps) {
       const need = { image: ['imagemagick', 'ImageMagick'], audio: ['ffmpeg', 'ffmpeg'], video: ['ffmpeg', 'ffmpeg'], doc: ['pandoc', 'pandoc'],
-        edit: ['ffmpeg', 'ffmpeg'], dl: ['ytdlp', 'yt-dlp (pip install yt-dlp)'], qr: ['qrcode', 'Пакет qrcode (pip install qrcode)'] }[m];
+        edit: ['ffmpeg', 'ffmpeg'], pdft: ['pypdf', 'Пакет pypdf (pip install pypdf)'], dl: ['ytdlp', 'yt-dlp (pip install yt-dlp)'], qr: ['qrcode', 'Пакет qrcode (pip install qrcode)'] }[m];
       if (need && !caps.engines[need[0]]) { pb.hidden = false; pb.textContent = `${need[1]} не найден в PATH. Установи его и перезапусти сервер, иначе этот режим не заработает.`; }
     }
     if (m === 'pdf' && !POPPLER_OK) { $('engineBanner').hidden = false; $('engineBanner').textContent = 'Poppler не найден в PATH. Установи poppler-utils и перезапусти сервер, иначе конвертация PDF не заработает.'; }
@@ -1046,6 +1078,13 @@ ul.files .up { width: 40px; height: 40px; }
 
     let url;
     if (k === 'edit') { url = '/api/edit'; editForm(fd); }
+    else if (k === 'pdft') {
+      url = '/api/pdf';
+      fd.append('op', pOp()); fd.append('ranges', $('pRanges').value); fd.append('angle', $('pAngle').value);
+      fd.append('quality', $('pQ').value); fd.append('max_px', $('pMax').value);
+      fd.append('password', $('pPass').value); fd.append('new_password', $('pNewPass').value);
+      fd.append('merge_name', files[0].name.replace(/\.[^.]+$/, '') + '_merged');
+    }
     else if (k === 'dl') { url = '/api/dl'; dlForm(fd); }
     else if (k === 'qr') { url = '/api/qr/bulk'; qrStyle(fd); fd.append('links', $('qrLinks').value); fd.append('dedupe', $('qrDedupe').checked ? '1' : '0'); fd.append('column', $('qrCol').value.trim()); }
     else if (k === 'uni') {
@@ -1057,6 +1096,7 @@ ul.files .up { width: 40px; height: 40px; }
       fd.append('sample_rate', $('sampleRate').value);
       fd.append('keep_metadata', $('keepMeta').checked ? '1' : '0');
       fd.append('name_template', $('nameTpl').value || '%name%');
+      fd.append('resize', m === 'image' ? ($('uniResize').value || 0) : 0);
     } else {
       url = { pdf: '/api/convert', photo: '/api/photos', topdf: '/api/photos2pdf' }[k];
       fd.append('format', k === 'topdf' ? 'jpg' : fmt());
@@ -1130,13 +1170,19 @@ ul.files .up { width: 40px; height: 40px; }
     }).catch(() => setTimeout(tick, 1500));
     tick();
   }
+  function plural(n, [one, few, many]) {
+    const m10 = n % 10, m100 = n % 100;
+    return n + ' ' + (m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many);
+  }
   function taskResult(d) {
     let html = '';
-    const unit = d.kind === 'dl' ? 'ссылок' : 'файлов';
+    const unit = d.kind === 'dl' ? ['ссылки', 'ссылок', 'ссылок'] : ['файла', 'файлов', 'файлов'];
     if (d.files) {
       const one = !!d.single_file, href = `/api/download/${d.job}${one ? '?raw=1' : ''}`;
-      const head = d.status === 'cancelled' ? 'Отменено. Успело сохраниться' : `Готово: ${d.done} из ${d.total} ${unit}. Файлов`;
-      html += `<div class="result"><span class="t-body-m">${head}: ${d.files}.</span>` +
+      const got = plural(d.files, ['файл', 'файла', 'файлов']);
+      const head = d.status === 'cancelled' ? `Отменено. Успело сохраниться: ${got}.`
+        : d.total > 1 ? `Готово ${d.done} из ${plural(d.total, unit)}, на выходе ${got}.` : `Готово, на выходе ${got}.`;
+      html += `<div class="result"><span class="t-body-m">${head}</span>` +
         `<a class="btn filled state" href="${href}" download>Скачать ${esc(one ? d.single_file : d.archive)}</a>`;
       if (!one && d.names && d.names.length) html += '<ul class="names">' + d.names.map(n => `<li><a href="/api/file/${d.job}/${encodeURIComponent(n)}" download>${esc(n)}</a></li>`).join('') + '</ul>';
       html += '</div>';
@@ -1210,6 +1256,30 @@ ul.files .up { width: 40px; height: 40px; }
   const player = () => $('previewSlot').firstChild;
   $('setStart').onclick = () => { if (player()) $('eStart').value = fmtT(player().currentTime); };
   $('setEnd').onclick = () => { if (player()) $('eEnd').value = fmtT(player().currentTime); };
+
+  /* ---------- PDF-инструменты ---------- */
+  const P_HINTS = {
+    merge: 'Файлы склеиваются по порядку списка, стрелкой ↑ можно поднять файл.',
+    split: 'Каждая страница станет отдельным PDF. Можно указать, какие страницы нужны.',
+    extract: 'Выбранные страницы соберутся в новый PDF в указанном порядке.',
+    rotate: 'Если страницы не указаны, повернутся все.',
+    compress: 'Пережимает картинки внутри PDF. Сильнее всего помогает сканам и фото. Текст не трогается.',
+    protect: 'PDF будет открываться только с паролем (шифрование AES-256).',
+    unlock: 'Нужен текущий пароль: взломать PDF без него нельзя.',
+  };
+  function syncPdft() {
+    const op = pOp();
+    $('pHint').textContent = P_HINTS[op];
+    $('pRangesRow').hidden = !['split', 'extract', 'rotate'].includes(op);
+    $('pRanges').placeholder = op === 'extract' ? 'например 1-3, 5, 8-' : 'все';
+    $('pAngleRow').hidden = op !== 'rotate'; $('pCompress').hidden = op !== 'compress';
+    $('pNewPassRow').hidden = op !== 'protect';
+    $('pPassRow').querySelector('span').textContent = op === 'unlock' ? 'Текущий пароль PDF' : 'Пароль, если PDF защищён';
+    $('pQVal').textContent = $('pQ').value; paintSlider($('pQ'));
+    updateGo();
+  }
+  $('pdftBox').addEventListener('input', syncPdft);
+  $('pOps').addEventListener('change', () => { statusEl.hidden = true; syncPdft(); render(); });
 
   /* ---------- скачивание ---------- */
   const dlMode = () => qs('input[name=dlm]:checked').value;

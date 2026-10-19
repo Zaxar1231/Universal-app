@@ -36,6 +36,7 @@ from flask import Flask, Response, jsonify, render_template, request, send_file,
 import converters as conv
 import downloader
 import editor
+import pdftools
 import qrtools
 from tasks import Task, TaskManager
 
@@ -624,7 +625,7 @@ def formats():
     """Какие категории и форматы умеет сервер (нужно интерфейсу для выпадающих списков)."""
     eng = conv.engines()
     eng.update({"ytdlp": downloader.available(), "ytdlp_version": downloader.version(),
-                "qrcode": qrtools.available()})
+                "qrcode": qrtools.available(), "pypdf": pdftools.available()})
     cats = {}
     for name, table in conv.CATEGORIES.items():
         tg = conv.targets_for(name)
@@ -658,6 +659,7 @@ def universal():
             "bitrate": request.form.get("bitrate", "auto"),
             "sample_rate": request.form.get("sample_rate", "auto"),
             "keep_metadata": request.form.get("keep_metadata", "1") == "1",
+            "resize": num("resize", 0, 0, 20000),
         }
         if opts["bitrate"] != "auto":
             opts["bitrate"] = str(num("bitrate", 128, 8, 640))
@@ -671,57 +673,74 @@ def universal():
     if not files:
         return jsonify({"error": "Файлы не выбраны"}), 400
 
-    purge_old_jobs()
-    job_id = uuid.uuid4().hex[:12]
-    job_dir = WORK_ROOT / job_id
-    in_dir, out_dir = job_dir / "in", job_dir / "out"
-    in_dir.mkdir(parents=True)
-    out_dir.mkdir(parents=True)
-    archive = remember_archive_name(job_dir, request.form.get("archive_name", ""))
+    job_id, job_dir, archive = new_job(request.form.get("archive_name", ""))
+    items = save_uploads(files, job_dir / "in")
+    task = Task(job_id, "convert", job_dir, archive)
+    TASKS.submit(task, lambda t: run_convert_task(t, items, to, opts, template))
+    return jsonify(task.to_dict())
 
-    used: dict[str, int] = {}
-    tasks = []
-    for f in files:
-        ext = Path(f.filename).suffix.lower()
-        stem = safe_stem(f.filename)
-        n = used.get(stem, 0)
-        used[stem] = n + 1
-        if n:
-            stem = f"{stem}_{n}"
-        src = in_dir / f"{stem}{ext}"
-        f.save(src)
-        tasks.append((src, stem))
+
+def run_convert_task(task: Task, items: list, to: str, opts: dict, template: str) -> None:
+    """Тело задачи конвертера: файлы параллельно, прогресс по числу готовых."""
+    out_dir = task.out_dir
+    n = task.total = len(items)
 
     def work(t):
         src, stem = t
+        if task.cancel_event.is_set():
+            return None
         out_stem = apply_name_template(template, stem)
         try:
-            out = conv.convert_any(src, out_dir, out_stem, to, opts)
+            conv.convert_any(src, out_dir, out_stem, to, opts)
         except conv.ConvertError as e:
-            return {"name": src.name, "ok": False, "error": str(e)}
+            return {"name": src.name, "error": str(e)}
         except Exception as e:  # неожиданная ошибка одного файла не должна валить пачку
-            return {"name": src.name, "ok": False, "error": f"Внутренняя ошибка: {e.__class__.__name__}"}
-        return {"name": src.name, "ok": True, "files": [out.name]}
+            return {"name": src.name, "error": f"Внутренняя ошибка: {e.__class__.__name__}"}
+        return {}
 
     # видео тяжёлое: меньше потоков, чтобы не съесть весь процессор
-    heavy = any(conv.category_of(t[0].suffix) in ("video",) for t in tasks)
+    heavy = any(conv.category_of(t[0].suffix) in ("video",) for t in items)
     workers = max(1, min(2 if heavy else 8, os.cpu_count() or 2))
+    finished = 0
+    task.update(0, f"Конвертирую {n} файлов в {to.upper()}…" if n > 1 else f"Конвертирую в {to.upper()}…")
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        results = list(pool.map(work, tasks))
+        for res in pool.map(work, items):
+            finished += 1
+            if res is None:
+                continue
+            if res:
+                task.failed.append(res)
+            else:
+                task.done += 1
+            task.update(finished / n, f"Готово {finished} из {n}")
 
-    shutil.rmtree(in_dir, ignore_errors=True)
+    shutil.rmtree(task.job_dir / "in", ignore_errors=True)
     for hidden in out_dir.glob(".*"):   # временные обложки и профили LibreOffice
         shutil.rmtree(hidden, ignore_errors=True) if hidden.is_dir() else hidden.unlink(missing_ok=True)
+    task.check_cancel()
 
-    ok = [r for r in results if r["ok"]]
-    resp = {
-        "job": job_id, "archive": archive, "total": len(results),
-        "done": len(ok), "failed": [r for r in results if not r["ok"]],
-        "files": sum(len(r["files"]) for r in ok),
-    }
-    if len(ok) == 1 and not resp["failed"]:
-        resp["single_file"] = ok[0]["files"][0]
-    return jsonify(resp)
+
+# ---------- PDF-инструменты ----------
+
+@app.route("/api/pdf", methods=["POST"])
+def pdf_tools():
+    if not pdftools.available():
+        return jsonify({"error": "Не установлен pypdf: pip install pypdf"}), 500
+    try:
+        opts = pdftools.read_opts(request.form)
+    except pdftools.PdfError as e:
+        return jsonify({"error": str(e)}), 400
+    files = [f for f in request.files.getlist("files") if f.filename]
+    if not files:
+        return jsonify({"error": "Файлы не выбраны"}), 400
+    if opts["op"] == "merge" and len(files) < 2:
+        return jsonify({"error": "Для склейки нужно хотя бы два PDF"}), 400
+    job_id, job_dir, archive = new_job(request.form.get("archive_name", "") or "pdf")
+    items = save_uploads(files, job_dir / "in")
+    merge_name = safe_stem(request.form.get("merge_name") or "merged")
+    task = Task(job_id, "pdf", job_dir, archive)
+    TASKS.submit(task, lambda t: pdftools.run_pdf_task(t, items, opts, merge_name))
+    return jsonify(task.to_dict())
 
 
 @app.route("/api/download/<job>")

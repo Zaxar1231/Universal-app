@@ -5,18 +5,19 @@
 ## Режимы
 | Режим | Что делает | Нужно |
 |---|---|---|
-| Картинки | PNG, JPG, WebP, GIF, AVIF, HEIC, ICO, TIFF, PSD, RAW и другие | ImageMagick |
+| Картинки | PNG, JPG, WebP, GIF, AVIF, HEIC, ICO, TIFF, PSD, RAW и другие; можно сразу уменьшить до N px | ImageMagick |
 | Аудио | MP3, WAV, FLAC, OGG, Opus, AAC, M4A и другие, а также аудио в видео | ffmpeg |
 | Видео | MP4, MKV, WebM, AVI, MOV и другие, а также звук из видео | ffmpeg |
 | Документы | DOCX, DOC, MD, HTML, RTF, EPUB, ODT, CSV и другие | pandoc (+ LibreOffice для .doc) |
 | PDF в картинки | JPG, PNG, TIFF, WebP, SVG, PS, EPS | poppler |
 | Фото в A4 | фото приводятся к листу A4 с нужным DPI | Pillow |
 | Фото в PDF | 1, 2, 4, 6, 8 или 9 фото на лист A4 | Pillow |
+| **Правка PDF** | склеить, разделить по страницам, вытащить страницы (1-3, 5, 8-), повернуть, сжать сканы, поставить или снять пароль | pypdf (ставится сам) |
 | **Редактор** | обрезка, склейка, кадрирование 9:16/1:1/…, поворот, разрешение, fps, скорость 0.25–4×, громкость, нормализация, появление/затухание, без звука, сжатие до N МБ, H.264/H.265/VP9/AV1, видео в GIF, предпросмотр с выбором начала и конца | ffmpeg |
 | **Скачать видео** | YouTube, TikTok, VK, Rutube, Instagram, X, Twitch, SoundCloud и ~1800 сайтов; видео до 4K или только звук (MP3/M4A/Opus/FLAC/WAV), плейлисты, субтитры, обложки, cookies для закрытого | yt-dlp, ffmpeg |
 | **QR-коды** | текст/ссылка, Wi‑Fi, контакт (vCard) с живым предпросмотром; пачка из списка, .txt, .csv или .docx; PNG/SVG/JPG, цвета, прозрачный фон | qrcode |
 
-Долгие операции (редактор, скачивание) идут в фоне: видно проценты, их можно отменить.
+Конвертер, редактор, скачивание и правка PDF идут в фоне: видно проценты, их можно отменить.
 
 ## Установка
 1. Python 3.10 или новее (на Windows отметь Add Python to PATH).
@@ -24,7 +25,7 @@
    - Windows: `choco install ffmpeg imagemagick pandoc poppler libreoffice-fresh`
    - Debian/Ubuntu: `sudo apt install ffmpeg imagemagick pandoc poppler-utils libreoffice`
    - macOS: `brew install ffmpeg imagemagick pandoc poppler`
-3. Запуск: Windows `run.bat`, Linux/macOS `./run.sh`. Скрипты сами создадут окружение, поставят зависимости и каждый раз обновят yt-dlp.
+3. Запуск: Windows `run.bat`, Linux/macOS `./run.sh`. Скрипты сами создадут окружение, доставят новые зависимости после обновления и каждый раз обновят yt-dlp.
 4. Открой http://localhost:5000
 
 Если нужной программы нет, интерфейс покажет красный баннер в соответствующем режиме.
