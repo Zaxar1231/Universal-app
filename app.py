@@ -36,6 +36,7 @@ from flask import Flask, Response, jsonify, render_template, request, send_file,
 import converters as conv
 import downloader
 import editor
+import engines as engine_store
 import pdftools
 import qrtools
 from tasks import Task, TaskManager
@@ -625,7 +626,9 @@ def formats():
     """Какие категории и форматы умеет сервер (нужно интерфейсу для выпадающих списков)."""
     eng = conv.engines()
     eng.update({"ytdlp": downloader.available(), "ytdlp_version": downloader.version(),
-                "qrcode": qrtools.available(), "pypdf": pdftools.available()})
+                "qrcode": qrtools.available(), "pypdf": pdftools.available(),
+                "poppler": all(poppler_ok().values()), "can_install": engine_store.can_install(),
+                "desktop": bool(os.environ.get("UNIVERSAL_DESKTOP"))})
     cats = {}
     for name, table in conv.CATEGORIES.items():
         tg = conv.targets_for(name)
@@ -983,11 +986,25 @@ def qr_bulk():
                     "failed": failed, "files": ok + 1})
 
 
+@app.route("/api/engines/install/<name>", methods=["POST"])
+def engine_install(name: str):
+    """Настольная версия: скачать движок одной кнопкой (фоновая задача с прогрессом)."""
+    if not engine_store.can_install():
+        return jsonify({"error": "Автоустановка движков есть только в Windows-версии"}), 400
+    if name not in engine_store.CATALOG:
+        return jsonify({"error": "Неизвестный движок"}), 404
+    job_id, job_dir, archive = new_job("engine")
+    task = Task(job_id, "engine", job_dir, archive)
+    TASKS.submit(task, lambda t: engine_store.install(name, t))
+    return jsonify(task.to_dict())
+
+
 @app.route("/api/engines")
 def engines_status():
     eng = conv.engines()
     eng.update({"poppler": all(poppler_ok().values()), "ytdlp": downloader.available(),
-                "ytdlp_version": downloader.version(), "qrcode": qrtools.available()})
+                "ytdlp_version": downloader.version(), "qrcode": qrtools.available(),
+                "can_install": engine_store.can_install(), "catalog": engine_store.status()})
     return jsonify(eng)
 
 

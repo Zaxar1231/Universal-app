@@ -164,7 +164,7 @@ footer { padding: 32px 0 calc(32px + env(safe-area-inset-bottom)); border-top: 1
       <p class="muted">Конвертер форматов в духе vert.sh, редактор видео и аудио на ffmpeg, скачивание видео с YouTube, TikTok, VK и ещё ~1800 сайтов, правка PDF и QR-коды. Ставится на компьютер или домашний сервер, файлы никуда не уходят.</p>
       <div class="actions">
         <a class="btn filled" href="#try">Попробовать в браузере</a>
-        <a class="btn tonal" href="https://github.com/Zaxar1231/Universal-app/releases/latest">Скачать</a>
+        <a class="btn tonal" href="https://github.com/Zaxar1231/Universal-app/releases/latest">Скачать для Windows</a>
         <a class="btn text" href="#run">Как запустить</a>
       </div>
     </div>
@@ -302,7 +302,15 @@ footer { padding: 32px 0 calc(32px + env(safe-area-inset-bottom)); border-top: 1
     <h2>Как запустить полную версию</h2>
     <div class="grid2">
       <div class="card">
-        <h3>На компьютере</h3>
+        <h3>Windows: обычная установка</h3>
+        <ol class="steps small">
+          <li>Скачай <b>Universal-Setup.exe</b> из <a href="https://github.com/Zaxar1231/Universal-app/releases/latest">последнего релиза</a> и запусти.</li>
+          <li>Открой Universal из «Пуска». Окно своё, без браузера и командной строки.</li>
+          <li>Если режиму нужен ffmpeg или другой движок, приложение предложит скачать его одной кнопкой.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h3>Из исходников (любая ОС)</h3>
         <ol class="steps small">
           <li>Поставь <a href="https://www.python.org/downloads/">Python 3.10+</a> (на Windows отметь «Add Python to PATH»).</li>
           <li>Поставь программы. Windows: <code>choco install ffmpeg imagemagick pandoc poppler</code>, Ubuntu: <code>sudo apt install ffmpeg imagemagick pandoc poppler-utils</code>.</li>
