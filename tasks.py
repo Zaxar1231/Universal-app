@@ -81,6 +81,7 @@ class Task:
             }
             if len(files) == 1:
                 d["single_file"] = files[0]
+            d["names"] = files[:100]
             return d
 
 

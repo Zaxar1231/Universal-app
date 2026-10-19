@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#f4fbfa">
-<title>Конвертер файлов</title>
+<title>Universal</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2300696b'/%3E%3Cpath d='M9 8v10a7 7 0 0 0 14 0V8h-4v10a3 3 0 0 1-6 0V8z' fill='%23fff'/%3E%3C/svg%3E">
 <style>
 /* =====================================================================
    Material You (Material 3). Цвета строятся из одного seed-цвета в JS,
@@ -140,7 +141,6 @@ ul.files .size { color: var(--md-on-surface-variant); font-size: .75rem; font-va
 .seg.wrap label:nth-of-type(3n+1) { border-left: 0; }
 .seg.wrap label:nth-of-type(-n+3) { border-top: 0; }
 .seg input:checked + label { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
-.seg input:checked + label::after { content: ""; }
 .seg input:focus-visible + label { outline: 3px solid var(--md-primary); outline-offset: -3px; }
 
 /* filter chips для формата */
@@ -219,6 +219,35 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
 .swatches input:focus-visible + label { outline: 3px solid var(--md-primary); outline-offset: 2px; }
 .row-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 
+/* --- новые режимы: редактор, загрузчик, QR --- */
+.pane { display: grid; gap: 16px; margin-bottom: 16px; }
+.pane .card { padding: 20px 24px; display: grid; gap: 16px; }
+.ta { width: 100%; min-height: 140px; resize: vertical; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--md-on-surface-variant);
+  border-radius: 4px 4px 0 0; background: var(--md-surface-container-highest); font: inherit; color: inherit; outline: none; line-height: 1.45; }
+.ta:focus { border-bottom: 2px solid var(--md-primary); }
+.ta.code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .875rem; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sect { display: grid; gap: 16px; }
+.sect > h3 { margin: 0; border-top: 1px solid var(--md-outline-variant); padding-top: 20px; }
+.sect:first-child > h3 { border-top: 0; padding-top: 0; }
+.tf input[type=color] { padding: 22px 12px 4px; cursor: pointer; }
+.player { width: 100%; max-height: 360px; border-radius: var(--sh-l); background: #000; display: block; }
+audio.player { background: none; max-height: none; }
+.vinfo { display: grid; grid-template-columns: 120px 1fr; gap: 12px 16px; align-items: center; }
+.vinfo + .vinfo { padding-top: 12px; border-top: 1px solid var(--md-outline-variant); }
+.vinfo img, .vinfo .noimg { width: 120px; aspect-ratio: 16/9; object-fit: cover; border-radius: var(--sh-s); background: var(--md-surface-container-highest); }
+.vinfo .ttl { font-weight: 500; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.vinfo .err { color: var(--md-error); }
+.badge { display: inline-block; padding: 0 8px; border-radius: 8px; background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); font-size: .75rem; font-weight: 500; line-height: 1.5rem; }
+.qrprev { display: grid; place-items: center; min-height: 260px; border-radius: var(--sh-l);
+  background: repeating-conic-gradient(var(--md-surface-container-high) 0 25%, var(--md-surface-container-lowest) 0 50%) 0 0/20px 20px; padding: 16px; }
+.qrprev img { max-width: min(100%, 320px); image-rendering: pixelated; }
+.result .names { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; max-height: 220px; overflow: auto; font-size: .8125rem; }
+.result .names a { color: inherit; }
+.filebtn { position: relative; }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+ul.files .up { width: 40px; height: 40px; }
+
 /* --- узкий экран: navigation bar снизу --- */
 @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } .settings { position: static; } }
 @media (max-width: 720px) {
@@ -238,7 +267,7 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
 </head>
 <body>
 <div class="app">
-  <nav class="rail" aria-label="Что конвертируем" id="rail">
+  <nav class="rail" aria-label="Режимы" id="rail">
     {% set icons = {
       'image': 'M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm40-80h480L570-480 450-320l-90-120-120 160Zm-40 80v-560 560Z',
       'audio': 'M400-120q-66 0-113-47t-47-113q0-66 47-113t113-47q23 0 42.5 5.500T480-418v-422h240v160H560v400q0 66-47 113t-113 47Z',
@@ -246,7 +275,10 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
       'doc': 'M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.500-23.500T160-160v-640q0-33 23.500-56.500T240-880h320l240 240v480q0 33-23.500 56.500T720-80H240Zm280-520v-200H240v640h480v-440H520Z',
       'pdf': 'M360-460h40v-80h40q17 0 28.500-11.500T480-580v-40q0-17-11.500-28.500T440-660h-80v200Zm40-120v-40h40v40h-40Zm120 120h80q17 0 28.500-11.500T640-500v-120q0-17-11.500-28.500T600-660h-80v200Zm40-40v-120h40v120h-40Zm120 40h40v-80h40v-40h-40v-40h40v-40h-80v200ZM320-240q-33 0-56.500-23.500T240-320v-480q0-33 23.500-56.500T320-880h480q33 0 56.500 23.500T880-800v480q0 33-23.500 56.500T800-240H320Zm0-80h480v-480H320v480ZM160-80q-33 0-56.500-23.500T80-160v-560h80v560h560v80H160Z',
       'photo': 'M480-260q75 0 127.500-52.500T660-440q0-75-52.500-127.500T480-620q-75 0-127.500 52.500T300-440q0 75 52.500 127.500T480-260Zm0-80q-42 0-71-29t-29-71q0-42 29-71t71-29q42 0 71 29t29 71q0 42-29 71t-71 29ZM160-120q-33 0-56.500-23.500T80-200v-480q0-33 23.500-56.500T160-760h126l74-80h240l74 80h126q33 0 56.500 23.500T880-680v480q0 33-23.500 56.500T800-120H160Z',
-      'topdf': 'M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.500-23.500T160-160v-640q0-33 23.500-56.500T240-880h320l240 240v480q0 33-23.500 56.500T720-80H240Zm280-520h200L520-800v200Z'
+      'topdf': 'M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.500-23.500T160-160v-640q0-33 23.500-56.500T240-880h320l240 240v480q0 33-23.500 56.500T720-80H240Zm280-520h200L520-800v200Z',
+      'edit': 'M760-120 480-400l-94 94q8 15 11 32t3 34q0 66-47 113T240-80q-66 0-113-47T80-240q0-66 47-113t113-47q18 0 34.500 3t31.500 11l94-94-94-94q-15 8-31.500 11t-34.500 3q-66 0-113-47T80-720q0-66 47-113t113-47q66 0 113 47t47 113q0 18-3 34t-11 32l494 494v40H760ZM600-520l-80-80 240-240h120v40L600-520ZM240-640q33 0 56.500-23.500T320-720q0-33-23.500-56.500T240-800q-33 0-56.500 23.500T160-720q0 33 23.500 56.500T240-640Zm240 180q8 0 14-6t6-14q0-8-6-14t-14-6q-8 0-14 6t-6 14q0 8 6 14t14 6ZM240-160q33 0 56.500-23.500T320-240q0-33-23.500-56.500T240-320q-33 0-56.500 23.500T160-240q0 33 23.500 56.500T240-160Z',
+      'dl': 'M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.500-23.500T160-240v-120h80v120h480v-120h80v120q0 33-23.500 56.500T720-160H240Z',
+      'qr': 'M120-520v-320h320v320H120Zm80-80h160v-160H200v160Zm-80 480v-320h320v320H120Zm80-80h160v-160H200v160Zm320-320v-320h320v320H520Zm80-80h160v-160H600v160Zm160 480v-80h80v80h-80ZM520-360v-80h80v80h-80Zm80 80v-80h80v80h-80Zm-80 80v-80h80v80h-80Zm80 80v-80h80v80h-80Zm80-80v-80h80v80h-80Zm0-160v-80h80v80h-80Zm80 80v-80h80v80h-80Z'
     } %}
     {% for key, label in [('image','Картинки'),('audio','Аудио'),('video','Видео'),('doc','Документы')] %}
     <label class="nav"><input type="radio" name="mode" value="{{ key }}" {% if key == 'image' %}checked{% endif %}>
@@ -255,6 +287,12 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
     {% endfor %}
     <span class="sep" role="separator"></span>
     {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF')] %}
+    <label class="nav"><input type="radio" name="mode" value="{{ key }}">
+      <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
+      <span class="t-label-m">{{ label }}</span></label>
+    {% endfor %}
+    <span class="sep" role="separator"></span>
+    {% for key, label in [('edit','Редактор'),('dl','Скачать видео'),('qr','QR-коды')] %}
     <label class="nav"><input type="radio" name="mode" value="{{ key }}">
       <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
       <span class="t-label-m">{{ label }}</span></label>
@@ -276,6 +314,60 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
 
     <div class="grid">
       <section aria-label="Файлы">
+        <!-- скачивание видео -->
+        <div class="pane" id="dlPane" hidden>
+          <div class="card">
+            <label class="field"><span class="lbl t-label-l">Ссылки на видео, плейлисты или треки</span>
+              <textarea class="ta code" id="urls" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…&#10;https://vt.tiktok.com/…&#10;Можно по одной в строке или вставить текст целиком: ссылки найдутся сами"></textarea></label>
+            <div class="row">
+              <button class="btn tonal state" id="pasteUrls" type="button">Вставить из буфера</button>
+              <button class="btn text state" id="peekUrls" type="button">Посмотреть, что по ссылкам</button>
+            </div>
+            <p class="hint">YouTube, TikTok, VK, Rutube, Дзен, Instagram, X, Twitch, Reddit, Vimeo, SoundCloud, OK и ещё около 1800 сайтов. Если сайт вдруг перестал качаться, обнови yt-dlp (run.bat/run.sh делают это сами при запуске).</p>
+          </div>
+          <div class="card" id="dlInfo" hidden></div>
+        </div>
+
+        <!-- QR-коды -->
+        <div class="pane" id="qrPane" hidden>
+          <div class="card">
+            <div class="seg" role="radiogroup" aria-label="Что зашить в QR">
+              <input type="radio" name="qrk" id="qrk1" value="text" checked><label for="qrk1">Текст</label>
+              <input type="radio" name="qrk" id="qrk2" value="wifi"><label for="qrk2">Wi‑Fi</label>
+              <input type="radio" name="qrk" id="qrk3" value="vcard"><label for="qrk3">Контакт</label>
+              <input type="radio" name="qrk" id="qrk4" value="list"><label for="qrk4">Пачка</label>
+            </div>
+            <div id="qrText" class="sect">
+              <textarea class="ta" id="qrData" placeholder="Ссылка или любой текст"></textarea>
+            </div>
+            <div id="qrWifi" class="sect" hidden>
+              <label class="tf"><span>Имя сети (SSID)</span><input type="text" id="wSsid" autocomplete="off"></label>
+              <label class="tf"><span>Пароль</span><input type="text" id="wPass" autocomplete="off" spellcheck="false"></label>
+              <div class="two">
+                <label class="tf"><span>Защита</span><select id="wSec"><option value="WPA">WPA/WPA2/WPA3</option><option value="WEP">WEP</option><option value="nopass">Без пароля</option></select></label>
+                <label class="sw"><span class="t-body-m">Скрытая сеть</span><input type="checkbox" id="wHidden"><span class="track"></span></label>
+              </div>
+            </div>
+            <div id="qrCard" class="sect" hidden>
+              <label class="tf"><span>Имя и фамилия</span><input type="text" id="cName" autocomplete="off"></label>
+              <div class="two">
+                <label class="tf"><span>Телефон</span><input type="tel" id="cPhone" autocomplete="off"></label>
+                <label class="tf"><span>Почта</span><input type="email" id="cEmail" autocomplete="off"></label>
+              </div>
+              <div class="two">
+                <label class="tf"><span>Компания</span><input type="text" id="cOrg" autocomplete="off"></label>
+                <label class="tf"><span>Сайт</span><input type="url" id="cUrl" autocomplete="off"></label>
+              </div>
+            </div>
+            <div id="qrList" class="sect" hidden>
+              <textarea class="ta code" id="qrLinks" spellcheck="false" placeholder="https://site.ru/1&#10;https://site.ru/2&#10;# строки с решёткой пропускаются"></textarea>
+              <p class="hint">Или перетащи ниже файлы .txt, .csv, .docx: из Word достаются гиперссылки, кнопки-ссылки и адреса в тексте. Каждый код станет отдельным файлом, плюс index.csv с соответствием.</p>
+            </div>
+            <div class="qrprev" id="qrPrev"><span class="t-body-m muted">Здесь появится QR-код</span></div>
+          </div>
+        </div>
+
+        <div id="filesPane">
         <label class="drop" id="drop">
           <input type="file" id="picker" multiple>
           <span class="big"><svg viewBox="0 -960 960 960"><path d="M440-320v-326L336-542l-56-58 200-200 200 200-56 58-104-104v326h-80ZM240-160q-33 0-56.500-23.500T160-240v-120h80v120h480v-120h80v120q0 33-23.500 56.500T720-160H240Z"/></svg></span>
@@ -292,9 +384,21 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
           <ul class="files" id="list"></ul>
           <div class="empty t-body-m muted" id="empty">Пока ничего не выбрано</div>
         </div>
+
+        <div class="card" id="previewCard" style="margin-top:16px;padding:16px;display:grid;gap:12px" hidden>
+          <span class="t-title-m" id="previewTitle">Предпросмотр</span>
+          <div id="previewSlot"></div>
+          <div class="row">
+            <button class="btn tonal state" id="setStart" type="button">Начало отсюда</button>
+            <button class="btn tonal state" id="setEnd" type="button">Конец здесь</button>
+            <span class="t-body-m muted" id="previewInfo"></span>
+          </div>
+        </div>
+        </div>
       </section>
 
       <aside class="card high settings" aria-label="Настройки">
+        <div id="classicBox" style="display:contents">
         <!-- универсальные режимы -->
         <div class="field" id="uniField" hidden>
           <span class="lbl t-label-l" id="uniLbl">Конвертировать в</span>
@@ -395,8 +499,187 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
             <label class="tf" id="gapRow"><span>Между фото, мм</span><input type="number" id="gap" min="0" max="30" value="5"></label>
           </div>
         </div>
+        </div>
+
+        <!-- редактор видео и аудио -->
+        <div id="editBox" class="sect" hidden>
+          <div class="sect">
+            <h3 class="t-title-m">Результат</h3>
+            <div class="chips" id="eOut" role="radiogroup">
+              {% for v, l in [('same','Как у исходника'),('mp4','MP4'),('mkv','MKV'),('webm','WebM'),('mov','MOV'),('gif','GIF')] %}
+              <input type="radio" name="eout" id="eo-{{ v }}" value="{{ v }}" {% if v == 'same' %}checked{% endif %}><label for="eo-{{ v }}">{{ l }}</label>
+              {% endfor %}
+              <span class="chip-group t-label-m muted">Только звук</span>
+              {% for v in ['mp3','m4a','wav','flac','ogg','opus'] %}
+              <input type="radio" name="eout" id="eo-{{ v }}" value="{{ v }}"><label for="eo-{{ v }}">{{ v|upper }}</label>
+              {% endfor %}
+            </div>
+            <label class="sw" id="mergeRow" hidden><span class="txt"><span class="t-body-m">Склеить в один файл</span><span class="hint">По порядку списка, стрелкой ↑ можно поднять файл. Размер кадра берётся у первого.</span></span>
+              <input type="checkbox" id="eMerge"><span class="track"></span></label>
+          </div>
+
+          <div class="sect">
+            <h3 class="t-title-m">Обрезка</h3>
+            <div class="two">
+              <label class="tf"><span>Начало</span><input type="text" id="eStart" placeholder="0:00" spellcheck="false" autocomplete="off"></label>
+              <label class="tf"><span>Конец</span><input type="text" id="eEnd" placeholder="до конца" spellcheck="false" autocomplete="off"></label>
+            </div>
+            <p class="hint" style="margin-top:-8px">Например 90, 1:30 или 1:02:03.5. Пусто: с начала / до конца.</p>
+            <label class="sw" id="fastRow"><span class="txt"><span class="t-body-m">Быстро, без перекодирования</span><span class="hint">Только для обрезки в тот же формат. Мгновенно, но режет по ключевым кадрам (±пара секунд).</span></span>
+              <input type="checkbox" id="eFast"><span class="track"></span></label>
+          </div>
+
+          <div class="sect" id="eVideoSect">
+            <h3 class="t-title-m">Кадр</h3>
+            <div class="field">
+              <span class="lbl t-label-l">Пропорции (обрезка по центру)</span>
+              <div class="seg wrap">
+                {% for v, l in [('','Исходные'),('16:9','16:9'),('9:16','9:16'),('1:1','1:1'),('4:5','4:5'),('4:3','4:3')] %}
+                <input type="radio" name="easp" id="ea{{ loop.index }}" value="{{ v }}" {% if not v %}checked{% endif %}><label for="ea{{ loop.index }}">{{ l }}</label>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="two">
+              <label class="tf"><span>Поворот</span><select id="eRot"><option value="0">Нет</option><option value="90">90° по часовой</option><option value="270">90° против</option><option value="180">180°</option></select></label>
+              <label class="tf"><span>Отражение</span><select id="eFlip"><option value="">Нет</option><option value="h">Зеркально</option><option value="v">Вверх ногами</option></select></label>
+            </div>
+            <div class="two" id="eResRow">
+              <label class="tf"><span>Разрешение</span><select id="eHeight"><option value="0">Исходное</option><option value="2160">2160p (4K)</option><option value="1440">1440p</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option><option value="240">240p</option></select></label>
+              <label class="tf"><span>Кадров в секунду</span><select id="eFps"><option value="0">Исходная</option><option>60</option><option>50</option><option>30</option><option>25</option><option>24</option><option>15</option></select></label>
+            </div>
+            <div class="two" id="eGifRow" hidden>
+              <label class="tf"><span>Ширина GIF, px</span><input type="number" id="eGifW" min="64" max="1920" value="480"></label>
+              <label class="tf"><span>Кадров в секунду</span><input type="number" id="eGifFps" min="1" max="50" value="12"></label>
+            </div>
+          </div>
+
+          <div class="sect">
+            <h3 class="t-title-m">Скорость и звук</h3>
+            <div class="slider-row">
+              <div class="top"><label class="t-label-l muted" for="eSpeed">Скорость</label><span class="t-label-l" id="eSpeedVal">1×</span></div>
+              <input type="range" id="eSpeed" min="0.25" max="4" step="0.25" value="1">
+            </div>
+            <div id="eAudioOpts" style="display:grid;gap:16px">
+              <div class="slider-row">
+                <div class="top"><label class="t-label-l muted" for="eVol">Громкость</label><span class="t-label-l" id="eVolVal">100%</span></div>
+                <input type="range" id="eVol" min="0" max="300" step="5" value="100">
+              </div>
+              <label class="sw"><span class="txt"><span class="t-body-m">Выровнять громкость</span><span class="hint">Нормализация по EBU R128 (−16 LUFS), как на стримингах.</span></span>
+                <input type="checkbox" id="eNorm"><span class="track"></span></label>
+              <label class="sw" id="eMuteRow"><span class="txt"><span class="t-body-m">Убрать звук</span></span>
+                <input type="checkbox" id="eMute"><span class="track"></span></label>
+            </div>
+            <div class="two">
+              <label class="tf"><span>Появление, сек</span><input type="number" id="eFadeIn" min="0" max="60" step="0.5" value="0"></label>
+              <label class="tf"><span>Затухание, сек</span><input type="number" id="eFadeOut" min="0" max="60" step="0.5" value="0"></label>
+            </div>
+          </div>
+
+          <div class="sect" id="eQualSect">
+            <h3 class="t-title-m">Качество и размер</h3>
+            <div class="two" id="eCodecRow">
+              <label class="tf"><span>Видеокодек</span><select id="eCodec"><option value="auto">Авто</option><option value="h264">H.264 (везде)</option><option value="h265">H.265 (меньше)</option><option value="vp9">VP9</option><option value="av1">AV1 (самый лёгкий)</option></select></label>
+              <label class="tf"><span>Скорость сжатия</span><select id="ePreset"><option value="veryfast">Быстро</option><option value="medium" selected>Обычно</option><option value="slow">Медленно, но меньше</option></select></label>
+            </div>
+            <div class="slider-row" id="eCrfRow">
+              <div class="top"><label class="t-label-l muted" for="eCrf">Качество видео</label><span class="t-label-l" id="eCrfVal">23 · хорошее</span></div>
+              <input type="range" id="eCrf" min="14" max="40" step="1" value="23" style="direction:rtl">
+              <p class="hint">Правее: лучше картинка и тяжелее файл. Это CRF: 18 почти без потерь, 23 стандарт, 28+ заметно мыльнее.</p>
+            </div>
+            <label class="tf" id="eTargetRow"><span>Сжать до размера, МБ (необязательно)</span><input type="number" id="eTarget" min="0" step="1" placeholder="например 25 для Discord, 50 для почты"></label>
+            <label class="tf"><span>Битрейт звука</span>
+              <select id="eAbr"><option value="auto">Авто</option><option>320</option><option>256</option><option>192</option><option>160</option><option>128</option><option>96</option><option>64</option></select></label>
+          </div>
+
+          <label class="tf"><span>Имя результата</span><input type="text" id="eName" value="%name%_edit" spellcheck="false" autocomplete="off"></label>
+        </div>
+
+        <!-- скачивание -->
+        <div id="dlBox" class="sect" hidden>
+          <div class="field">
+            <span class="lbl t-label-l">Что качать</span>
+            <div class="seg">
+              <input type="radio" name="dlm" id="dlm1" value="video" checked><label for="dlm1">Видео</label>
+              <input type="radio" name="dlm" id="dlm2" value="audio"><label for="dlm2">Только звук</label>
+            </div>
+          </div>
+          <div id="dlVideo" class="sect">
+            <label class="tf"><span>Качество</span><select id="dlQ"><option value="best">Лучшее доступное</option><option value="2160">до 2160p (4K)</option><option value="1440">до 1440p</option><option value="1080">до 1080p</option><option value="720">до 720p</option><option value="480">до 480p</option><option value="360">до 360p</option></select></label>
+            <div class="field">
+              <span class="lbl t-label-l">Формат</span>
+              <div class="chips">
+                {% for v in ['mp4','mkv','webm'] %}<input type="radio" name="dlc" id="dlc-{{ v }}" value="{{ v }}" {% if v == 'mp4' %}checked{% endif %}><label for="dlc-{{ v }}">{{ v|upper }}</label>{% endfor %}
+              </div>
+            </div>
+            <label class="sw" id="compatRow"><span class="txt"><span class="t-body-m">Максимальная совместимость</span><span class="hint">H.264 + AAC: откроется на любом телефоне и телевизоре. Выключи ради 4K/8K: там обычно VP9/AV1.</span></span>
+              <input type="checkbox" id="dlCompat" checked><span class="track"></span></label>
+            <label class="sw"><span class="txt"><span class="t-body-m">Субтитры</span><span class="hint">Русские и английские, если есть. Вшиваются в файл.</span></span>
+              <input type="checkbox" id="dlSubs"><span class="track"></span></label>
+          </div>
+          <div id="dlAudio" class="sect" hidden>
+            <div class="field">
+              <span class="lbl t-label-l">Формат</span>
+              <div class="chips">
+                {% for v in ['mp3','m4a','opus','flac','wav'] %}<input type="radio" name="dla" id="dla-{{ v }}" value="{{ v }}" {% if v == 'mp3' %}checked{% endif %}><label for="dla-{{ v }}">{{ v|upper }}</label>{% endfor %}
+              </div>
+            </div>
+            <label class="tf" id="dlAbrRow"><span>Битрейт</span><select id="dlAbr"><option value="best">Как в источнике</option><option>320</option><option>256</option><option>192</option><option>128</option><option>96</option></select></label>
+          </div>
+          <label class="sw"><span class="txt"><span class="t-body-m">Весь плейлист</span><span class="hint">Иначе по ссылке на видео из плейлиста качается только оно.</span></span>
+            <input type="checkbox" id="dlPl"><span class="track"></span></label>
+          <label class="sw"><span class="txt"><span class="t-body-m">Обложка</span></span>
+            <input type="checkbox" id="dlThumb" checked><span class="track"></span></label>
+          <label class="sw"><span class="txt"><span class="t-body-m">Теги и главы</span><span class="hint">Название, автор, дата, главы YouTube.</span></span>
+            <input type="checkbox" id="dlMeta" checked><span class="track"></span></label>
+          <div class="field">
+            <span class="lbl t-label-l">Cookies для закрытого контента</span>
+            <div class="row">
+              <span class="btn tonal state filebtn"><input type="file" id="dlCookies" accept=".txt,text/plain">Выбрать cookies.txt</span>
+              <button class="btn text state" id="dlCookiesClear" type="button" hidden>Убрать</button>
+            </div>
+            <p class="hint" id="dlCookiesHint">Нужны для приватных видео, 18+ и Instagram. Выгрузи расширением «Get cookies.txt LOCALLY». Файл используется один раз и удаляется.</p>
+          </div>
+          <p class="hint" id="ytdlpVer"></p>
+        </div>
+
+        <!-- QR -->
+        <div id="qrBox" class="sect" hidden>
+          <div class="field">
+            <span class="lbl t-label-l">Формат файла</span>
+            <div class="chips">
+              {% for v in ['png','svg','jpg'] %}<input type="radio" name="qrf" id="qrf-{{ v }}" value="{{ v }}" {% if v == 'png' %}checked{% endif %}><label for="qrf-{{ v }}">{{ v|upper }}</label>{% endfor %}
+            </div>
+            <p class="hint">SVG масштабируется без потерь: лучший вариант для печати и макетов.</p>
+          </div>
+          <div class="slider-row">
+            <div class="top"><label class="t-label-l muted" for="qrBox_">Размер точки</label><span class="t-label-l" id="qrBoxVal">10 px</span></div>
+            <input type="range" id="qrBox_" min="2" max="40" step="1" value="10">
+          </div>
+          <div class="slider-row">
+            <div class="top"><label class="t-label-l muted" for="qrBorder">Белая рамка</label><span class="t-label-l" id="qrBorderVal">4</span></div>
+            <input type="range" id="qrBorder" min="0" max="10" step="1" value="4">
+            <p class="hint">По стандарту нужно 4 модуля, иначе некоторые сканеры промахиваются.</p>
+          </div>
+          <div class="field">
+            <span class="lbl t-label-l">Защита от повреждений</span>
+            <div class="seg">
+              {% for v, l in [('L','7%'),('M','15%'),('Q','25%'),('H','30%')] %}<input type="radio" name="qre" id="qre-{{ v }}" value="{{ v }}" {% if v == 'M' %}checked{% endif %}><label for="qre-{{ v }}">{{ v }} · {{ l }}</label>{% endfor %}
+            </div>
+            <p class="hint">Выше защита: код читается даже затёртым, но точек больше.</p>
+          </div>
+          <div class="two">
+            <label class="tf"><span>Цвет точек</span><input type="color" id="qrFg" value="#000000"></label>
+            <label class="tf"><span>Цвет фона</span><input type="color" id="qrBg" value="#ffffff"></label>
+          </div>
+          <label class="sw" id="qrTrRow"><span class="t-body-m">Прозрачный фон</span><input type="checkbox" id="qrTr"><span class="track"></span></label>
+          <div id="qrListOpts" class="sect" hidden>
+            <label class="sw"><span class="t-body-m">Убрать повторы</span><input type="checkbox" id="qrDedupe" checked><span class="track"></span></label>
+            <label class="tf"><span>Колонка CSV со ссылками (если есть заголовок)</span><input type="text" id="qrCol" placeholder="например url" autocomplete="off"></label>
+          </div>
+        </div>
 
         <button class="btn filled lg state" id="go" disabled>Конвертировать</button>
+        <button class="btn text state" id="cancel" hidden>Отменить</button>
         <div class="status" id="status" hidden aria-live="polite"></div>
       </aside>
     </div>
@@ -502,7 +785,10 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
     image: { title: 'Картинки', kind: 'uni' }, audio: { title: 'Аудио', kind: 'uni' },
     video: { title: 'Видео', kind: 'uni' }, doc: { title: 'Документы', kind: 'uni' },
     pdf: { title: 'PDF в картинки', kind: 'pdf' }, photo: { title: 'Фото в A4', kind: 'photo' }, topdf: { title: 'Фото в PDF', kind: 'topdf' },
+    edit: { title: 'Редактор видео и аудио', kind: 'edit' }, dl: { title: 'Скачать видео', kind: 'dl' }, qr: { title: 'QR-коды', kind: 'qr' },
   };
+  const isNew = () => ['edit', 'dl', 'qr'].includes(MODES[mode()].kind);
+  const qrKind = () => qs('input[name=qrk]:checked').value;
   const mode = () => qs('input[name=mode]:checked').value;
   const isUni = () => MODES[mode()].kind === 'uni';
   const isPhotoish = () => ['photo', 'topdf'].includes(mode());
@@ -522,6 +808,8 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
     const m = mode();
     if (m === 'pdf') return /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
     if (isPhotoish()) return IMG_RE.test(f.name) || f.type.startsWith('image/');
+    if (m === 'qr') return /\.(txt|csv|docx)$/i.test(f.name);
+    if (m === 'dl') return false;
     return !!caps && caps.categories[m].inputs.includes(extOf(f.name));
   }
 
@@ -546,13 +834,39 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
       li.querySelector('.name').textContent = f.name; li.querySelector('.name').title = f.name;
       li.querySelector('.size').textContent = fmtSize(f.size);
       li.querySelector('button').onclick = () => { files.splice(i, 1); render(); };
+      if (mode() === 'edit' && files.length > 1 && i > 0) {
+        const up = document.createElement('button');
+        up.className = 'icon-btn state up'; up.title = up.ariaLabel = 'Поднять выше';
+        up.innerHTML = '<svg viewBox="0 -960 960 960"><path d="M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z"/></svg>';
+        up.onclick = () => { [files[i - 1], files[i]] = [files[i], files[i - 1]]; render(); };
+        li.insertBefore(up, li.lastChild);
+      }
       list.appendChild(li);
     });
     $('count').textContent = files.length;
     $('total').textContent = files.length ? '· ' + fmtSize(files.reduce((s, f) => s + f.size, 0)) : '';
     $('empty').hidden = files.length > 0;
-    clearBtn.disabled = goBtn.disabled = files.length === 0;
+    clearBtn.disabled = files.length === 0;
     if (isUni()) refreshUniTargets();
+    if (mode() === 'edit') { $('mergeRow').hidden = files.length < 2; updatePreview(); syncEdit(); }
+    updateGo();
+  }
+
+  /* кнопка запуска: текст и доступность зависят от режима */
+  let busy = false;
+  function updateGo() {
+    const m = mode(); let ok = files.length > 0, label = 'Конвертировать';
+    if (m === 'edit') label = $('eMerge').checked && files.length > 1 ? 'Склеить и сохранить' : 'Применить';
+    if (m === 'dl') { ok = /https?:\/\//i.test($('urls').value); label = 'Скачать'; }
+    if (m === 'qr') {
+      const k = qrKind();
+      if (k === 'list') {
+        const n = $('qrLinks').value.split('\n').filter(l => l.trim() && !l.trim().startsWith('#')).length;
+        ok = n > 0 || files.length > 0; label = files.length ? 'Сделать QR-коды' : (n ? `Сделать QR-коды: ${n}` : 'Сделать QR-коды');
+      } else { ok = !!qrPayloadReady(); label = 'Скачать QR-код'; }
+    }
+    goBtn.textContent = label;
+    goBtn.disabled = busy || !ok;
   }
 
   picker.addEventListener('change', () => { addFiles(picker.files); picker.value = ''; });
@@ -625,6 +939,9 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
 
   function syncSettings() {
     const m = mode(), k = MODES[m].kind, uni = k === 'uni', topdf = k === 'topdf', photo = k === 'photo' || topdf, pdf = k === 'pdf';
+    $('classicBox').hidden = isNew();
+    $('editBox').hidden = k !== 'edit'; $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
+    if (isNew()) { if (k === 'edit') syncEdit(); if (k === 'dl') syncDl(); if (k === 'qr') syncQr(); return; }
     $('uniField').hidden = !uni;
     $('formatsField').hidden = !(pdf || k === 'photo');
     $('pdfOpts').hidden = uni || topdf; $('pdfOpts').style.display = (uni || topdf) ? 'none' : 'grid';
@@ -683,13 +1000,16 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
     pdf: 'Пакетная конвертация страниц PDF в JPG, PNG, TIFF, WebP, SVG, PS, EPS.',
     photo: 'Готовые фото приводятся к листу A4 с нужным разрешением.',
     topdf: 'Фото раскладываются на листах A4: по одному на страницу или сеткой.',
+    edit: 'Обрезка, склейка, кадрирование, поворот, скорость, громкость, сжатие до нужного размера и GIF. Работает ffmpeg.',
+    dl: 'Видео и музыка с YouTube, TikTok, VK, Rutube и ещё ~1800 сайтов. Качается сюда, на этот компьютер.',
+    qr: 'Один код для ссылки, Wi‑Fi или контакта, либо сотни кодов разом из списка.',
   };
   function applyMode() {
     const m = mode(), k = MODES[m].kind;
     $('title').textContent = MODES[m].title; $('subtitle').textContent = SUBS[m];
-    const acc = { pdf: 'application/pdf,.pdf' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
+    const acc = { pdf: 'application/pdf,.pdf', qr: '.txt,.csv,.docx', dl: '', edit: caps ? caps.categories.edit.inputs.map(e => '.' + e).join(',') : 'audio/*,video/*' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps && caps.categories[m] ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
     picker.accept = acc; dirPicker.accept = acc;
-    const what = { pdf: 'PDF', image: 'картинки', audio: 'аудиофайлы', video: 'видео', doc: 'документы' }[m] || 'фото';
+    const what = { pdf: 'PDF', image: 'картинки', audio: 'аудиофайлы', video: 'видео', doc: 'документы', edit: 'видео или аудио', qr: 'списки ссылок' }[m] || 'фото';
     $('dropTitle').textContent = `Перетащи ${what} сюда`;
     $('dropSub').textContent = k === 'pdf' ? 'Можно сразу сотню. Папку тоже можно перетащить.' : 'или нажми, чтобы выбрать. Папку тоже можно перетащить.';
     const d = { topdf: 200, photo: 300 }[m] || 150; $('dpi').value = d; $('dpiVal').textContent = d + ' DPI';
@@ -697,13 +1017,18 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
     paintSlider($('dpi')); paintSlider($('quality'));
     $('dpiHint').textContent = m === 'topdf' ? '200 хватит для печати и почты, 300 для качественной печати (файл тяжелее).' : m === 'photo' ? 'Для печати на A4 нужно 300 DPI.' : k === 'pdf' ? '150 хватит для экрана, 300 для печати.' : '';
     files = []; statusEl.hidden = true; if (k === 'uni' && caps) renderUniChips();
+    $('dlPane').hidden = m !== 'dl'; $('qrPane').hidden = m !== 'qr';
+    $('filesPane').hidden = m === 'dl' || (m === 'qr' && qrKind() !== 'list');
+    $('previewCard').hidden = true; cancelBtn.hidden = true;
     const pb = $('engineBanner'); pb.hidden = true;
     if (caps) {
-      const need = { image: ['imagemagick', 'ImageMagick'], audio: ['ffmpeg', 'ffmpeg'], video: ['ffmpeg', 'ffmpeg'], doc: ['pandoc', 'pandoc'] }[m];
+      const need = { image: ['imagemagick', 'ImageMagick'], audio: ['ffmpeg', 'ffmpeg'], video: ['ffmpeg', 'ffmpeg'], doc: ['pandoc', 'pandoc'],
+        edit: ['ffmpeg', 'ffmpeg'], dl: ['ytdlp', 'yt-dlp (pip install yt-dlp)'], qr: ['qrcode', 'Пакет qrcode (pip install qrcode)'] }[m];
       if (need && !caps.engines[need[0]]) { pb.hidden = false; pb.textContent = `${need[1]} не найден в PATH. Установи его и перезапусти сервер, иначе этот режим не заработает.`; }
     }
     if (m === 'pdf' && !POPPLER_OK) { $('engineBanner').hidden = false; $('engineBanner').textContent = 'Poppler не найден в PATH. Установи poppler-utils и перезапусти сервер, иначе конвертация PDF не заработает.'; }
     render(); syncSettings();
+    if (m === 'qr') qrRefresh();
   }
   const POPPLER_OK = {{ 'true' if (poppler.pdftoppm and poppler.pdftocairo) else 'false' }};
   document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', applyMode));
@@ -712,14 +1037,18 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
 
   /* ---------- отправка ---------- */
   goBtn.onclick = () => {
-    if (!files.length) return;
     const m = mode(), k = MODES[m].kind, fd = new FormData();
+    if (k === 'qr' && qrKind() !== 'list') { qrDownload(); return; }
+    if (!files.length && !['dl', 'qr'].includes(k)) return;
     files.forEach(f => fd.append('files', f, f.name));
     const dirs = [...new Set(files.map(f => f._dir).filter(Boolean))];
     if (dirs.length) fd.append('archive_name', dirs.length === 1 ? dirs[0] : `${dirs[0]} (+${dirs.length - 1})`);
 
     let url;
-    if (k === 'uni') {
+    if (k === 'edit') { url = '/api/edit'; editForm(fd); }
+    else if (k === 'dl') { url = '/api/dl'; dlForm(fd); }
+    else if (k === 'qr') { url = '/api/qr/bulk'; qrStyle(fd); fd.append('links', $('qrLinks').value); fd.append('dedupe', $('qrDedupe').checked ? '1' : '0'); fd.append('column', $('qrCol').value.trim()); }
+    else if (k === 'uni') {
       url = '/api/universal';
       fd.append('to', uniTarget[m]);
       fd.append('quality', $('quality').value);
@@ -747,7 +1076,7 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
       }
     }
 
-    goBtn.disabled = true;
+    busy = true; updateGo();
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
     xhr.upload.onprogress = e => {
@@ -757,15 +1086,18 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
       else setStatus('<span class="t-body-m">Конвертирую…</span><div class="progress busy"><i></i></div>');
     };
     xhr.onload = () => {
-      goBtn.disabled = false;
       let data = {}; try { data = JSON.parse(xhr.responseText); } catch (_) {}
-      if (xhr.status !== 200) { setStatus(`<ul class="errs"><li>${esc(data.error || 'Сервер вернул ошибку ' + xhr.status)}</li></ul>`); return; }
+      if (xhr.status !== 200) { busy = false; updateGo(); setStatus(`<ul class="errs"><li>${esc(data.error || 'Сервер вернул ошибку ' + xhr.status)}</li></ul>`); return; }
+      if (data.task) { pollTask(data); return; }
+      busy = false; updateGo();
       const unit = m === 'pdf' ? 'PDF' : 'файлов';
       const dl = (raw, label) => `<a class="btn filled state" href="/api/download/${data.job}${raw ? '?raw=1' : ''}" download>Скачать ${esc(label)}</a>`;
       let html;
       if (k === 'topdf') {
         const single = !!data.single_pdf;
         html = `<div class="result"><span class="t-body-m">Готово: ${data.done} из ${data.total} фото, страниц A4: ${data.pages}.</span>${dl(single, single ? data.single_pdf : data.archive)}</div>`;
+      } else if (k === 'qr') {
+        html = data.done ? `<div class="result"><span class="t-body-m">Готово: ${data.done} из ${data.total} QR-кодов, в архиве ещё index.csv со списком.</span>${dl(false, data.archive)}</div>` : '';
       } else if (k === 'uni') {
         const single = !!data.single_file;
         html = data.done ? `<div class="result"><span class="t-body-m">Готово: ${data.done} из ${data.total}.</span>${dl(single, single ? data.single_file : data.archive)}</div>` : '';
@@ -775,10 +1107,222 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
       if ((data.failed || []).length) html += `<ul class="errs">` + data.failed.map(f => `<li><b>${esc(f.name)}</b>: ${esc(f.error)}</li>`).join('') + `</ul>`;
       setStatus(html);
     };
-    xhr.onerror = () => { goBtn.disabled = false; setStatus('<ul class="errs"><li>Не удалось связаться с сервером. Он запущен?</li></ul>'); };
-    setStatus('<span class="t-body-m">Загружаю файлы… 0%</span><div class="progress"><i></i></div>');
+    xhr.onerror = () => { busy = false; updateGo(); setStatus('<ul class="errs"><li>Не удалось связаться с сервером. Он запущен?</li></ul>'); };
+    setStatus(k === 'dl' ? '<span class="t-body-m">Отправляю ссылки…</span><div class="progress busy"><i></i></div>' : '<span class="t-body-m">Загружаю файлы… 0%</span><div class="progress"><i></i></div>');
     xhr.send(fd);
   };
+
+  /* ---------- фоновые задачи: прогресс и отмена ---------- */
+  const cancelBtn = $('cancel');
+  let currentTask = null;
+  function pollTask(t) {
+    currentTask = t.task; cancelBtn.hidden = false; cancelBtn.disabled = false;
+    const tick = () => fetch('/api/task/' + t.task).then(r => r.json()).then(d => {
+      if (d.task !== currentTask) return;
+      if (['queued', 'running'].includes(d.status)) {
+        const p = d.progress == null ? null : Math.round(d.progress * 100);
+        setStatus(`<span class="t-body-m">${esc(d.message || 'Работаю…')}${p == null ? '' : ' · ' + p + '%'}</span>` +
+          `<div class="progress${p == null ? ' busy' : ''}"><i style="width:${p ?? 0}%"></i></div>`);
+        setTimeout(tick, 700); return;
+      }
+      currentTask = null; cancelBtn.hidden = true; busy = false; updateGo();
+      setStatus(taskResult(d));
+    }).catch(() => setTimeout(tick, 1500));
+    tick();
+  }
+  function taskResult(d) {
+    let html = '';
+    const unit = d.kind === 'dl' ? 'ссылок' : 'файлов';
+    if (d.files) {
+      const one = !!d.single_file, href = `/api/download/${d.job}${one ? '?raw=1' : ''}`;
+      const head = d.status === 'cancelled' ? 'Отменено. Успело сохраниться' : `Готово: ${d.done} из ${d.total} ${unit}. Файлов`;
+      html += `<div class="result"><span class="t-body-m">${head}: ${d.files}.</span>` +
+        `<a class="btn filled state" href="${href}" download>Скачать ${esc(one ? d.single_file : d.archive)}</a>`;
+      if (!one && d.names && d.names.length) html += '<ul class="names">' + d.names.map(n => `<li><a href="/api/file/${d.job}/${encodeURIComponent(n)}" download>${esc(n)}</a></li>`).join('') + '</ul>';
+      html += '</div>';
+    } else if (d.status === 'cancelled') html += '<div class="result"><span class="t-body-m">Отменено.</span></div>';
+    const errs = (d.failed || []).map(f => `<li><b>${esc(f.name)}</b>: ${esc(f.error)}</li>`);
+    if (d.status === 'error' && !errs.length) errs.push(`<li>${esc(d.error)}</li>`);
+    if (errs.length) html += `<ul class="errs">${errs.join('')}</ul>`;
+    return html;
+  }
+  cancelBtn.onclick = () => { if (!currentTask) return; cancelBtn.disabled = true; fetch(`/api/task/${currentTask}/cancel`, { method: 'POST' }); };
+
+  /* ---------- редактор ---------- */
+  const eOut = () => qs('input[name=eout]:checked').value;
+  const AUDIO_OUT = ['mp3', 'm4a', 'wav', 'flac', 'ogg', 'opus'];
+  const CRF_NAMES = [[17, 'почти без потерь'], [20, 'отличное'], [24, 'хорошее'], [28, 'среднее'], [33, 'низкое'], [99, 'очень низкое']];
+  function syncEdit() {
+    const o = eOut(), audioOnly = AUDIO_OUT.includes(o), gif = o === 'gif';
+    const anyVideo = files.some(f => (caps ? caps.categories.video.inputs : []).includes(extOf(f.name)));
+    $('eVideoSect').hidden = audioOnly || (o === 'same' && files.length > 0 && !anyVideo);
+    $('eResRow').hidden = gif; $('eGifRow').hidden = !gif;
+    $('eQualSect').hidden = false;
+    $('eCodecRow').hidden = $('eCrfRow').hidden = $('eTargetRow').hidden = audioOnly || gif || (o === 'same' && files.length > 0 && !anyVideo);
+    $('eMuteRow').hidden = audioOnly || gif;
+    $('eAudioOpts').hidden = gif;
+    const crf = +$('eCrf').value; $('eCrfVal').textContent = `${crf} · ${CRF_NAMES.find(([n]) => crf <= n)[1]}`;
+    $('eSpeedVal').textContent = (+$('eSpeed').value) + '×'; $('eVolVal').textContent = $('eVol').value + '%';
+    ['eSpeed', 'eVol', 'eCrf'].forEach(id => paintSlider($(id)));
+    $('eCrf').style.setProperty('--p', (100 - (crf - 14) / 26 * 100) + '%');
+    updateGo();
+  }
+  ['eOut', 'eMerge', 'eSpeed', 'eVol', 'eCrf'].forEach(id => $(id).addEventListener('input', () => { syncEdit(); if (id === 'eMerge') render(); }));
+  $('eOut').addEventListener('change', syncEdit);
+  function editForm(fd) {
+    const v = id => $(id).value.trim();
+    fd.append('out', eOut()); fd.append('start', v('eStart')); fd.append('end', v('eEnd'));
+    fd.append('fast', $('eFast').checked ? '1' : '0'); fd.append('merge', $('eMerge').checked ? '1' : '0');
+    fd.append('aspect', qs('input[name=easp]:checked').value); fd.append('rotate', v('eRot'));
+    fd.append('hflip', v('eFlip') === 'h' ? '1' : '0'); fd.append('vflip', v('eFlip') === 'v' ? '1' : '0');
+    fd.append('height', v('eHeight')); fd.append('fps', v('eFps'));
+    fd.append('gif_width', v('eGifW')); fd.append('gif_fps', v('eGifFps'));
+    fd.append('speed', v('eSpeed')); fd.append('volume', v('eVol'));
+    fd.append('normalize', $('eNorm').checked ? '1' : '0'); fd.append('mute', $('eMute').checked ? '1' : '0');
+    fd.append('fade_in', v('eFadeIn') || 0); fd.append('fade_out', v('eFadeOut') || 0);
+    fd.append('vcodec', v('eCodec')); fd.append('preset', v('ePreset')); fd.append('crf', v('eCrf'));
+    fd.append('target_mb', v('eTarget')); fd.append('abitrate', v('eAbr'));
+    fd.append('name_template', v('eName') || '%name%_edit');
+    if (files[0]) fd.append('merge_name', files[0].name.replace(/\.[^.]+$/, '') + '_merged');
+  }
+
+  // предпросмотр первого файла: браузер играет mp4/webm/mp3/ogg/wav, остальное просто пропускаем
+  let previewFile = null, previewUrl = null;
+  const fmtT = t => { t = Math.max(0, t); const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = (t % 60).toFixed(1).padStart(4, '0'); return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + s; };
+  function updatePreview() {
+    const f = files[0];
+    if (f === previewFile) return;
+    previewFile = f; if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = null;
+    $('previewSlot').innerHTML = ''; $('previewCard').hidden = true;
+    if (!f) return;
+    const isAudio = (caps ? caps.categories.audio.inputs : []).includes(extOf(f.name));
+    const el = document.createElement(isAudio ? 'audio' : 'video');
+    el.className = 'player'; el.controls = true; el.preload = 'metadata';
+    previewUrl = el.src = URL.createObjectURL(f);
+    el.onloadedmetadata = () => {
+      $('previewCard').hidden = false;
+      $('previewTitle').textContent = 'Предпросмотр: ' + f.name;
+      $('previewInfo').textContent = 'Длительность ' + fmtT(el.duration) + (el.videoWidth ? ` · ${el.videoWidth}×${el.videoHeight}` : '');
+    };
+    el.onerror = () => { $('previewCard').hidden = true; };
+    $('previewSlot').appendChild(el);
+  }
+  const player = () => $('previewSlot').firstChild;
+  $('setStart').onclick = () => { if (player()) $('eStart').value = fmtT(player().currentTime); };
+  $('setEnd').onclick = () => { if (player()) $('eEnd').value = fmtT(player().currentTime); };
+
+  /* ---------- скачивание ---------- */
+  const dlMode = () => qs('input[name=dlm]:checked').value;
+  function syncDl() {
+    const a = dlMode() === 'audio';
+    $('dlVideo').hidden = a; $('dlAudio').hidden = !a;
+    $('compatRow').hidden = qs('input[name=dlc]:checked').value !== 'mp4';
+    $('dlAbrRow').hidden = ['flac', 'wav'].includes(qs('input[name=dla]:checked').value);
+    $('dlCookiesClear').hidden = !$('dlCookies').files.length;
+    $('dlCookiesHint').textContent = $('dlCookies').files.length ? 'Выбрано: ' + $('dlCookies').files[0].name : 'Нужны для приватных видео, 18+ и Instagram. Выгрузи расширением «Get cookies.txt LOCALLY». Файл используется один раз и удаляется.';
+    if (caps && caps.engines.ytdlp_version) $('ytdlpVer').textContent = 'yt-dlp ' + caps.engines.ytdlp_version;
+    updateGo();
+  }
+  $('dlBox').addEventListener('change', syncDl);
+  $('dlCookiesClear').onclick = () => { $('dlCookies').value = ''; syncDl(); };
+  $('urls').addEventListener('input', updateGo);
+  $('pasteUrls').onclick = async () => {
+    try { const t = await navigator.clipboard.readText(); $('urls').value = ($('urls').value.trim() + '\n' + t).trim(); updateGo(); }
+    catch (_) { $('urls').focus(); setStatus('<ul class="errs"><li>Браузер не дал доступ к буферу. Вставь через Ctrl+V.</li></ul>'); }
+  };
+  function dlForm(fd) {
+    fd.append('urls', $('urls').value); fd.append('mode', dlMode());
+    fd.append('quality', $('dlQ').value); fd.append('container', qs('input[name=dlc]:checked').value);
+    fd.append('audio_format', qs('input[name=dla]:checked').value); fd.append('abitrate', $('dlAbr').value);
+    fd.append('compat', $('dlCompat').checked ? '1' : '0'); fd.append('subs', $('dlSubs').checked ? '1' : '0');
+    fd.append('playlist', $('dlPl').checked ? '1' : '0'); fd.append('thumbnail', $('dlThumb').checked ? '1' : '0');
+    fd.append('metadata', $('dlMeta').checked ? '1' : '0');
+    if ($('dlCookies').files[0]) fd.append('cookies', $('dlCookies').files[0]);
+  }
+  $('peekUrls').onclick = () => {
+    const fd = new FormData(); fd.append('urls', $('urls').value);
+    if ($('dlCookies').files[0]) fd.append('cookies', $('dlCookies').files[0]);
+    const box = $('dlInfo'); box.hidden = false;
+    box.innerHTML = '<span class="t-body-m">Смотрю ссылки…</span><div class="progress busy"><i></i></div>';
+    fetch('/api/dl/info', { method: 'POST', body: fd }).then(r => r.json()).then(d => {
+      if (d.error) { box.innerHTML = `<span class="t-body-m err" style="color:var(--md-error)">${esc(d.error)}</span>`; return; }
+      box.innerHTML = d.items.map(it => it.error
+        ? `<div class="vinfo"><span class="noimg"></span><div><div class="ttl">${esc(it.url)}</div><div class="t-body-m err">${esc(it.error)}</div></div></div>`
+        : `<div class="vinfo">${it.thumbnail ? `<img src="${esc(it.thumbnail)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'noimg'}))">` : '<span class="noimg"></span>'}` +
+          `<div><div class="ttl">${esc(it.title)}</div><div class="t-body-m muted">${[it.uploader, it.duration ? fmtT(it.duration).replace(/\.\d$/, '') : '', it.site].filter(Boolean).map(esc).join(' · ')}</div>` +
+          `${it.playlist ? `<span class="badge">Плейлист: ${it.count}${it.count >= 50 ? '+' : ''} шт.</span>` : ''}${it.heights && it.heights.length ? ` <span class="badge">до ${it.heights[0]}p</span>` : ''}</div></div>`).join('');
+    }).catch(() => { box.innerHTML = '<span class="t-body-m">Не удалось связаться с сервером.</span>'; });
+  };
+
+  /* ---------- QR ---------- */
+  function syncQr() {
+    const k = qrKind();
+    $('qrText').hidden = k !== 'text'; $('qrWifi').hidden = k !== 'wifi'; $('qrCard').hidden = k !== 'vcard'; $('qrList').hidden = k !== 'list';
+    $('qrPrev').hidden = k === 'list'; $('qrListOpts').hidden = k !== 'list';
+    $('filesPane').hidden = k !== 'list';
+    const jpg = qs('input[name=qrf]:checked').value === 'jpg';
+    $('qrTrRow').hidden = jpg; if (jpg) $('qrTr').checked = false;
+    $('qrBoxVal').textContent = $('qrBox_').value + ' px'; $('qrBorderVal').textContent = $('qrBorder').value;
+    paintSlider($('qrBox_')); paintSlider($('qrBorder'));
+    updateGo();
+  }
+  function qrStyle(fd) {
+    fd.append('format', qs('input[name=qrf]:checked').value); fd.append('box_size', $('qrBox_').value);
+    fd.append('border', $('qrBorder').value); fd.append('ec', qs('input[name=qre]:checked').value);
+    fd.append('fg', $('qrFg').value); fd.append('bg', $('qrBg').value); fd.append('transparent', $('qrTr').checked ? '1' : '0');
+  }
+  function qrPayloadReady() {
+    const k = qrKind();
+    if (k === 'text') return $('qrData').value.trim();
+    if (k === 'wifi') return $('wSsid').value.trim();
+    if (k === 'vcard') return $('cName').value.trim() || $('cPhone').value.trim() || $('cEmail').value.trim();
+    return '';
+  }
+  function qrForm(previewOnly) {
+    const fd = new FormData(), k = qrKind();
+    qrStyle(fd); fd.append('kind', k);
+    if (previewOnly) { fd.set('format', 'png'); fd.set('box_size', '8'); }
+    if (k === 'text') fd.append('text', $('qrData').value);
+    if (k === 'wifi') { fd.append('ssid', $('wSsid').value); fd.append('password', $('wPass').value); fd.append('security', $('wSec').value); fd.append('hidden', $('wHidden').checked ? '1' : '0'); }
+    if (k === 'vcard') { fd.append('name', $('cName').value); fd.append('phone', $('cPhone').value); fd.append('email', $('cEmail').value); fd.append('org', $('cOrg').value); fd.append('url', $('cUrl').value); }
+    return fd;
+  }
+  let qrTimer = 0, qrSeq = 0, qrImgUrl = null;
+  function qrRefresh() {
+    syncQr(); clearTimeout(qrTimer);
+    if (qrKind() === 'list') return;
+    qrTimer = setTimeout(() => {
+      const seq = ++qrSeq, box = $('qrPrev');
+      if (!qrPayloadReady()) { box.innerHTML = '<span class="t-body-m muted">Здесь появится QR-код</span>'; return; }
+      fetch('/api/qr', { method: 'POST', body: qrForm(true) }).then(async r => {
+        if (seq !== qrSeq) return;
+        if (!r.ok) { const d = await r.json().catch(() => ({})); box.innerHTML = `<span class="t-body-m" style="color:var(--md-error)">${esc(d.error || 'Ошибка')}</span>`; return; }
+        if (qrImgUrl) URL.revokeObjectURL(qrImgUrl);
+        qrImgUrl = URL.createObjectURL(await r.blob());
+        box.innerHTML = `<img src="${qrImgUrl}" alt="QR-код">`;
+      }).catch(() => {});
+    }, 250);
+  }
+  $('qrPane').addEventListener('input', qrRefresh);
+  $('qrPane').addEventListener('change', () => { qrRefresh(); applyQrKind(); });
+  $('qrBox').addEventListener('input', qrRefresh);
+  $('qrBox').addEventListener('change', qrRefresh);
+  let lastQrKind = 'text';
+  function applyQrKind() {
+    const k = qrKind(); if (k === lastQrKind) return;
+    if ((k === 'list') !== (lastQrKind === 'list')) { files = []; render(); }
+    lastQrKind = k; statusEl.hidden = true; syncQr();
+  }
+  async function qrDownload() {
+    const st = qs('input[name=qrf]:checked').value;
+    const r = await fetch('/api/qr?download=1', { method: 'POST', body: qrForm(false) });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); setStatus(`<ul class="errs"><li>${esc(d.error || 'Ошибка')}</li></ul>`); return; }
+    const a = document.createElement('a'), u = URL.createObjectURL(await r.blob());
+    const base = (qrKind() === 'wifi' ? 'wifi_' + $('wSsid').value : qrKind() === 'vcard' ? 'contact_' + ($('cName').value || 'qr') : 'qr').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60);
+    a.href = u; a.download = `${base}.${st}`; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 5000);
+  }
+  $('qrLinks').addEventListener('input', updateGo);
 
   /* ---------- старт ---------- */
   fetch('/api/formats').then(r => r.json()).then(d => { caps = d; applyMode(); }).catch(() => { applyMode(); });

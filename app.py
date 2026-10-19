@@ -623,7 +623,8 @@ def apply_name_template(template: str, name: str) -> str:
 def formats():
     """Какие категории и форматы умеет сервер (нужно интерфейсу для выпадающих списков)."""
     eng = conv.engines()
-    eng.update({"ytdlp": downloader.available(), "qrcode": qrtools.available()})
+    eng.update({"ytdlp": downloader.available(), "ytdlp_version": downloader.version(),
+                "qrcode": qrtools.available()})
     cats = {}
     for name, table in conv.CATEGORIES.items():
         tg = conv.targets_for(name)
@@ -789,6 +790,24 @@ def save_uploads(files, in_dir: Path) -> list[tuple[Path, str]]:
         f.save(src)
         out.append((src, stem))
     return out
+
+
+@app.route("/api/file/<job>/<path:name>")
+def download_one(job: str, name: str):
+    """Один файл из результата (когда в задании их несколько)."""
+    if not re.fullmatch(r"[0-9a-f]{12}", job):
+        abort(404)
+    out_dir = WORK_ROOT / job / "out"
+    one = out_dir / name
+    if "/" in name or "\\" in name or name.startswith(".") or not one.is_file():
+        abort(404)
+    resp = send_file(one, mimetype=mimetypes.guess_type(one.name)[0] or "application/octet-stream",
+                     as_attachment=True, download_name="file")
+    resp.headers["Content-Disposition"] = (
+        f'attachment; filename="{ascii_fallback(one.stem)}{one.suffix}"; '
+        f"filename*=UTF-8''{quote(one.name, safe='')}"
+    )
+    return resp
 
 
 @app.route("/api/task/<tid>")
