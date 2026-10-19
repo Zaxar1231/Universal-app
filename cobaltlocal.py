@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -42,8 +43,15 @@ services:
     container_name: {container}
     ports:
       - "127.0.0.1:{port}:9000/tcp"
+    # host.docker.internal — этот компьютер (там слушает прокси VPN-клиента); в Docker Desktop есть и так
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       API_URL: "http://localhost:{port}/"
+      # сервер только для себя: лимиты публичного инстанса (20 запросов в минуту) мешают пачкам ссылок
+      RATELIMIT_MAX: "10000"
+      TUNNEL_RATELIMIT_MAX: "10000"
+      SESSION_RATELIMIT_MAX: "10000"
 {extra}"""
 
 
@@ -125,6 +133,10 @@ def status() -> dict:
     port = _port()
     if st["state"] and port:
         st["url"] = f"http://localhost:{port}/"
+        try:
+            st["proxy"] = (folder() / "proxy.txt").read_text().strip()
+        except OSError:
+            st["proxy"] = ""
     return st
 
 
@@ -137,12 +149,27 @@ def _free(port: int) -> bool:
             return False
 
 
-def compose_text(port: int, cookies: bool) -> str:
+def container_proxy(net: dict | None) -> str:
+    """Прокси VPN-клиента для контейнера. Иначе cobalt ходит в интернет мимо VPN,
+    и заблокированные сайты (YouTube из России) ему не открываются.
+    cobalt (undici) понимает только HTTP-прокси; у VPN-клиентов порт обычно смешанный
+    (socks и http на одном), а 127.0.0.1 изнутри контейнера — это сам контейнер."""
+    p = downloader.effective_proxy(net)
+    if not p:
+        return ""
+    p = re.sub(r"^socks(4a?|5h?)://", "http://", p, flags=re.I)
+    return re.sub(r"//(127\.\d+\.\d+\.\d+|localhost|\[::1\])(?=[:/]|$)", "//host.docker.internal", p, flags=re.I)
+
+
+def compose_text(port: int, cookies: bool, proxy: str = "") -> str:
     extra = ""
+    if proxy:
+        extra += (f'      HTTP_PROXY: "{proxy}"\n'
+                  f'      HTTPS_PROXY: "{proxy}"\n'
+                  '      NO_PROXY: "localhost,127.0.0.1,::1"\n')
     if cookies:
-        extra = ('      COOKIE_PATH: "/cookies.json"\n'
-                 "    volumes:\n"
-                 "      - ./cookies.json:/cookies.json:ro\n")
+        extra += '      COOKIE_PATH: "/cookies.json"\n'
+        extra += "    volumes:\n      - ./cookies.json:/cookies.json:ro\n"
     return COMPOSE.format(image=IMAGE, container=CONTAINER, port=port, extra=extra)
 
 
@@ -180,7 +207,7 @@ def _compose(docker: str, task: Task, *args: str) -> tuple[int, list[str]]:
     return proc.returncode, tail
 
 
-def create(task: Task) -> None:
+def create(task: Task, net: dict | None = None) -> None:
     docker = docker_exe()
     if not docker:
         raise RuntimeError("Не найден Docker. Установи Docker Desktop (docker.com) и попробуй ещё раз")
@@ -196,8 +223,10 @@ def create(task: Task) -> None:
         port = next((p for p in PORTS if _free(p)), None)
         if not port:
             raise RuntimeError("Порты 9000–9010 заняты, сервер некуда повесить")
-    (d / "docker-compose.yml").write_text(compose_text(port, (d / "cookies.json").is_file()), encoding="utf-8")
+    proxy = container_proxy(net)
+    (d / "docker-compose.yml").write_text(compose_text(port, (d / "cookies.json").is_file(), proxy), encoding="utf-8")
     (d / "port.txt").write_text(str(port))
+    (d / "proxy.txt").write_text(proxy)
 
     task.update(0.1, "Скачиваю свежий образ cobalt (первый раз ≈ 100 МБ)…")
     code, tail = _compose(docker, task, "pull")

@@ -1113,3 +1113,41 @@ def test_dl_netcheck(client, monkeypatch):
     assert downloader._short_net_error("<urlopen error Tunnel connection failed: 403 Forbidden>") == "прокси не пустил (403)"
     assert d["proxy"] == "" and d["ipv4"] is True and "ipv6" in d
     assert all(c["proxy"] == "" and c["source_address"] == "0.0.0.0" for c in calls)
+
+
+def test_cobalt_local_proxy_and_limits(fake_docker, monkeypatch, client):
+    """Прокси VPN-клиента уходит в контейнер (иначе cobalt ходит мимо VPN), лимиты сняты."""
+    import urllib.request
+    cobaltlocal, bindir = fake_docker
+    cp = cobaltlocal.container_proxy
+    assert cp({"proxy": "none"}) == ""
+    assert cp({"proxy": "http://127.0.0.1:10809"}) == "http://host.docker.internal:10809"
+    assert cp({"proxy": "socks5://localhost:7890"}) == "http://host.docker.internal:7890"
+    assert cp({"proxy": "http://192.168.1.5:3128"}) == "http://192.168.1.5:3128"
+    monkeypatch.setattr(urllib.request, "getproxies", lambda: {"socks": "socks4://127.0.0.1:10808"})
+    assert cp({"proxy": "auto"}) == "http://host.docker.internal:10808"
+    yml = cobaltlocal.compose_text(9000, True, "http://host.docker.internal:10809")
+    assert 'HTTPS_PROXY: "http://host.docker.internal:10809"' in yml and 'NO_PROXY: "localhost,127.0.0.1,::1"' in yml
+    assert 'RATELIMIT_MAX: "10000"' in yml and "host.docker.internal:host-gateway" in yml
+    assert yml.index("COOKIE_PATH") < yml.index("volumes:")
+
+    if sys.platform == "win32":
+        return
+    (bindir / "daemon").touch()
+    monkeypatch.setattr(downloader, "cobalt_info", lambda url, key="", net=None: {"version": "11.7", "services": []})
+    d = wait_task(client, client.post("/api/cobalt/local", data={"proxy": "127.0.0.1:10809"}).get_json()["task"])
+    assert d["status"] == "done", d
+    assert 'HTTP_PROXY: "http://host.docker.internal:10809"' in (cobaltlocal.folder() / "docker-compose.yml").read_text()
+    assert client.get("/api/cobalt/local").get_json()["proxy"] == "http://host.docker.internal:10809"
+
+
+def test_cobalt_errors_explained(monkeypatch, tmp_path):
+    o = downloader.read_opts({"cobalt_url": "http://localhost:9000/"})
+    for code, part in (("error.api.rate_exceeded", "ограничил число запросов"),
+                       ("error.api.youtube.no_session_tokens", "сервер сессий"),
+                       ("error.api.fetch.fail", "Перезапустить и обновить сервер"),   # свой сервер мимо VPN
+                       ("error.api.something.new", "ошибка something.new")):
+        reply = json.dumps({"status": "error", "error": {"code": code}}).encode()
+        monkeypatch.setattr(downloader, "_urlopen", lambda req, timeout, net=None, r=reply: io.BytesIO(r))
+        with pytest.raises(downloader.CobaltFail, match=part):
+            downloader._cobalt_download("https://x.test/v", o, tmp_path, lambda e: None, 0, 1)

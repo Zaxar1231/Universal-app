@@ -963,7 +963,8 @@ def cobalt_local_status():
 def cobalt_local_create():
     job_id, job_dir, archive = new_job("cobalt")
     task = Task(job_id, "cobalt", job_dir, archive)
-    TASKS.submit(task, cobaltlocal.create)
+    net = downloader.read_net(request.form)
+    TASKS.submit(task, lambda t: cobaltlocal.create(t, net))
     return jsonify(task.to_dict())
 
 

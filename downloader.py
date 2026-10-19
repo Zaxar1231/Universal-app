@@ -407,7 +407,28 @@ COBALT_ERRORS = {
     "auth.key.missing": "серверу cobalt нужен API-ключ",
     "auth.key.invalid": "API-ключ cobalt не подошёл",
     "auth.jwt.missing": "сервер cobalt требует проверку в браузере (Turnstile), из приложения его использовать нельзя",
+    "auth.jwt.invalid": "сервер cobalt требует проверку в браузере (Turnstile), из приложения его использовать нельзя",
+    "auth.turnstile.missing": "сервер cobalt требует проверку в браузере (Turnstile), из приложения его использовать нельзя",
+    "auth.not_configured": "сервер cobalt настроен с ошибкой (авторизация)",
+    "rate_exceeded": "сервер cobalt ограничил число запросов в минуту. Свой сервер: нажми «Перезапустить и обновить сервер», лимиты снимутся",
+    "fetch.short_link": "cobalt не раскрыл короткую ссылку, вставь полную",
+    "fetch.critical.core": "сервер cobalt не смог открыть сайт",
+    "content.region": "заблокировано в регионе сервера",
+    "content.paid": "платный контент",
+    "content.post.age": "пост 18+, нужен вход",
+    "service.disabled": "этот сайт выключен на сервере cobalt",
+    "service.audio_not_supported": "с этого сайта cobalt не умеет отдавать только звук",
+    "youtube.no_session_tokens": "серверу cobalt нужен сервер сессий YouTube (YOUTUBE_SESSION_SERVER)",
+    "youtube.token_expired": "у сервера cobalt истёк вход в YouTube",
+    "youtube.api_error": "YouTube отклонил запрос сервера cobalt",
+    "youtube.no_matching_format": "у YouTube нет подходящего формата для cobalt",
+    "youtube.no_hls_streams": "у YouTube нет подходящего формата для cobalt",
+    "youtube.drm": "видео защищено DRM",
+    "invalid_body": "сервер cobalt не понял запрос (слишком старая или новая версия)",
+    "generic": "внутренняя ошибка сервера cobalt",
 }
+# сайт не открылся у самого сервера: свой cobalt в Docker ходит в интернет отдельно от приложения
+COBALT_NET = ("fetch.fail", "fetch.critical", "fetch.critical.core", "fetch.empty", "youtube.login")
 
 
 class CobaltFail(Exception):
@@ -504,7 +525,11 @@ def _cobalt_download(url: str, o: dict, out: Path, emit, base: float, span: floa
     if status == "error":
         code = (data.get("error") or {}).get("code", "")
         short = re.sub(r"^error\.api\.", "", code)          # сервер шлёт error.api.link.invalid
-        raise CobaltFail(COBALT_ERRORS.get(short, short or "неизвестная ошибка"))
+        text = COBALT_ERRORS.get(short, f"ошибка {short}" if short else "неизвестная ошибка")
+        if short in COBALT_NET and _is_loopback(o["cobalt_url"]):
+            text += (" (свой сервер в Docker ходит в интернет сам: если сайт открывается только через VPN, "
+                     "нажми «Перезапустить и обновить сервер» при включённом VPN — прокси передастся в контейнер)")
+        raise CobaltFail(text)
     try:
         if status in ("tunnel", "redirect"):
             title = data.get("filename") or url
