@@ -326,7 +326,7 @@ ul.files .up { width: 40px; height: 40px; }
               <button class="btn tonal state" id="pasteUrls" type="button">Вставить из буфера</button>
               <button class="btn text state" id="peekUrls" type="button">Посмотреть, что по ссылкам</button>
             </div>
-            <p class="hint">YouTube, TikTok, VK, Rutube, Дзен, Instagram, X, Twitch, Reddit, Vimeo, SoundCloud, OK и ещё около 1800 сайтов. Если сайт вдруг перестал качаться, обнови yt-dlp (run.bat/run.sh делают это сами при запуске).</p>
+            <p class="hint">YouTube, TikTok, VK, Rutube, Дзен, Instagram, X, Twitch, Reddit, Vimeo, SoundCloud, OK и ещё около 1800 сайтов. <span id="ytdlpHint">Если сайт вдруг перестал качаться, обнови yt-dlp (run.bat/run.sh делают это сами при запуске).</span></p>
           </div>
           <div class="card" id="dlInfo" hidden></div>
         </div>
@@ -1078,6 +1078,8 @@ ul.files .up { width: 40px; height: 40px; }
     $('dpiHint').textContent = m === 'topdf' ? '200 хватит для печати и почты, 300 для качественной печати (файл тяжелее).' : m === 'photo' ? 'Для печати на A4 нужно 300 DPI.' : k === 'pdf' ? '150 хватит для экрана, 300 для печати.' : '';
     files = []; statusEl.hidden = true; if (k === 'uni' && caps) renderUniChips();
     $('dlPane').hidden = m !== 'dl'; $('qrPane').hidden = m !== 'qr';
+    // список ссылок документа живёт вне вкладки QR: при смене режима сбрасываем и прячем его
+    docLinks = null; docSel.clear(); docFileKey = ''; $('qrDocLinks').hidden = true;
     $('filesPane').hidden = m === 'dl' || (m === 'qr' && !['list', 'doc'].includes(qrKind()));
     $('previewCard').hidden = true; cancelBtn.hidden = true;
     const pb = $('engineBanner'); pb.hidden = true; pb.className = 'banner';
@@ -1362,6 +1364,7 @@ ul.files .up { width: 40px; height: 40px; }
     $('dlCookiesHint').textContent = $('dlCookies').files.length ? 'Выбрано: ' + $('dlCookies').files[0].name : 'Нужны для приватных видео, 18+ и Instagram. Выгрузи расширением «Get cookies.txt LOCALLY». Файл используется один раз и удаляется.';
     if (caps && caps.engines.ytdlp_version) $('ytdlpVer').textContent = 'yt-dlp ' + caps.engines.ytdlp_version;
     $('ytdlpUpd').hidden = !(caps && caps.engines.desktop);
+    if (caps && caps.engines.desktop) $('ytdlpHint').textContent = 'Если сайт вдруг перестал качаться, нажми «Обновить yt-dlp» в настройках справа.';
     updateGo();
   }
   $('dlBox').addEventListener('change', syncDl);
@@ -1407,7 +1410,7 @@ ul.files .up { width: 40px; height: 40px; }
     const many = k === 'list' || k === 'doc';
     $('qrPrev').hidden = many; $('qrListOpts').hidden = k !== 'list';
     $('qrDoc').hidden = k !== 'doc'; $('qrDocOpts').hidden = k !== 'doc'; $('qrFmtField').hidden = k === 'doc';
-    $('dropTitle').textContent = k === 'doc' ? 'Перетащи документ сюда' : 'Перетащи списки ссылок сюда'; $('qrDocLinks').hidden = k !== 'doc' || !docLinks;
+    $('dropTitle').textContent = k === 'doc' ? 'Перетащи документ сюда' : 'Перетащи списки ссылок сюда'; $('qrDocLinks').hidden = !docVisible();
     $('filesPane').hidden = !many;
     $('qdSizeVal').textContent = String(+$('qdSize').value).replace('.', ',') + ' см'; paintSlider($('qdSize'));
     if (k === 'doc') { const acc = '.docx,.md,.markdown,.html,.htm,.odt,.rtf,.doc,.epub'; picker.accept = acc; dirPicker.accept = acc; }
@@ -1468,9 +1471,10 @@ ul.files .up { width: 40px; height: 40px; }
   }
   /* QR в документе: найти ссылки, отметить нужные, получить документ с QR */
   let docLinks = null, docSel = new Set(), docFileKey = '';
+  const docVisible = () => mode() === 'qr' && qrKind() === 'doc' && !!docLinks;
   function renderDocLinks() {
     const box = $('qrDocLinks');
-    box.hidden = !docLinks || qrKind() !== 'doc';
+    box.hidden = !docVisible();
     if (!docLinks) return;
     if (!docLinks.length) { box.innerHTML = '<span class="t-body-m">В документе не нашлось ни одной ссылки http(s).</span>'; updateGo(); return; }
     box.innerHTML = `<div class="row" style="justify-content:space-between"><span class="t-title-m">Ссылки в документе: ${docLinks.length}</span>` +
