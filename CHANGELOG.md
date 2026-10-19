@@ -1,5 +1,20 @@
 # История изменений
 
+## v1.2.0 — 2026-10-19
+
+### Linux
+- **`.deb`** для Debian 12+, Ubuntu 22.04+, Linux Mint и других: `sudo apt install ./universal_1.2.0_all.deb`.
+- **`.rpm`** для Fedora: `sudo dnf install ./universal-1.2.0-1.noarch.rpm`.
+- **Пакет для Arch** (Manjaro, EndeavourOS): `sudo pacman -U universal-1.2.0-1-any.pkg.tar.zst`.
+- Своё окно (WebKitGTK), значок в меню приложений. ffmpeg, ImageMagick, pandoc и poppler ставятся зависимостями пакета автоматически.
+
+### macOS
+- **`Universal-1.2.0-macos-arm64.dmg`** (Apple Silicon) и **`-x86_64.dmg`** (Intel): перетащи Universal в «Программы».
+- Движки ставятся через Homebrew; приложение подсказывает точную команду (`brew install ffmpeg` и т.д.).
+
+### Везде
+- Кнопка «Обновить yt-dlp» работает во всех настольных версиях, не только в Windows.
+
 ## v1.1.0 — 2026-10-19
 
 ### Windows-приложение

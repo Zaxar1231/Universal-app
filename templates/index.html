@@ -1065,6 +1065,8 @@ ul.files .up { width: 40px; height: 40px; }
       const ff = ['audio', 'video', 'edit', 'dl'].includes(m) && !caps.engines.ffmpeg;
       if (caps.engines.can_install && (ff || (need && INSTALLABLE[need[0]] && !caps.engines[need[0]]) || (m === 'pdf' && !POPPLER_OK))) {
         offerEngine(ff ? 'ffmpeg' : m === 'pdf' ? 'poppler' : need[0]);
+      } else if (caps.engines.desktop && (ff || (need && INSTALLABLE[need[0]] && !caps.engines[need[0]]) || (m === 'pdf' && !POPPLER_OK))) {
+        systemEngineHint(ff ? 'ffmpeg' : m === 'pdf' ? 'poppler' : need[0]);
       } else if (need && !caps.engines[need[0]]) { pb.hidden = false; pb.textContent = `${need[1]} не найден в PATH. Установи его и перезапусти сервер, иначе этот режим не заработает.`; }
       else if (m === 'pdf' && !POPPLER_OK) { pb.hidden = false; pb.textContent = 'Poppler не найден в PATH. Установи poppler-utils и перезапусти сервер, иначе конвертация PDF не заработает.'; }
     }
@@ -1079,6 +1081,16 @@ ul.files .up { width: 40px; height: 40px; }
     pb.innerHTML = `<span class="t-body-m">Для этого режима нужен <b>${title}</b>. Он скачается один раз (${size}) и дальше будет работать без интернета.</span>` +
       `<button class="btn filled state" id="engGo">Скачать ${title}</button>`;
     $('engGo').onclick = () => installEngine(name, pb);
+  }
+  // macOS и Linux: движки ставит система, подсказываем точную команду
+  const BREW = { ffmpeg: 'ffmpeg', pandoc: 'pandoc', poppler: 'poppler', imagemagick: 'imagemagick' };
+  const APT = { ffmpeg: 'ffmpeg', pandoc: 'pandoc', poppler: 'poppler-utils', imagemagick: 'imagemagick' };
+  function systemEngineHint(name) {
+    const pb = $('engineBanner'), title = INSTALLABLE[name][0], mac = caps.engines.platform === 'darwin';
+    const cmd = mac ? `brew install ${BREW[name]}` : `sudo apt install ${APT[name]}`;
+    pb.className = 'banner offer'; pb.hidden = false;
+    pb.innerHTML = `<span class="t-body-m">Для этого режима нужен <b>${title}</b>. ${mac ? 'Установи его через <a href="https://brew.sh" target="_blank" rel="noopener">Homebrew</a>' : 'Установи пакет'} и перезапусти приложение:</span>` +
+      `<code style="font-family:ui-monospace,monospace">${cmd}</code>` + (mac ? '' : '<span class="hint">Fedora: sudo dnf install …, Arch: sudo pacman -S …</span>');
   }
   function installEngine(name, box, after) {
     box.innerHTML = '<span class="t-body-m">Начинаю…</span><div class="progress busy"><i></i></div>';
@@ -1326,7 +1338,7 @@ ul.files .up { width: 40px; height: 40px; }
     $('dlCookiesClear').hidden = !$('dlCookies').files.length;
     $('dlCookiesHint').textContent = $('dlCookies').files.length ? 'Выбрано: ' + $('dlCookies').files[0].name : 'Нужны для приватных видео, 18+ и Instagram. Выгрузи расширением «Get cookies.txt LOCALLY». Файл используется один раз и удаляется.';
     if (caps && caps.engines.ytdlp_version) $('ytdlpVer').textContent = 'yt-dlp ' + caps.engines.ytdlp_version;
-    $('ytdlpUpd').hidden = !(caps && caps.engines.can_install);
+    $('ytdlpUpd').hidden = !(caps && caps.engines.desktop);
     updateGo();
   }
   $('dlBox').addEventListener('change', syncDl);

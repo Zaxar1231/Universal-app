@@ -49,7 +49,9 @@ CATALOG = {
     },
     "imagemagick": {
         "title": "ImageMagick", "size": "≈ 50 МБ", "exe": ["magick.exe"],
-        "repo": "ImageMagick/ImageMagick", "asset": r"portable-Q16-HDRI-x64\.(zip|7z)$",
+        "repo": "ImageMagick/ImageMagick",
+        # zip, если есть; иначе 7z (его распаковывает 7zr.exe: py7zr не умеет фильтр BCJ2)
+        "asset": [r"portable-Q16-HDRI-x64\.zip$", r"portable-Q16-HDRI-x64\.7z$"],
         "for": "картинки",
     },
     "ytdlp": {
@@ -93,7 +95,11 @@ def activate() -> None:
         sys.path.insert(0, yt)       # zipapp yt-dlp импортируется как обычный пакет
 
 
-def can_install() -> bool:
+def can_install(name: str = "") -> bool:
+    """Бинарные движки качаем только на Windows: на Linux они приходят зависимостями
+    пакета, на macOS ставятся через Homebrew. Свежий yt-dlp годится везде."""
+    if name == "ytdlp":
+        return True
     return sys.platform == "win32" or bool(os.environ.get("UNIVERSAL_ENGINES_ANYOS"))
 
 
@@ -146,9 +152,11 @@ def _resolve_url(spec: dict) -> str:
             errors.append(e.__class__.__name__)
             continue
         listed = True
-        for name, url in assets:
-            if re.search(spec["asset"], name):
-                return url
+        patterns = spec["asset"] if isinstance(spec["asset"], list) else [spec["asset"]]
+        for pattern in patterns:          # по приоритету: сначала zip, потом 7z
+            for name, url in assets:
+                if re.search(pattern, name):
+                    return url
     if listed:
         raise EngineError(f"В последнем релизе {spec['repo']} нет файла для Windows")
     raise EngineError(f"Не удалось узнать последнюю версию ({', '.join(errors)}). Проверь интернет")
@@ -179,14 +187,43 @@ def _download(url: str, dest: Path, task: Task | None, base: float, span: float)
         raise EngineError(f"Загрузка прервалась ({e.__class__.__name__}). Попробуй ещё раз")
 
 
-def _extract(archive: Path, target: Path) -> None:
-    if archive.suffix.lower() == ".7z":
-        try:
-            import py7zr  # type: ignore
-        except ImportError:
-            raise EngineError("Для распаковки .7z нужен пакет py7zr")
+SEVEN_ZIP_URL = "https://www.7-zip.org/a/7zr.exe"   # официальный консольный 7-Zip, только формат 7z
+
+
+def _seven_zip_exe() -> str:
+    """7zr.exe рядом с движками (скачивается один раз), на других ОС системный 7z."""
+    found = shutil.which("7zr") or shutil.which("7z") or shutil.which("7za")
+    if found:
+        return found
+    if sys.platform != "win32":
+        raise EngineError("Для распаковки этого архива нужен 7-Zip (пакет p7zip)")
+    exe = engines_dir() / "tools" / "7zr.exe"
+    if not exe.exists():
+        exe.parent.mkdir(parents=True, exist_ok=True)
+        _download(SEVEN_ZIP_URL, exe, None, 0, 0)
+    return str(exe)
+
+
+def _extract_7z(archive: Path, target: Path) -> None:
+    try:
+        import py7zr  # type: ignore
         with py7zr.SevenZipFile(archive) as z:
             z.extractall(target)
+        return
+    except ImportError:
+        pass
+    except Exception:                       # BCJ2 и прочие фильтры, которых py7zr не знает
+        shutil.rmtree(target, ignore_errors=True)
+    import subprocess
+    res = subprocess.run([_seven_zip_exe(), "x", str(archive), f"-o{target}", "-y"],
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        raise EngineError("Не удалось распаковать архив движка: " + (res.stderr or res.stdout).strip()[-200:])
+
+
+def _extract(archive: Path, target: Path) -> None:
+    if archive.suffix.lower() == ".7z":
+        _extract_7z(archive, target)
         return
     with zipfile.ZipFile(archive) as z:
         for m in z.infolist():   # защита от путей вида ../../
@@ -206,7 +243,8 @@ def install(name: str, task: Task | None = None) -> str:
         task.total = 1
         task.update(0, f"Ищу последнюю версию {spec['title']}…")
     url = _resolve_url(spec)
-    with tempfile.TemporaryDirectory(dir=edir) as tmp:
+    # ignore_cleanup_errors: Windows держит файл открытым, и ошибка уборки скрыла бы настоящую
+    with tempfile.TemporaryDirectory(dir=edir, ignore_cleanup_errors=True) as tmp:
         tmp = Path(tmp)
         fname = url.rsplit("/", 1)[-1]
         if name == "ytdlp":

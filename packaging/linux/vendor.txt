@@ -1,0 +1,16 @@
+# Чистые Python-библиотеки, которые кладутся внутрь пакета (pip install --target).
+# Pillow, cryptography и PyGObject берутся системные: они с бинарными модулями.
+flask
+werkzeug
+jinja2
+markupsafe
+itsdangerous
+blinker
+click
+yt-dlp
+qrcode
+pypdf
+pywebview
+proxy_tools
+bottle
+typing_extensions

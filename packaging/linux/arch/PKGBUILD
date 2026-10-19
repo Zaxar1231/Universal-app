@@ -1,0 +1,19 @@
+# Пакет для Arch Linux и производных (Manjaro, EndeavourOS).
+# Собирается в CI из готового дерева: cp universal-<v>-linux.tar.gz сюда && makepkg
+pkgname=universal
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="File converter, video editor, video downloader, PDF tools and QR codes"
+arch=('any')
+url="https://github.com/Zaxar1231/Universal-app"
+license=('AGPL-3.0-only')
+depends=('python' 'python-gobject' 'webkit2gtk-4.1' 'python-pillow' 'python-cryptography'
+         'ffmpeg' 'imagemagick' 'pandoc-cli' 'poppler')
+optdepends=('libreoffice-fresh: чтение и запись старых .doc')
+source=("universal-${pkgver}-linux.tar.gz")
+sha256sums=('SKIP')
+noextract=("universal-${pkgver}-linux.tar.gz")
+
+package() {
+  tar -C "$pkgdir" -xzf "$srcdir/universal-${pkgver}-linux.tar.gz"
+}

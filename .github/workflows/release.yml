@@ -71,6 +71,8 @@ jobs:
       - name: Зависимости
         run: pip install -r packaging/requirements-desktop.txt
       - name: Сборка exe
+        env:
+          UNIVERSAL_VERSION: ${{ steps.v.outputs.version }}
         run: pyinstaller packaging/universal.spec --noconfirm
       - name: Самопроверка exe
         shell: pwsh
@@ -91,3 +93,116 @@ jobs:
         run: |
           V="${{ steps.v.outputs.version }}"
           gh release upload "v$V" "Output/Universal-Setup-$V.exe" "Output/Universal-$V-windows-portable.zip" --clobber
+
+  linux:
+    # .deb (Debian, Ubuntu, Mint), .rpm (Fedora) и пакет для Arch из одного дерева /usr
+    needs: release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Версия
+        id: v
+        run: |
+          V="${{ github.event.inputs.version }}"
+          [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Дерево и .deb
+        run: |
+          pip install pillow
+          packaging/linux/build.sh "${{ steps.v.outputs.version }}" out
+      - name: .rpm (Fedora)
+        run: docker run --rm -v "$PWD:/src" -w /src fedora:latest packaging/linux/build-rpm.sh "${{ steps.v.outputs.version }}" /src/out
+      - name: Пакет для Arch
+        run: docker run --rm -v "$PWD:/src" -w /src archlinux:base-devel packaging/linux/build-arch.sh "${{ steps.v.outputs.version }}" /src/out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            out/*.deb
+            out/*.rpm
+            out/*.pkg.tar.zst
+
+  linux-test:
+    # каждый пакет ставится в чистый контейнер своего дистрибутива и проходит universal --smoke
+    needs: linux
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "debian:12", install: "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends /pkg/*.deb" }
+          - { image: "ubuntu:22.04", install: "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends /pkg/*.deb" }
+          - { image: "ubuntu:24.04", install: "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends /pkg/*.deb" }
+          - { image: "fedora:latest", install: "dnf install -y -q /pkg/*.rpm" }
+          - { image: "archlinux:latest", install: "pacman -Syu --noconfirm --needed >/dev/null && pacman -U --noconfirm /pkg/*.pkg.tar.zst" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-packages
+          path: pkg
+      - name: Установка и самопроверка в ${{ matrix.image }}
+        run: docker run --rm -v "$PWD/pkg:/pkg" -v "$PWD/packaging/linux/smoke.sh:/smoke.sh" ${{ matrix.image }} sh -c '${{ matrix.install }} >/tmp/install.log 2>&1 || { tail -30 /tmp/install.log; exit 1; }; /smoke.sh'
+
+  linux-publish:
+    needs: [linux, linux-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-packages
+          path: pkg
+      - name: В релиз
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "v${{ needs.linux.outputs.version }}" pkg/* --clobber
+
+  macos:
+    # Universal.app в .dmg: Apple Silicon (arm64) и Intel (x86_64)
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-latest, arch: arm64 }
+          - { runner: macos-15-intel, arch: x86_64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Версия
+        id: v
+        run: |
+          V="${{ github.event.inputs.version }}"
+          [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: Зависимости
+        run: pip install -r packaging/requirements-desktop.txt
+      - name: Сборка .app
+        env:
+          UNIVERSAL_VERSION: ${{ steps.v.outputs.version }}
+        run: pyinstaller packaging/universal.spec --noconfirm
+      - name: Самопроверка
+        run: |
+          export UNIVERSAL_HOME="$RUNNER_TEMP/universal-smoke"
+          dist/Universal.app/Contents/MacOS/Universal --smoke && rc=0 || rc=$?
+          cat "$UNIVERSAL_HOME/smoke.json"; echo
+          [ $rc -eq 0 ] || { cat "$UNIVERSAL_HOME/universal.log" 2>/dev/null; exit 1; }
+      - name: .dmg
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          mkdir dmg && cp -R dist/Universal.app dmg/ && ln -s /Applications dmg/Applications
+          hdiutil create -volname "Universal $V" -srcfolder dmg -ov -format UDZO "Universal-$V-macos-${{ matrix.arch }}.dmg"
+      - name: В релиз
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "v${{ steps.v.outputs.version }}" Universal-*.dmg --clobber
