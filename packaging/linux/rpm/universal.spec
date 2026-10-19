@@ -2,7 +2,7 @@
 # rpmbuild -bb --define "_sourcedir <папка с tar.gz>" --define "ver <v>" universal.spec
 Name:           universal
 Version:        %{ver}
-Release:        1%{?dist}
+Release:        1
 Summary:        File converter, video editor, video downloader, PDF tools and QR codes
 License:        AGPL-3.0-only
 URL:            https://github.com/Zaxar1231/Universal-app
