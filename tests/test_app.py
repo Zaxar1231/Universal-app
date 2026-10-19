@@ -542,3 +542,42 @@ def test_windows_ignores_system_convert(monkeypatch):
     monkeypatch.setattr(converters.sys, "platform", "win32")
     monkeypatch.setattr(converters.shutil, "which", lambda n: "C:/Windows/System32/convert.exe" if n == "convert" else None)
     assert converters._magick() is None
+
+
+def test_engine_resolve_falls_back_to_release_page(monkeypatch):
+    """API упёрся в лимит (403) -> ссылка берётся со страницы релиза."""
+    import http.server
+    import threading
+    import engines
+
+    class FakeGitHub(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            if self.path.startswith("/api/"):
+                self.send_response(403); self.end_headers(); self.wfile.write(b"rate limit exceeded")
+            elif self.path == "/jgm/pandoc/releases/latest":
+                self.send_response(302); self.send_header("Location", "/jgm/pandoc/releases/tag/3.9"); self.end_headers()
+            elif self.path == "/jgm/pandoc/releases/tag/3.9":
+                self.send_response(200); self.end_headers()
+            elif self.path == "/jgm/pandoc/releases/expanded_assets/3.9":
+                self.send_response(200); self.end_headers()
+                self.wfile.write(b'<a href="/jgm/pandoc/releases/download/3.9/pandoc-3.9-arm64-macOS.zip">'
+                                 b'<a href="/jgm/pandoc/releases/download/3.9/pandoc-3.9-windows-x86_64.zip">')
+            else:
+                self.send_response(404); self.end_headers()
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), FakeGitHub)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_port}"
+    monkeypatch.setattr(engines, "GITHUB_API", base + "/api/repos/{repo}/releases/latest")
+    monkeypatch.setattr(engines, "GITHUB_WEB", base)
+    try:
+        assert engines._resolve_url(engines.CATALOG["pandoc"]) == base + "/jgm/pandoc/releases/download/3.9/pandoc-3.9-windows-x86_64.zip"
+        with pytest.raises(engines.EngineError, match="нет файла"):
+            engines._resolve_url({"repo": "jgm/pandoc", "asset": r"nothing-matches$"})
+        with pytest.raises(engines.EngineError, match="Проверь интернет"):
+            engines._resolve_url({"repo": "no/such", "asset": "x"})
+    finally:
+        srv.shutdown()

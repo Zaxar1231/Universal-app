@@ -27,6 +27,7 @@ from pathlib import Path
 from tasks import Task
 
 GITHUB_API = "https://api.github.com/repos/{repo}/releases/latest"
+GITHUB_WEB = "https://github.com"
 UA = {"User-Agent": "Universal-app"}
 
 # что качать (Windows x64). exe — по какому файлу понять, что движок на месте.
@@ -110,19 +111,47 @@ class EngineError(Exception):
     pass
 
 
+def _get(url: str, timeout: int = 30):
+    headers = dict(UA)
+    token = os.environ.get("GITHUB_TOKEN")
+    if token and url.startswith(GITHUB_API.split("/repos/")[0]):
+        headers["Authorization"] = f"Bearer {token}"
+    return urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout)
+
+
+def _assets_from_api(repo: str) -> list[tuple[str, str]]:
+    with _get(GITHUB_API.format(repo=repo)) as r:
+        data = json.load(r)
+    return [(a["name"], a["browser_download_url"]) for a in data.get("assets", [])]
+
+
+def _assets_from_html(repo: str) -> list[tuple[str, str]]:
+    """Запасной путь без API (у API лимит 60 запросов в час на IP): страница релиза."""
+    with _get(f"{GITHUB_WEB}/{repo}/releases/latest") as r:
+        tag = r.geturl().rstrip("/").rsplit("/", 1)[-1]      # редирект на .../releases/tag/<tag>
+    with _get(f"{GITHUB_WEB}/{repo}/releases/expanded_assets/{tag}") as r:
+        page = r.read().decode("utf-8", "replace")
+    links = re.findall(r'href="(/' + re.escape(repo) + r'/releases/download/[^"]+)"', page)
+    return [(l.rsplit("/", 1)[-1], GITHUB_WEB + l) for l in dict.fromkeys(links)]
+
+
 def _resolve_url(spec: dict) -> str:
     if "url" in spec:
         return spec["url"]
-    req = urllib.request.Request(GITHUB_API.format(repo=spec["repo"]), headers=UA)
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            data = json.load(r)
-    except Exception as e:
-        raise EngineError(f"Не удалось узнать последнюю версию ({e.__class__.__name__}). Проверь интернет")
-    for a in data.get("assets", []):
-        if re.search(spec["asset"], a["name"]):
-            return a["browser_download_url"]
-    raise EngineError(f"В последнем релизе {spec['repo']} нет файла для Windows")
+    errors, listed = [], False
+    for source in (_assets_from_api, _assets_from_html):
+        try:
+            assets = source(spec["repo"])
+        except Exception as e:
+            errors.append(e.__class__.__name__)
+            continue
+        listed = True
+        for name, url in assets:
+            if re.search(spec["asset"], name):
+                return url
+    if listed:
+        raise EngineError(f"В последнем релизе {spec['repo']} нет файла для Windows")
+    raise EngineError(f"Не удалось узнать последнюю версию ({', '.join(errors)}). Проверь интернет")
 
 
 def _download(url: str, dest: Path, task: Task | None, base: float, span: float) -> None:
