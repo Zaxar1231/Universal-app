@@ -10,12 +10,40 @@ id задачи совпадает с id папки задания, поэтом
 """
 from __future__ import annotations
 
+import os
+import signal
 import subprocess
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable
+
+
+def kill_tree(proc: subprocess.Popen) -> None:
+    """Убивает процесс вместе с детьми (yt-dlp запускает ffmpeg, а тот живёт дольше родителя)."""
+    if proc.poll() is not None:
+        return
+    try:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=15)
+        else:
+            try:
+                pgid = os.getpgid(proc.pid)
+                if pgid != os.getpgid(0):        # своя группа (start_new_session): убиваем её целиком
+                    os.killpg(pgid, signal.SIGKILL)
+                else:                            # общая с приложением группа: только сам процесс
+                    proc.kill()
+            except (ProcessLookupError, PermissionError):
+                proc.kill()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    if proc.poll() is None:
+        try:
+            proc.kill()
+        except OSError:
+            pass
 
 
 class Cancelled(Exception):
@@ -58,11 +86,8 @@ class Task:
     def cancel(self) -> None:
         self.cancel_event.set()
         proc = self.proc
-        if proc and proc.poll() is None:
-            try:
-                proc.kill()
-            except OSError:
-                pass
+        if proc:
+            kill_tree(proc)
 
     def outputs(self) -> list[str]:
         if not self.out_dir.is_dir():

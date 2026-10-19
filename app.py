@@ -631,6 +631,7 @@ def formats():
                 "qrcode": qrtools.available(), "pypdf": pdftools.available(),
                 "poppler": all(poppler_ok().values()), "can_install": engine_store.can_install(),
                 "platform": sys.platform,
+                "deno": bool(shutil.which("deno")),
                 "desktop": bool(os.environ.get("UNIVERSAL_DESKTOP"))})
     cats = {}
     for name, table in conv.CATEGORIES.items():

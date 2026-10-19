@@ -761,3 +761,88 @@ def test_qrdoc_odt_via_docx(tmp_path):
     out = tmp_path / "out"; out.mkdir()
     dst, n = qrdoc.apply(tmp_path / "s.odt", out, "s", {"https://odt.example.com"}, "replace", 3, qrtools.read_style({}), tmp_path / "w")
     assert dst.suffix == ".docx" and n == 1
+
+
+# ---------------------------------------------------------------- загрузчик: отмена и скорость
+
+@pytest.fixture()
+def slow_server(media, tmp_path):
+    """/big.mp4 отдаётся по ~100 КБ/с, /hang вообще не отвечает (как зависший сайт)."""
+    import http.server
+    import threading
+    big = tmp_path / "big.bin"
+    big.write_bytes(os.urandom(4 * 1048576))
+
+    class Slow(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            if self.path.startswith("/hang"):
+                time.sleep(60)
+                return
+            data = big.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "video/mp4")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            try:
+                for i in range(0, len(data), 8192):
+                    self.wfile.write(data[i:i + 8192])
+                    time.sleep(0.08)
+            except OSError:
+                pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Slow)
+    srv.daemon_threads = True
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_port}"
+    srv.shutdown()
+
+
+def _cancel_and_time(client, tid):
+    t0 = time.time()
+    client.post(f"/api/task/{tid}/cancel")
+    d = wait_task(client, tid, timeout=20)
+    return d, time.time() - t0
+
+
+@pytest.mark.parametrize("path, wait_for", [("/big.mp4", "Качаю"), ("/hang/video.mp4", "получаю данные")])
+def test_dl_cancel_is_immediate(client, slow_server, path, wait_for):
+    r = client.post("/api/dl", data={"urls": slow_server + path, "mode": "video"})
+    tid = r.get_json()["task"]
+    t0 = time.time()
+    while wait_for not in client.get(f"/api/task/{tid}").get_json()["message"] and time.time() - t0 < 20:
+        time.sleep(0.2)
+    time.sleep(1)
+    task = webapp.TASKS.get(tid)
+    worker = task.proc
+    assert worker is not None and worker.poll() is None            # качает отдельный процесс
+    d, took = _cancel_and_time(client, tid)
+    assert d["status"] == "cancelled" and took < 3, (d, took)
+    assert worker.poll() is not None                              # процесс убит, а не брошен
+    assert not any(task.out_dir.iterdir())                        # недокачанные .part убраны
+
+
+def test_dl_worker_crash_is_reported(client, monkeypatch):
+    import downloader
+    monkeypatch.setattr(downloader, "worker_cmd", lambda args: [sys.executable, "-c", "import sys; sys.exit('boom')"])
+    d = wait_task(client, client.post("/api/dl", data={"urls": "https://example.com/v"}).get_json()["task"])
+    assert d["status"] == "error" and "boom" in d["error"]
+
+
+def test_dl_opts_speed_and_js_runtime():
+    y = downloader.build_opts(downloader.read_opts({"mode": "video"}), Path("/tmp"), None)
+    assert y["concurrent_fragment_downloads"] == 4 and "deno" in y["js_runtimes"]
+
+
+def test_engine_deno_install_sets_exec_bit(engine_env, monkeypatch):
+    engines, srv_dir, base = engine_env
+    exe = "deno.exe" if sys.platform == "win32" else "deno"
+    with zipfile.ZipFile(srv_dir / engines._deno_asset(), "w") as z:
+        z.writestr(exe, "#!/bin/sh\necho deno 2.0\n")
+    monkeypatch.setitem(engines.CATALOG, "deno", {**engines.CATALOG["deno"], "url": base + "/{asset}"})
+    path = engines.install("deno")
+    assert Path(path, exe).exists() and engines.can_install("deno")
+    if sys.platform != "win32":
+        assert os.access(Path(path, exe), os.X_OK)

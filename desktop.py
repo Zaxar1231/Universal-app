@@ -64,6 +64,16 @@ def smoke(url: str) -> int:
         import webview  # noqa: F401  (проверяем, что окно попало в сборку)
         import yt_dlp  # noqa: F401
         checks["imports"] = True
+        # отдельный процесс скачивания (exe запускает сам себя с --dl-worker) стартует и отвечает
+        import subprocess
+        import tempfile
+        import downloader
+        with tempfile.TemporaryDirectory() as d:
+            ev, args = os.path.join(d, "ev.jsonl"), os.path.join(d, "args.json")
+            with open(args, "w", encoding="utf-8") as f:
+                json.dump({"urls": [], "opts": downloader.read_opts({}), "out": d, "events": ev, "cookie": ""}, f)
+            subprocess.run(downloader.worker_cmd(args), timeout=120, capture_output=True)
+            checks["dl_worker"] = os.path.exists(ev) and '"finished"' in open(ev, encoding="utf-8").read()
         if sys.platform.startswith("linux"):
             import webview.platforms.gtk  # noqa: F401  (GTK и WebKit2 из зависимостей пакета)
             checks["gui"] = True
@@ -75,6 +85,12 @@ def smoke(url: str) -> int:
 
 
 def main() -> None:
+    if "--dl-worker" in sys.argv:
+        # тот же exe в роли отдельного процесса скачивания (см. downloader.worker_cmd)
+        engines.activate()
+        import downloader
+        downloader.worker_main(sys.argv[sys.argv.index("--dl-worker") + 1])
+        return
     home = engines.root()
     home.mkdir(parents=True, exist_ok=True)
     if sys.stdout is None or sys.stderr is None:

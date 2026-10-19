@@ -54,12 +54,32 @@ CATALOG = {
         "asset": [r"portable-Q16-HDRI-x64\.zip$", r"portable-Q16-HDRI-x64\.7z$"],
         "for": "картинки",
     },
+    "deno": {
+        # JavaScript-движок, которым yt-dlp решает задачки YouTube; без него YouTube режет скорость
+        "title": "deno", "size": "≈ 45 МБ", "exe": ["deno.exe"],
+        "url": "https://github.com/denoland/deno/releases/latest/download/{asset}",
+        "for": "быстрое скачивание с YouTube",
+    },
     "ytdlp": {
         "title": "свежий yt-dlp", "size": "≈ 3 МБ", "exe": ["yt-dlp.zip"],
         "url": "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp",
         "for": "скачивание видео, если какой-то сайт перестал качаться",
     },
 }
+
+
+def _deno_asset() -> str:
+    import platform
+    arch = "aarch64" if platform.machine().lower() in ("arm64", "aarch64") else "x86_64"
+    target = {"win32": "pc-windows-msvc", "darwin": "apple-darwin"}.get(sys.platform, "unknown-linux-gnu")
+    return f"deno-{arch}-{target}.zip"
+
+
+def _exe_names(name: str) -> list[str]:
+    names = CATALOG[name]["exe"]
+    if name == "deno" and sys.platform != "win32":  # deno есть и для Linux/macOS, там без .exe
+        names = [n[:-4] if n.endswith(".exe") else n for n in names]
+    return names
 
 
 def root() -> Path:
@@ -98,7 +118,7 @@ def activate() -> None:
 def can_install(name: str = "") -> bool:
     """Бинарные движки качаем только на Windows: на Linux они приходят зависимостями
     пакета, на macOS ставятся через Homebrew. Свежий yt-dlp годится везде."""
-    if name == "ytdlp":
+    if name in ("ytdlp", "deno"):
         return True
     return sys.platform == "win32" or bool(os.environ.get("UNIVERSAL_ENGINES_ANYOS"))
 
@@ -143,7 +163,7 @@ def _assets_from_html(repo: str) -> list[tuple[str, str]]:
 
 def _resolve_url(spec: dict) -> str:
     if "url" in spec:
-        return spec["url"]
+        return spec["url"].replace("{asset}", _deno_asset())
     errors, listed = [], False
     for source in (_assets_from_api, _assets_from_html):
         try:
@@ -262,7 +282,7 @@ def install(name: str, task: Task | None = None) -> str:
         else:
             unpacked = tmp / "x"
             _extract(archive, unpacked)
-            first = spec["exe"][0]
+            first = _exe_names(name)[0]
             found = next((p for p in unpacked.rglob(first) if p.is_file()), None)
             if not found:
                 raise EngineError(f"В архиве нет {first}")
@@ -271,9 +291,14 @@ def install(name: str, task: Task | None = None) -> str:
             # вся распакованная папка: рядом с exe лежат нужные ему dll и настройки
             shutil.move(str(unpacked), final)
             result = str(final / found.parent.relative_to(unpacked))
-            for exe in spec["exe"][1:]:
+            for exe in _exe_names(name)[1:]:
                 if not (Path(result) / exe).exists():
                     raise EngineError(f"В архиве нет {exe}")
+            if sys.platform != "win32":              # zip не хранит права на запуск
+                for exe in _exe_names(name):
+                    p = Path(result) / exe
+                    if p.exists():
+                        p.chmod(0o755)
     paths = _load_paths()
     paths[name] = result
     _paths_file().write_text(json.dumps(paths, ensure_ascii=False, indent=1), encoding="utf-8")

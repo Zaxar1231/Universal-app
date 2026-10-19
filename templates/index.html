@@ -1093,6 +1093,7 @@ ul.files .up { width: 40px; height: 40px; }
         systemEngineHint(ff ? 'ffmpeg' : m === 'pdf' ? 'poppler' : need[0]);
       } else if (need && !caps.engines[need[0]]) { pb.hidden = false; pb.textContent = `${need[1]} не найден в PATH. Установи его и перезапусти сервер, иначе этот режим не заработает.`; }
       else if (m === 'pdf' && !POPPLER_OK) { pb.hidden = false; pb.textContent = 'Poppler не найден в PATH. Установи poppler-utils и перезапусти сервер, иначе конвертация PDF не заработает.'; }
+      if (m === 'dl' && pb.hidden && caps.engines.ffmpeg && caps.engines.ytdlp && !caps.engines.deno) offerDeno();
     }
     render(); syncSettings();
     if (m === 'qr') qrRefresh();
@@ -1105,6 +1106,18 @@ ul.files .up { width: 40px; height: 40px; }
     pb.innerHTML = `<span class="t-body-m">Для этого режима нужен <b>${title}</b>. Он скачается один раз (${size}) и дальше будет работать без интернета.</span>` +
       `<button class="btn filled state" id="engGo">Скачать ${title}</button>`;
     $('engGo').onclick = () => installEngine(name, pb);
+  }
+  // YouTube без JavaScript-движка режет скорость (~0,1 МБ/с) и прячет часть форматов
+  function offerDeno() {
+    const pb = $('engineBanner');
+    pb.className = 'banner offer'; pb.hidden = false;
+    const why = '<span class="t-body-m">Для быстрого скачивания с <b>YouTube</b> нужен движок <b>deno</b>. Без него YouTube режет скорость примерно до 0,1 МБ/с и прячет часть качеств. Другим сайтам он не нужен.</span>';
+    if (caps.engines.desktop) {
+      pb.innerHTML = why + '<button class="btn filled state" id="denoGo">Скачать deno (≈ 45 МБ)</button>';
+      $('denoGo').onclick = () => installEngine('deno', pb);
+    } else {
+      pb.innerHTML = why + '<span class="t-body-m">Установи его с <a href="https://deno.com" target="_blank" rel="noopener">deno.com</a> и перезапусти сервер.</span>';
+    }
   }
   // macOS и Linux: движки ставит система, подсказываем точную команду
   const BREW = { ffmpeg: 'ffmpeg', pandoc: 'pandoc', poppler: 'poppler', imagemagick: 'imagemagick' };

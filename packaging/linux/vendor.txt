@@ -8,6 +8,7 @@ itsdangerous
 blinker
 click
 yt-dlp
+yt-dlp-ejs
 qrcode
 pypdf
 pywebview
