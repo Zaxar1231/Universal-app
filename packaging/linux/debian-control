@@ -1,0 +1,15 @@
+Package: universal
+Version: @VERSION@
+Architecture: all
+Maintainer: Universal <noreply@github.com>
+Installed-Size: @SIZE@
+Depends: python3 (>= 3.10), python3-gi, gir1.2-webkit2-4.1 | gir1.2-webkit2-4.0, python3-pil, python3-cryptography, ffmpeg, imagemagick, pandoc, poppler-utils
+Recommends: libreoffice-writer
+Section: utils
+Priority: optional
+Homepage: https://github.com/Zaxar1231/Universal-app
+Description: File converter, video editor, video downloader, PDF tools and QR codes
+ Universal converts images, audio, video and documents (like vert.sh),
+ edits video and audio with ffmpeg, downloads videos from YouTube, TikTok,
+ VK and ~1800 sites with yt-dlp, edits PDFs and makes QR codes.
+ Everything runs locally in its own window.

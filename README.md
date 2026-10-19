@@ -37,10 +37,21 @@
 <img src="site/img/mobile_editor.webp" width="24%" alt="Редактор на телефоне">
 </p>
 
-## Windows: просто установи
-Скачай **`Universal-Setup-X.Y.Z.exe`** из [последнего релиза](https://github.com/Zaxar1231/Universal-app/releases/latest) и запусти. Появится обычное приложение со значком в «Пуске», без командной строки и браузера. Когда режиму понадобится ffmpeg, pandoc, poppler или ImageMagick, приложение предложит скачать его одной кнопкой. Нужен Windows 10/11 x64 (WebView2 установщик поставит сам, если его нет).
+## Установка
+Все файлы в [последнем релизе](https://github.com/Zaxar1231/Universal-app/releases/latest).
 
-Не хочешь устанавливать: возьми `Universal-X.Y.Z-windows-portable.zip`, распакуй и запусти `Universal.exe`.
+| Система | Файл | Как поставить |
+|---|---|---|
+| Windows 10/11 | `Universal-Setup-X.Y.Z.exe` | запустить установщик. Движки приложение предложит скачать одной кнопкой |
+| Windows без установки | `Universal-X.Y.Z-windows-portable.zip` | распаковать, запустить `Universal.exe` |
+| Debian, Ubuntu, Mint | `universal_X.Y.Z_all.deb` | `sudo apt install ./universal_X.Y.Z_all.deb` |
+| Fedora | `universal-X.Y.Z-1.noarch.rpm` | `sudo dnf install ./universal-X.Y.Z-1.noarch.rpm` |
+| Arch, Manjaro | `universal-X.Y.Z-1-any.pkg.tar.zst` | `sudo pacman -U universal-X.Y.Z-1-any.pkg.tar.zst` |
+| macOS (Apple Silicon / Intel) | `Universal-X.Y.Z-macos-arm64.dmg` / `-x86_64.dmg` | открыть, перетащить в «Программы»; движки: `brew install ffmpeg imagemagick pandoc poppler` |
+
+На Linux ffmpeg, ImageMagick, pandoc и poppler приходят зависимостями пакета. В Fedora основной ffmpeg (`ffmpeg-free`) не умеет H.264/H.265: для редактора видео поставь ffmpeg из [RPM Fusion](https://rpmfusion.org/).
+
+Первый запуск на macOS: приложение не подписано сертификатом Apple, поэтому открой его правой кнопкой → «Открыть» (или «Системные настройки → Конфиденциальность и безопасность → Всё равно открыть»). На Windows SmartScreen может попросить «Подробнее → Выполнить в любом случае».
 
 ## Установка из исходников (Windows, Linux, macOS)
 1. Python 3.10 или новее (на Windows отметь Add Python to PATH).
@@ -90,8 +101,10 @@ NET=1 python -m pytest -q    # плюс настоящее скачивание 
 ## Сайт
 Папка `site/` публикуется на GitHub Pages workflow-ом `.github/workflows/pages.yml` при каждом пуше в `main`. Это статическая страница: QR (qrcode-generator), картинки (canvas) и PDF (pdf-lib) работают в браузере, её можно установить на телефон как приложение и пользоваться офлайн.
 
-## Сборка Windows-приложения
-`desktop.py` запускает тот же сервер внутри окна pywebview, `engines.py` качает движки в `%LOCALAPPDATA%\Universal\engines`. Exe собирает PyInstaller (`packaging/universal.spec`), установщик Inno Setup (`packaging/installer.iss`); всё это делает workflow «Релиз» на Windows-раннере и перед публикацией запускает `Universal.exe --smoke`. Локально: `pip install -r packaging/requirements-desktop.txt && python desktop.py`.
+## Сборка настольных версий
+Linux-пакеты собирает `packaging/linux/build.sh` (дерево `/usr` + `.deb`), `build-rpm.sh` и `build-arch.sh` в контейнерах Fedora и Arch; чистые Python-библиотеки лежат внутри пакета, Pillow, cryptography и WebKitGTK берутся системные. macOS: тот же `packaging/universal.spec` собирает `Universal.app`, `hdiutil` делает `.dmg`. Каждый пакет в workflow «Релиз» ставится в чистый контейнер своего дистрибутива (Debian 12, Ubuntu 22.04/24.04, Fedora, Arch) и проходит `universal --smoke`.
+
+Windows: `desktop.py` запускает тот же сервер внутри окна pywebview, `engines.py` качает движки в `%LOCALAPPDATA%\Universal\engines`. Exe собирает PyInstaller (`packaging/universal.spec`), установщик Inno Setup (`packaging/installer.iss`); всё это делает workflow «Релиз» на Windows-раннере и перед публикацией запускает `Universal.exe --smoke`. Локально: `pip install -r packaging/requirements-desktop.txt && python desktop.py`.
 
 ## Релизы
 Описание версий в `CHANGELOG.md`. Новый релиз: добавь раздел `## vX.Y.Z` в CHANGELOG и запусти workflow «Релиз» (Actions → Релиз → Run workflow) или запушь тег `vX.Y.Z`. Архив и описание соберутся сами. К релизу прикладываются установщик и портативная версия для Windows, а также архив исходников только с файлами для работы: модули `*.py`, `templates/`, `requirements.txt`, `run.bat`, `run.sh`, README и LICENSE. Тесты, Docker и сайт берутся из репозитория (`git clone`).

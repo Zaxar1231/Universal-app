@@ -93,7 +93,11 @@ def activate() -> None:
         sys.path.insert(0, yt)       # zipapp yt-dlp импортируется как обычный пакет
 
 
-def can_install() -> bool:
+def can_install(name: str = "") -> bool:
+    """Бинарные движки качаем только на Windows: на Linux они приходят зависимостями
+    пакета, на macOS ставятся через Homebrew. Свежий yt-dlp годится везде."""
+    if name == "ytdlp":
+        return True
     return sys.platform == "win32" or bool(os.environ.get("UNIVERSAL_ENGINES_ANYOS"))
 
 

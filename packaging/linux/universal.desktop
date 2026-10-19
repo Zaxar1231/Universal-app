@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Universal
+GenericName=File Converter
+GenericName[ru]=Конвертер файлов
+Comment=Convert files, edit video, download videos, PDF tools and QR codes
+Comment[ru]=Конвертер файлов, редактор видео, скачивание видео, PDF и QR-коды
+Exec=universal
+Icon=universal
+Terminal=false
+Categories=AudioVideo;Graphics;Office;Utility;
+Keywords=convert;video;audio;ffmpeg;pdf;qr;youtube;download;
+StartupWMClass=Universal

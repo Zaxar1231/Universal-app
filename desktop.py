@@ -64,6 +64,9 @@ def smoke(url: str) -> int:
         import webview  # noqa: F401  (проверяем, что окно попало в сборку)
         import yt_dlp  # noqa: F401
         checks["imports"] = True
+        if sys.platform.startswith("linux"):
+            import webview.platforms.gtk  # noqa: F401  (GTK и WebKit2 из зависимостей пакета)
+            checks["gui"] = True
     except Exception as e:
         checks["error"] = repr(e)
     out = engines.root() / "smoke.json"
@@ -81,6 +84,10 @@ def main() -> None:
         sys.stderr = sys.stderr or log
     import logging
     logging.getLogger("werkzeug").setLevel(logging.WARNING)   # без строки на каждый запрос
+    if sys.platform == "darwin":
+        # из Finder приложение стартует без PATH из терминала, а Homebrew живёт здесь
+        extra = [d for d in ("/opt/homebrew/bin", "/usr/local/bin") if os.path.isdir(d)]
+        os.environ["PATH"] = os.pathsep.join(extra + [os.environ.get("PATH", "")])
     os.environ.setdefault("WORK_DIR", str(home / "jobs"))
     os.environ["UNIVERSAL_DESKTOP"] = "1"
     engines.activate()            # PATH к движкам и свежий yt-dlp, до импорта app
