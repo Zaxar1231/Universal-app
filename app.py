@@ -915,12 +915,13 @@ def dl_info():
     if not urls:
         return jsonify({"error": "Не нашёл ссылок. Вставь адрес, начинающийся с http"}), 400
     cookie = _cookiefile(None)
+    net = downloader.read_net(request.form)
     items = []
     try:
         with ThreadPoolExecutor(max_workers=4) as pool:
             def one(u):
                 try:
-                    return downloader.probe_url(u, cookie)
+                    return downloader.probe_url(u, cookie, net)
                 except downloader.DownloadFail as e:
                     return {"url": u, "error": str(e)}
             items = list(pool.map(one, urls))
@@ -930,6 +931,15 @@ def dl_info():
     return jsonify({"items": items})
 
 
+@app.route("/api/dl/netcheck", methods=["POST"])
+def dl_netcheck():
+    """«Проверить сеть»: открываются ли сайты с текущими настройками прокси/IPv4."""
+    try:
+        return jsonify(downloader.net_check(downloader.read_net(request.form)))
+    except downloader.DownloadFail as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/dl/cobalt-check", methods=["POST"])
 def dl_cobalt_check():
     """Проверка сервера cobalt: отвечает ли и какие сайты умеет."""
@@ -937,7 +947,8 @@ def dl_cobalt_check():
     if not re.match(r"^https?://", base, re.I):
         return jsonify({"error": "Адрес сервера должен начинаться с http:// или https://"}), 400
     try:
-        return jsonify(downloader.cobalt_info(base, (request.form.get("cobalt_key") or "").strip()))
+        return jsonify(downloader.cobalt_info(base, (request.form.get("cobalt_key") or "").strip(),
+                                              downloader.read_net(request.form)))
     except downloader.CobaltFail as e:
         return jsonify({"error": f"cobalt: {e}"}), 400
 

@@ -1036,3 +1036,80 @@ def test_cobalt_local_no_docker(monkeypatch, client):
     assert client.get("/api/cobalt/local").get_json()["docker"] is False
     d = wait_task(client, client.post("/api/cobalt/local").get_json()["task"])
     assert d["status"] == "error" and "Docker Desktop" in d["error"]
+
+
+# ---------------------------------------------------------------- сеть и VPN
+
+def test_net_settings(monkeypatch):
+    import urllib.request
+    rn = downloader.read_net
+    assert rn({}) == {"proxy": "auto", "ipv4": True}
+    assert rn({"proxy": "127.0.0.1:10809", "ipv4": "0"}) == {"proxy": "http://127.0.0.1:10809", "ipv4": False}
+    assert rn({"proxy": "socks5://127.0.0.1:10808"})["proxy"] == "socks5://127.0.0.1:10808"
+    assert rn({"proxy": "ftp://x; rm -rf"})["proxy"] == "auto"
+    assert downloader.net_opts({"proxy": "none", "ipv4": True}) == {"proxy": "", "source_address": "0.0.0.0"}
+    assert downloader.net_opts({"proxy": "http://p:1", "ipv4": False}) == {"proxy": "http://p:1"}
+    # Windows отдаёт socks из реестра как socks4, а v2rayN/Clash говорят socks5
+    monkeypatch.setattr(urllib.request, "getproxies", lambda: {"socks": "socks4://127.0.0.1:10808"})
+    assert downloader.system_proxy() == "socks5h://127.0.0.1:10808"
+    assert downloader.net_opts({"proxy": "auto", "ipv4": False}) == {"proxy": "socks5h://127.0.0.1:10808"}
+    monkeypatch.setattr(urllib.request, "getproxies", lambda: {"https": "http://127.0.0.1:10809"})
+    assert downloader.net_opts({"proxy": "auto", "ipv4": False}) == {}   # yt-dlp возьмёт системный сам
+    assert [a["proxy"] for a in downloader._net_attempts({"proxy": "auto"})] == ["auto", "none"]
+    monkeypatch.setattr(urllib.request, "getproxies", lambda: {})
+    assert len(downloader._net_attempts({"proxy": "auto"})) == 1
+
+
+def test_net_human_errors():
+    h = downloader._human_error
+    assert "VPN" in h("ERROR: [youtube] x: Sign in to confirm you’re not a bot. Use --cookies")
+    assert "прокси" in h("Unable to connect to proxy: [Errno 111] Connection refused")
+    assert "Проверить сеть" in h("<urlopen error timed out>")
+
+
+@needs_ffmpeg
+def test_dl_dead_system_proxy_falls_back_to_direct(client, http_media, monkeypatch):
+    """VPN-клиент выключили, а прокси в системе остался: качаем напрямую."""
+    dead = "http://127.0.0.1:9"                       # discard-порт, там никого нет
+    for k in ("http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("NO_PROXY", "")
+    monkeypatch.setenv("no_proxy", "")
+    monkeypatch.setenv("http_proxy", dead)
+    monkeypatch.setenv("https_proxy", dead)
+    d = client.post("/api/dl/info", data={"urls": f"{http_media}/a.mp4"}).get_json()
+    assert d["items"][0]["title"] == "a", d
+    r = client.post("/api/dl", data={"urls": f"{http_media}/a.mp4", "mode": "video"})
+    d = wait_task(client, r.get_json()["task"])
+    assert d["status"] == "done" and d["single_file"].endswith(".mp4"), d
+    # а если прокси задан явно и он мёртвый — понятная ошибка, без тихого обхода
+    r = client.post("/api/dl", data={"urls": f"{http_media}/a.mp4", "proxy": dead})
+    d = wait_task(client, r.get_json()["task"])
+    assert d["status"] == "error" and "прокси" in d["error"], d
+
+
+def test_dl_netcheck(client, monkeypatch):
+    calls = []
+
+    class FakeYDL:
+        def __init__(self, opts):
+            calls.append(opts)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def urlopen(self, url):
+            if "vk.com" in url:
+                raise OSError("<urlopen error timed out>")
+            return io.BytesIO(b"x")
+
+    monkeypatch.setattr(downloader.yt_dlp, "YoutubeDL", FakeYDL)
+    d = client.post("/api/dl/netcheck", data={"proxy": "none", "ipv4": "1"}).get_json()
+    by = {x["name"]: x for x in d["sites"]}
+    assert by["YouTube"]["ok"] and not by["VK"]["ok"] and by["VK"]["error"] == "нет ответа"
+    assert downloader._short_net_error("<urlopen error Tunnel connection failed: 403 Forbidden>") == "прокси не пустил (403)"
+    assert d["proxy"] == "" and d["ipv4"] is True and "ipv6" in d
+    assert all(c["proxy"] == "" and c["source_address"] == "0.0.0.0" for c in calls)

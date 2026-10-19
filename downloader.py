@@ -75,6 +75,14 @@ class _Quiet:
 
 def _human_error(msg: str) -> str:
     low = msg.lower()
+    if "not a bot" in low or "confirm you" in low:
+        return ("YouTube не пускает с IP этого VPN («подтвердите, что вы не бот»). Выбери другой сервер VPN, "
+                "исключи Universal из VPN (раздельное туннелирование) или добавь cookies.txt")
+    if "unable to connect to proxy" in low or "proxyerror" in low or "proxy" in low and "refused" in low:
+        return ("Не подключиться к прокси. VPN-клиент выключен, а прокси в системе остался, или порт другой: "
+                "в настройках «Сеть и VPN» выбери «Без прокси» или впиши верный")
+    if "certificate verify failed" in low or "certificate_verify_failed" in low:
+        return "Сертификат сайта не прошёл проверку: VPN или антивирус подменяет HTTPS. Выключи у них проверку HTTPS"
     if "unsupported url" in low:
         return "Этот сайт не поддерживается (или ссылка не на видео)"
     if "private" in low or "login" in low or "sign in" in low or "cookies" in low:
@@ -83,20 +91,103 @@ def _human_error(msg: str) -> str:
         return "Видео недоступно (удалено, закрыто или заблокировано в регионе)"
     if "http error 429" in low or "too many requests" in low:
         return "Сайт ограничил частоту запросов (429). Подожди немного или добавь cookies.txt"
-    if "urlopen error" in low or "tunnel connection failed" in low or "timed out" in low \
-            or "name or service not known" in low or "getaddrinfo failed" in low:
-        return "Нет связи с сайтом (интернет, прокси или блокировка провайдера)"
+    if _is_net_error(low):
+        return "Нет связи с сайтом (интернет, VPN, прокси или блокировка провайдера). Нажми «Проверить сеть» в настройках"
     if "requested format is not available" in low:
         return "Такого качества нет. Выбери «Лучшее»"
     return msg.strip()[:300] or "yt-dlp не смог скачать"
 
 
-def _base_opts(cookiefile: Path | None) -> dict:
+NET_ERRORS = ("urlopen error", "tunnel connection failed", "timed out", "name or service not known",
+              "getaddrinfo failed", "nodename nor servname", "connection reset", "connection refused",
+              "network is unreachable", "no route to host", "remote end closed", "connection aborted",
+              "transporterror", "unable to download webpage", "eof occurred", "ssl: ", "winerror 10060",
+              "winerror 10054", "winerror 10061")
+
+
+def _is_net_error(low: str) -> bool:
+    return any(k in low for k in NET_ERRORS)
+
+
+# ----------------------------------------------------------------------------
+# сеть: VPN-клиенты (v2rayN, Clash, Hiddify, Happ…) прописывают прокси в систему,
+# а VPN в режиме TUN часто ломает IPv6, и тогда каждое соединение висит по 30 с
+# ----------------------------------------------------------------------------
+
+PROXY_RE = re.compile(r"^(https?|socks5h?|socks4a?)://[^\s/]+(:\d+)?/?$", re.I)
+
+
+def system_proxy() -> str:
+    """Прокси из настроек системы (реестр Windows, macOS, переменные окружения)."""
+    v = _raw_system_proxy().strip()
+    if not v:
+        return ""
+    if "://" not in v:
+        v = "http://" + v
+    # Windows подписывает socks-прокси как socks4, а VPN-клиенты почти всегда говорят socks5
+    return re.sub(r"^socks4a?://", "socks5h://", v, flags=re.I)
+
+
+def effective_proxy(o: dict | None) -> str:
+    p = (o or {}).get("proxy", "auto")
+    if p == "none":
+        return ""
+    if p and p != "auto":
+        return p
+    return system_proxy()
+
+
+def _raw_system_proxy() -> str:
+    import urllib.request
+    try:
+        found = urllib.request.getproxies()
+    except Exception:
+        return ""
+    return next((found[k] for k in ("https", "http", "all", "socks") if found.get(k)), "")
+
+
+def net_opts(o: dict | None) -> dict:
+    """Настройки сети для yt-dlp. «Как в системе» оставляем yt-dlp (он учтёт и исключения
+    вроде localhost), явно передаём только свой адрес, «напрямую» и исправленный socks4."""
+    o = o or {}
+    n = {}
+    p = o.get("proxy", "auto")
+    if p == "none":
+        n["proxy"] = ""                          # "" = напрямую
+    elif p != "auto":
+        n["proxy"] = p
+    elif re.match(r"^socks4a?://", _raw_system_proxy(), re.I):
+        n["proxy"] = system_proxy()
+    if o.get("ipv4", True):
+        n["source_address"] = "0.0.0.0"          # только IPv4: сломанный VPN-ом IPv6 не тормозит
+    return n
+
+
+def _is_loopback(url: str) -> bool:
+    from urllib.parse import urlsplit
+    host = (urlsplit(url).hostname or "").lower()
+    return host in ("localhost", "::1") or host.startswith("127.")
+
+
+def _urlopen(req, timeout: float, o: dict | None = None):
+    """urllib с теми же настройками сети: свой сервер на этом компьютере всегда напрямую."""
+    import urllib.request
+    url = req.full_url if hasattr(req, "full_url") else req
+    mode = (o or {}).get("proxy", "auto")
+    if not _is_loopback(url) and (mode == "auto" or mode.lower().startswith("socks")):
+        return urllib.request.urlopen(req, timeout=timeout)   # системные настройки (urllib не умеет socks)
+    proxy = "" if _is_loopback(url) or mode == "none" else mode
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({"http": proxy, "https": proxy} if proxy else {}))
+    return opener.open(req, timeout=timeout)
+
+
+def _base_opts(cookiefile: Path | None, net: dict | None = None) -> dict:
     o = {
         "quiet": True, "no_warnings": True, "noprogress": True,
-        "logger": _Quiet(), "socket_timeout": 30, "retries": 5, "fragment_retries": 5,
+        "logger": _Quiet(), "socket_timeout": 20, "retries": 5, "fragment_retries": 5,
         "windowsfilenames": True, "trim_file_name": 150,
     }
+    o.update(net_opts(net))
     if cookiefile:
         o["cookiefile"] = str(cookiefile)
     if shutil.which("ffmpeg"):
@@ -104,17 +195,23 @@ def _base_opts(cookiefile: Path | None) -> dict:
     return o
 
 
-def probe_url(url: str, cookiefile: Path | None = None) -> dict:
+def probe_url(url: str, cookiefile: Path | None = None, net: dict | None = None) -> dict:
     """Короткая информация для предпросмотра: название, автор, длительность, обложка."""
     if not yt_dlp:
         raise DownloadFail("yt-dlp не установлен: pip install yt-dlp")
-    opts = _base_opts(cookiefile) | {"skip_download": True, "extract_flat": "in_playlist",
-                                     "playlist_items": "1-50"}
-    try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-    except DownloadError as e:
-        raise DownloadFail(_human_error(opts["logger"].last_error or str(e)))
+    info = None
+    attempts = _net_attempts(net)
+    for k, attempt in enumerate(attempts):
+        opts = _base_opts(cookiefile, attempt) | {"skip_download": True, "extract_flat": "in_playlist",
+                                                  "playlist_items": "1-50"}
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+            break
+        except DownloadError as e:
+            err = opts["logger"].last_error or str(e)
+            if k + 1 == len(attempts) or not _is_net_error(err.lower()):
+                raise DownloadFail(_human_error(err))
     if not info:
         raise DownloadFail("Ничего не нашлось по ссылке")
     is_list = info.get("_type") == "playlist"
@@ -134,8 +231,17 @@ def probe_url(url: str, cookiefile: Path | None = None) -> dict:
     }
 
 
+def _net_attempts(o: dict | None) -> list[dict]:
+    """Как пробовать сеть: как настроено, а если прокси взят из системы и не сработал — ещё напрямую."""
+    o = dict(o or {})
+    tries = [o]
+    if o.get("proxy", "auto") == "auto" and system_proxy():
+        tries.append(o | {"proxy": "none"})
+    return tries
+
+
 def build_opts(o: dict, out_dir: Path, cookiefile: Path | None) -> dict:
-    ydl = _base_opts(cookiefile)
+    ydl = _base_opts(cookiefile, o)
     # видео кусками (HLS/DASH: VK, Rutube, YouTube) качаем в 4 потока, а не по одному
     ydl["concurrent_fragment_downloads"] = 4
     # JavaScript-движок для YouTube: без него сайт режет скорость и прячет форматы
@@ -195,6 +301,7 @@ def read_opts(form) -> dict:
         "cobalt_url": (form.get("cobalt_url") or os.environ.get("COBALT_URL") or "").strip(),
         "cobalt_key": (form.get("cobalt_key") or os.environ.get("COBALT_API_KEY") or "").strip(),
     }
+    o.update(read_net(form))
     if o["cobalt_url"] and not re.match(r"^https?://", o["cobalt_url"], re.I):
         o["cobalt_url"] = ""
     if o["mode"] not in ("video", "audio"):
@@ -208,6 +315,71 @@ def read_opts(form) -> dict:
     if o["abitrate"] not in ("best", "320", "256", "192", "128", "96"):
         o["abitrate"] = "best"
     return o
+
+
+def read_net(form) -> dict:
+    """Прокси: auto (как в системе) | none | свой адрес; плюс «только IPv4»."""
+    p = (form.get("proxy") or os.environ.get("UNIVERSAL_PROXY") or "auto").strip()
+    if p not in ("auto", "none"):
+        if "://" not in p:
+            p = "http://" + p                    # 127.0.0.1:10809 → http://127.0.0.1:10809
+        if not PROXY_RE.match(p):
+            p = "auto"
+    return {"proxy": p, "ipv4": form.get("ipv4", "1") == "1"}
+
+
+def _short_net_error(msg: str) -> str:
+    low = msg.lower()
+    m = re.search(r"tunnel connection failed: (\d+)", low)
+    if m:
+        return f"прокси не пустил ({m.group(1)})"
+    for keys, text in ((("timed out", "10060"), "нет ответа"),
+                       (("name or service not known", "getaddrinfo", "nodename nor servname", "11001"), "адрес не найден (DNS)"),
+                       (("refused", "10061"), "соединение отклонено"),
+                       (("reset", "10054", "remote end closed", "eof occurred"), "соединение оборвали (похоже на блокировку)"),
+                       (("certificate",), "подменён сертификат HTTPS"),
+                       (("unreachable", "no route"), "сеть недоступна")):
+        if any(k in low for k in keys):
+            return text
+    return msg[:160]
+
+
+NET_TARGETS = [("YouTube", "https://www.youtube.com/generate_204"), ("VK", "https://vk.com/"),
+               ("Rutube", "https://rutube.ru/"), ("TikTok", "https://www.tiktok.com/")]
+
+
+def net_check(net: dict) -> dict:
+    """Кнопка «Проверить сеть»: открываются ли сайты с текущими настройками и работает ли IPv6."""
+    import socket
+    from concurrent.futures import ThreadPoolExecutor
+
+    def site(item):
+        name, url = item
+        t0 = time.time()
+        try:
+            with yt_dlp.YoutubeDL(_base_opts(None, net) | {"socket_timeout": 10}) as y:
+                y.urlopen(url).read(1)
+            return {"name": name, "ok": True, "ms": int((time.time() - t0) * 1000)}
+        except Exception as e:
+            return {"name": name, "ok": False, "error": _short_net_error(str(e))}
+
+    def ipv6():
+        try:
+            addr = socket.getaddrinfo("www.youtube.com", 443, socket.AF_INET6, socket.SOCK_STREAM)[0][4]
+            with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as sock:
+                sock.settimeout(4)
+                sock.connect(addr)
+            return True
+        except Exception:
+            return False
+
+    if not yt_dlp:
+        raise DownloadFail("yt-dlp не установлен")
+    with ThreadPoolExecutor(max_workers=len(NET_TARGETS) + 1) as pool:
+        v6 = pool.submit(ipv6)
+        sites = list(pool.map(site, NET_TARGETS))
+    return {"system_proxy": system_proxy(), "proxy": effective_proxy(net), "ipv4": net.get("ipv4", True),
+            "ipv6": v6.result(), "sites": sites}
 
 
 # ----------------------------------------------------------------------------
@@ -249,12 +421,12 @@ def _cobalt_headers(key: str) -> dict:
     return h
 
 
-def cobalt_info(base: str, key: str = "") -> dict:
+def cobalt_info(base: str, key: str = "", net: dict | None = None) -> dict:
     """GET / сервера cobalt: версия и список сайтов (для кнопки «Проверить»)."""
     import urllib.request
     req = urllib.request.Request(base.rstrip("/") + "/", headers=_cobalt_headers(key))
     try:
-        with urllib.request.urlopen(req, timeout=15) as r:
+        with _urlopen(req, 15, net) as r:
             data = json.load(r)
     except Exception as e:
         raise CobaltFail(f"сервер не ответил ({e.__class__.__name__})")
@@ -279,10 +451,11 @@ def _cobalt_payload(url: str, o: dict) -> dict:
     return p
 
 
-def _fetch_file(url: str, dest_dir: Path, name: str, emit, base: float, span: float, title: str) -> Path:
+def _fetch_file(url: str, dest_dir: Path, name: str, emit, base: float, span: float, title: str,
+                net: dict | None = None) -> Path:
     import urllib.request
     req = urllib.request.Request(url, headers={"User-Agent": "Universal-app"})
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with _urlopen(req, 60, net) as r:
         if not name:
             cd = r.headers.get("Content-Disposition") or ""
             m = re.search(r"filename\*?=(?:UTF-8'')?\"?([^\";]+)", cd)
@@ -318,7 +491,7 @@ def _cobalt_download(url: str, o: dict, out: Path, emit, base: float, span: floa
                                  data=json.dumps(_cobalt_payload(url, o)).encode(),
                                  headers=_cobalt_headers(o["cobalt_key"]))
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with _urlopen(req, 60, o) as r:
             data = json.load(r)
     except urllib.error.HTTPError as e:
         try:
@@ -335,7 +508,7 @@ def _cobalt_download(url: str, o: dict, out: Path, emit, base: float, span: floa
     try:
         if status in ("tunnel", "redirect"):
             title = data.get("filename") or url
-            _fetch_file(data["url"], out, data.get("filename", ""), emit, base, span, title)
+            _fetch_file(data["url"], out, data.get("filename", ""), emit, base, span, title, o)
             return 1
         if status == "picker":
             items = [x["url"] for x in data.get("picker", []) if x.get("url")]
@@ -343,7 +516,7 @@ def _cobalt_download(url: str, o: dict, out: Path, emit, base: float, span: floa
                 items.append(data["audio"])
             for k, item in enumerate(items):
                 _fetch_file(item, out, "", emit, base + span * k / len(items), span / len(items),
-                            f"{k + 1} из {len(items)}")
+                            f"{k + 1} из {len(items)}", o)
             return len(items)
     except CobaltFail:
         raise
@@ -395,16 +568,23 @@ def _download_all(urls: list[str], o: dict, out: Path, cookiefile: Path | None, 
             except CobaltFail as e:
                 cobalt_error = f"cobalt: {e}"
                 emit({"message": f"{cobalt_error}. Пробую yt-dlp…"})
-        logger = _Quiet()
-        ydl_opts["logger"] = logger
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-            emit({"done": url})
-        except DownloadError as e:
-            emit({"failed": url, "error": _with(cobalt_error, _human_error(logger.last_error or str(e)))})
-        except Exception as e:  # одна ссылка не должна валить всю пачку
-            emit({"failed": url, "error": _with(cobalt_error, _human_error(str(e)))})
+        attempts = _net_attempts(o)
+        for k, attempt in enumerate(attempts):
+            logger = _Quiet()
+            ydl_opts["logger"] = logger
+            ydl_opts.update(net_opts(attempt))
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+                emit({"done": url})
+                break
+            except Exception as e:  # одна ссылка не должна валить всю пачку
+                err = (logger.last_error or str(e)) if isinstance(e, DownloadError) else str(e)
+                if k + 1 < len(attempts) and _is_net_error(err.lower()):
+                    emit({"message": f"Через системный прокси не вышло, пробую напрямую: {state['title']}"})
+                    continue
+                emit({"failed": url, "error": _with(cobalt_error, _human_error(err))})
+                break
 
 
 def _with(cobalt_error: str, error: str) -> str:

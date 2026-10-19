@@ -337,3 +337,10 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - API: `GET /api/cobalt/local` (статус), `POST` (задача создания, адрес в `result` задачи — новое поле `Task.result`), `DELETE` (`docker compose down`).
 - Тест — поддельный `docker`-скрипт. В песочнице настоящий образ с ghcr.io не скачивается (прокси), проверены сообщение об этой ошибке и `docker compose config` для сгенерированного файла.
 
+### 13.8 Сеть и VPN (v1.5.0)
+- `downloader.read_net(form)` → `{"proxy": "auto"|"none"|URL, "ipv4": bool}` (форма или `UNIVERSAL_PROXY`), входит в `read_opts`. `net_opts()` даёт yt-dlp `source_address=0.0.0.0` (только IPv4) и `proxy`: для `auto` ничего не задаём (yt-dlp сам берёт системный прокси вместе с исключениями), кроме socks4 из реестра Windows — его переписываем в `socks5h://`.
+- `_net_attempts`: если прокси системный и ошибка сетевая (`_is_net_error`), ссылка повторяется напрямую (`probe_url` и цикл в `_download_all`). Явно указанный прокси не обходится.
+- `_urlopen` для cobalt: loopback всегда без прокси (раньше системный прокси VPN перехватывал и localhost:9000).
+- `POST /api/dl/netcheck` → `net_check()`: системный прокси, итоговый прокси, IPv6 (TCP до youtube.com:443 за 4 с), 4 сайта через `YoutubeDL.urlopen` с теми же настройками; причины коротко через `_short_net_error`.
+- Настоящий VPN в песочнице не проверить; тест — мёртвый системный прокси (`http://127.0.0.1:9`) с откатом напрямую, плюс подделанный `YoutubeDL` для netcheck.
+
