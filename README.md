@@ -1,5 +1,13 @@
 # Universal
 
+[![Тесты](https://github.com/Zaxar1231/Universal-app/actions/workflows/tests.yml/badge.svg)](https://github.com/Zaxar1231/Universal-app/actions/workflows/tests.yml)
+[![Сайт](https://img.shields.io/badge/сайт-открыть-00696b)](https://zaxar1231.github.io/Universal-app/)
+[![Лицензия: AGPL-3.0](https://img.shields.io/badge/лицензия-AGPL--3.0-blue)](LICENSE)
+
+**[Открыть сайт →](https://zaxar1231.github.io/Universal-app/)**: QR-коды, конвертер картинок и правка PDF работают прямо в браузере, в том числе на телефоне. Видео, аудио и скачивание требуют полной версии (ниже).
+
+![Конвертер](site/img/convert.webp)
+
 Локальный комбайн для файлов: конвертер форматов (как vert.sh), редактор видео и аудио на ffmpeg, скачивание видео с любых сайтов и QR-коды. Всё работает на твоём компьютере или домашнем сервере, файлы никуда не уходят (кроме скачивания, понятно).
 
 ## Режимы
@@ -19,6 +27,15 @@
 
 Конвертер, редактор, скачивание и правка PDF идут в фоне: видно проценты, их можно отменить.
 
+<p>
+<img src="site/img/editor.webp" width="49%" alt="Редактор видео">
+<img src="site/img/download.webp" width="49%" alt="Скачивание видео">
+</p>
+<p>
+<img src="site/img/mobile_qr.webp" width="24%" alt="QR на телефоне">
+<img src="site/img/mobile_editor.webp" width="24%" alt="Редактор на телефоне">
+</p>
+
 ## Установка
 1. Python 3.10 или новее (на Windows отметь Add Python to PATH).
 2. Программы (ставь те, что нужны твоим режимам):
@@ -29,6 +46,14 @@
 4. Открой http://localhost:5000
 
 Если нужной программы нет, интерфейс покажет красный баннер в соответствующем режиме.
+
+## Открыть с телефона
+Телефон и компьютер в одной Wi‑Fi сети. Запусти сервер открытым в сеть и с паролем:
+```bash
+HOST=0.0.0.0 APP_PASSWORD=мой-пароль ./run.sh                 # Linux / macOS
+set HOST=0.0.0.0&& set APP_PASSWORD=мой-пароль&& run.bat      # Windows (cmd)
+```
+Потом на телефоне открой `http://IP-компьютера:5000` (IP смотри в `ipconfig` / `ip a`), логин любой. Windows спросит про брандмауэр: разреши для частной сети.
 
 ## Docker (домашний сервер)
 ```bash
@@ -55,7 +80,10 @@ NET=1 python -m pytest -q    # плюс настоящее скачивание 
 ## Консольный QR
 `tools/bulk_qr.py` — исходный скрипт массовой генерации, работает и без сервера: `python tools/bulk_qr.py links.docx -f svg`.
 
+## Сайт
+Папка `site/` публикуется на GitHub Pages workflow-ом `.github/workflows/pages.yml` при каждом пуше в `main`. Это статическая страница: QR (qrcode-generator), картинки (canvas) и PDF (pdf-lib) работают в браузере, её можно установить на телефон как приложение и пользоваться офлайн.
+
 ## Лицензии
-Набор форматов и логика параметров звука/видео в конвертере взяты из проекта VERT (AGPL-3.0). yt-dlp — Unlicense. Скачивай только то, на что у тебя есть права.
+Проект под AGPL-3.0 (см. `LICENSE`): набор форматов и логика параметров звука/видео в конвертере взяты из проекта VERT (AGPL-3.0). yt-dlp — Unlicense. Скачивай только то, на что у тебя есть права.
 
 Подробности устройства: `HANDOVER.md`.

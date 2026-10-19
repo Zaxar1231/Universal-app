@@ -1,0 +1,21 @@
+name: Тесты
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Программы
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg imagemagick pandoc poppler-utils
+      - name: Зависимости
+        run: pip install -r requirements.txt pytest
+      - name: Тесты
+        run: python -m pytest -q
