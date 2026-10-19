@@ -86,7 +86,7 @@ NET=1 python -m pytest -q    # плюс настоящее скачивание 
 Папка `site/` публикуется на GitHub Pages workflow-ом `.github/workflows/pages.yml` при каждом пуше в `main`. Это статическая страница: QR (qrcode-generator), картинки (canvas) и PDF (pdf-lib) работают в браузере, её можно установить на телефон как приложение и пользоваться офлайн.
 
 ## Релизы
-Описание версий в `CHANGELOG.md`. Новый релиз: добавь раздел `## vX.Y.Z` в CHANGELOG и запусти workflow «Релиз» (Actions → Релиз → Run workflow) или запушь тег `vX.Y.Z`. Архив и описание соберутся сами.
+Описание версий в `CHANGELOG.md`. Новый релиз: добавь раздел `## vX.Y.Z` в CHANGELOG и запусти workflow «Релиз» (Actions → Релиз → Run workflow) или запушь тег `vX.Y.Z`. Архив и описание соберутся сами. В архив релиза попадают только файлы для работы: модули `*.py`, `templates/`, `requirements.txt`, `run.bat`, `run.sh`, README и LICENSE. Тесты, Docker и сайт берутся из репозитория (`git clone`).
 
 ## Лицензии
 Проект под AGPL-3.0 (см. `LICENSE`): набор форматов и логика параметров звука/видео в конвертере взяты из проекта VERT (AGPL-3.0). yt-dlp — Unlicense. Скачивай только то, на что у тебя есть права.
