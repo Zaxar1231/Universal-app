@@ -63,6 +63,7 @@ class Task:
         self.done = 0
         self.failed: list[dict] = []
         self.error = ""
+        self.result: dict = {}          # что вернуть интерфейсу кроме файлов
         self.created = time.time()
         self.cancel_event = threading.Event()
         self.proc: subprocess.Popen | None = None   # текущий ffmpeg, чтобы убить при отмене
@@ -104,6 +105,8 @@ class Task:
                 "done": self.done, "failed": list(self.failed), "error": self.error,
                 "archive": self.archive, "files": len(files),
             }
+            if self.result:
+                d["result"] = dict(self.result)
             if len(files) == 1:
                 d["single_file"] = files[0]
             d["names"] = files[:100]

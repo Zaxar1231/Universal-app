@@ -954,3 +954,85 @@ def test_dl_read_events_windows_newlines_and_partial_tail(tmp_path):
     evs, pos2 = downloader.read_events(p, pos)
     assert evs == [{"progress": 0.5, "message": "b"}] and pos2 == p.stat().st_size
     assert downloader.read_events(tmp_path / "none", 7) == ([], 7)
+
+
+# ---------------------------------------------------------------- свой cobalt в Docker
+
+FAKE_DOCKER = r'''#!/usr/bin/env python3
+import os, sys
+d = os.path.dirname(os.path.abspath(__file__))
+state = os.path.join(d, "state")
+a = sys.argv[1:]
+open(os.path.join(d, "log"), "a").write(" ".join(a) + "\n")
+if a[0] == "info":
+    sys.exit(0 if os.path.exists(os.path.join(d, "daemon")) else 1)
+if a[:2] == ["compose", "version"]:
+    print("Docker Compose version v2"); sys.exit(0)
+if a[0] == "ps":
+    print(open(state).read() if os.path.exists(state) else ""); sys.exit(0)
+if a[0] == "compose" and "pull" in a:
+    print("cobalt Pulled"); sys.exit(0)
+if a[0] == "compose" and "up" in a:
+    assert os.path.exists("docker-compose.yml")
+    print("cobalt Pulling"); print("Container universal-cobalt Started")
+    open(state, "w").write("running"); sys.exit(0)
+if a[0] == "compose" and "down" in a:
+    os.remove(state); sys.exit(0)
+sys.exit(2)
+'''
+
+
+@pytest.fixture()
+def fake_docker(tmp_path, monkeypatch):
+    import cobaltlocal
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    exe = bindir / "docker"
+    exe.write_text(FAKE_DOCKER.replace("#!/usr/bin/env python3", "#!" + sys.executable))
+    exe.chmod(0o755)
+    monkeypatch.setattr(cobaltlocal, "docker_exe", lambda: str(exe))
+    monkeypatch.setattr(cobaltlocal, "_desktop_app", lambda: None)
+    return cobaltlocal, bindir
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="фейковый docker — скрипт с shebang")
+def test_cobalt_local_lifecycle(fake_docker, monkeypatch, client):
+    cobaltlocal, bindir = fake_docker
+    st = client.get("/api/cobalt/local").get_json()
+    assert st["docker"] and not st["daemon"] and not st["state"]
+    # Docker не запущен, а запустить его некому — понятная ошибка
+    d = wait_task(client, client.post("/api/cobalt/local").get_json()["task"])
+    assert d["status"] == "error" and "systemctl" in d["error"]
+
+    (bindir / "daemon").touch()
+    seen = []
+    monkeypatch.setattr(downloader, "cobalt_info", lambda url, key="": seen.append(url) or {"version": "11.5", "services": []})
+    d = wait_task(client, client.post("/api/cobalt/local").get_json()["task"])
+    assert d["status"] == "done", d
+    url = d["result"]["url"]
+    assert url.startswith("http://localhost:90") and seen[-1] == url
+    port = url.rsplit(":", 1)[1].strip("/")
+    yml = (cobaltlocal.folder() / "docker-compose.yml").read_text()
+    assert f'"127.0.0.1:{port}:9000/tcp"' in yml and f'API_URL: "http://localhost:{port}/"' in yml
+    assert "ghcr.io/imputnet/cobalt" in yml and "cookies" not in yml
+    st = client.get("/api/cobalt/local").get_json()
+    assert st["state"] == "running" and st["url"] == url
+
+    # повторное нажатие оставляет тот же порт и подхватывает cookies.json
+    (cobaltlocal.folder() / "cookies.json").write_text("{}")
+    d = wait_task(client, client.post("/api/cobalt/local").get_json()["task"])
+    assert d["result"]["url"] == url
+    assert "./cookies.json:/cookies.json:ro" in (cobaltlocal.folder() / "docker-compose.yml").read_text()
+
+    st = client.delete("/api/cobalt/local").get_json()
+    assert not st["state"]
+    assert "compose -p universal-cobalt down" in (bindir / "log").read_text()
+
+
+def test_cobalt_local_no_docker(monkeypatch, client):
+    import cobaltlocal
+    monkeypatch.setattr(cobaltlocal, "docker_exe", lambda: None)
+    assert client.get("/api/cobalt/local").get_json()["docker"] is False
+    d = wait_task(client, client.post("/api/cobalt/local").get_json()["task"])
+    assert d["status"] == "error" and "Docker Desktop" in d["error"]
