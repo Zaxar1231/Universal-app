@@ -25,6 +25,8 @@ jobs:
     runs-on: windows-latest
     env:
       UNIVERSAL_HOME: ${{ github.workspace }}\..\universal-home
+      GITHUB_TOKEN: ${{ github.token }}      # у API без токена общий лимит на IP раннера
+      PYTHONIOENCODING: utf-8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
