@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4fbfa">
+<title>Конвертер файлов</title>
+<style>
+/* =====================================================================
+   Material You (Material 3). Цвета строятся из одного seed-цвета в JS,
+   ниже только запасная бирюзовая палитра, чтобы страница не мигала.
+   Elevation передаётся тоном поверхности, а не тенью, как в M3.
+   ===================================================================== */
+:root {
+  --md-primary: #00696b; --md-on-primary: #fff;
+  --md-primary-container: #6ff7f9; --md-on-primary-container: #002020;
+  --md-secondary: #4a6363; --md-secondary-container: #cce8e8; --md-on-secondary-container: #051f20;
+  --md-tertiary-container: #d7e3ff; --md-on-tertiary-container: #061b3c;
+  --md-error: #ba1a1a; --md-error-container: #ffdad6; --md-on-error-container: #410002;
+  --md-surface: #f4fbfa; --md-on-surface: #161d1d; --md-on-surface-variant: #3f4948;
+  --md-surface-container-lowest: #fff; --md-surface-container-low: #eef5f4;
+  --md-surface-container: #e8efee; --md-surface-container-high: #e3e9e9;
+  --md-surface-container-highest: #dde4e3;
+  --md-outline: #6f7979; --md-outline-variant: #bec9c8;
+  --md-scrim: #000;
+  --sh-xs: 4px; --sh-s: 8px; --sh-m: 12px; --sh-l: 16px; --sh-xl: 28px;
+  --font: "Roboto Flex", Roboto, "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px);
+  --rail: 80px; --bar: 80px;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; color-scheme: light dark; }
+body {
+  margin: 0; background: var(--md-surface); color: var(--md-on-surface);
+  font: 400 16px/1.5 var(--font); letter-spacing: .01em;
+}
+button, input, select { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+/* --- типографика M3 --- */
+.t-headline { font-size: 1.75rem; line-height: 2.25rem; font-weight: 400; margin: 0; }
+.t-title-l { font-size: 1.375rem; line-height: 1.75rem; font-weight: 400; margin: 0; }
+.t-title-m { font-size: 1rem; line-height: 1.5rem; font-weight: 500; letter-spacing: .009em; margin: 0; }
+.t-body-m { font-size: .875rem; line-height: 1.25rem; }
+.t-label-l { font-size: .875rem; line-height: 1.25rem; font-weight: 500; letter-spacing: .007em; }
+.t-label-m { font-size: .75rem; line-height: 1rem; font-weight: 500; letter-spacing: .04em; }
+.muted { color: var(--md-on-surface-variant); }
+
+/* --- state layer: наведение/фокус/нажатие как в M3 --- */
+.state { position: relative; overflow: hidden; isolation: isolate; }
+.state::before { content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0; z-index: -1; transition: opacity .15s; }
+.state:hover::before { opacity: .08; }
+.state:focus-visible::before { opacity: .12; }
+.state:active::before { opacity: .12; }
+:focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+
+/* --- раскладка: rail слева на широком, bar снизу на узком --- */
+.app { min-height: 100dvh; display: grid; grid-template-columns: var(--rail) 1fr; }
+.rail {
+  position: sticky; top: 0; height: 100dvh; padding: calc(var(--safe-t) + 44px) 0 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  background: var(--md-surface); overflow-y: auto; scrollbar-width: none;
+}
+.rail::-webkit-scrollbar { display: none; }
+.nav { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%;
+  background: none; border: 0; padding: 0; cursor: pointer; color: var(--md-on-surface-variant); }
+.nav input { position: absolute; opacity: 0; pointer-events: none; }
+.nav .pill { width: 56px; height: 32px; border-radius: 16px; display: grid; place-items: center;
+  transition: background .2s, width .2s; }
+.nav svg { width: 24px; height: 24px; fill: currentColor; }
+.nav .t-label-m { text-align: center; max-width: 76px; line-height: 1rem; }
+.nav { padding: 2px 0; }
+.nav:hover .pill { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+.nav:has(input:checked) { color: var(--md-on-surface); }
+.nav:has(input:checked) .pill { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.nav:has(input:checked) .t-label-m { font-weight: 700; }
+.nav:has(input:focus-visible) .pill { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.rail .sep { width: 40px; height: 1px; background: var(--md-outline-variant); margin: 4px 0; }
+
+main { padding: calc(var(--safe-t) + 20px) 24px 48px; max-width: 1180px; width: 100%; }
+header.top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin: 8px 0 24px; }
+header.top p { margin: 4px 0 0; }
+.icon-btn { width: 48px; height: 48px; border-radius: 24px; border: 0; background: none; cursor: pointer;
+  display: grid; place-items: center; color: var(--md-on-surface-variant); flex: none; }
+.icon-btn svg { width: 24px; height: 24px; fill: currentColor; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+
+/* --- карточки: filled, тон вместо тени --- */
+.card { background: var(--md-surface-container-low); border-radius: var(--sh-xl); }
+.card.high { background: var(--md-surface-container); }
+
+/* --- зона загрузки --- */
+.drop { display: grid; justify-items: center; text-align: center; gap: 4px; padding: 40px 24px;
+  border: 2px dashed var(--md-outline); border-radius: var(--sh-xl); background: var(--md-surface-container-low);
+  cursor: pointer; transition: background .15s, border-color .15s; position: relative; }
+.drop:hover, .drop.over { background: var(--md-secondary-container); border-color: var(--md-primary); }
+.drop:focus-within { border-color: var(--md-primary); }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.drop .big { width: 72px; height: 72px; border-radius: 28px; background: var(--md-primary-container);
+  color: var(--md-on-primary-container); display: grid; place-items: center; margin-bottom: 12px; }
+.drop .big svg { width: 32px; height: 32px; fill: currentColor; }
+
+/* --- кнопки --- */
+.btn { height: 40px; padding: 0 24px; border-radius: 20px; border: 0; cursor: pointer; font-weight: 500;
+  font-size: .875rem; letter-spacing: .007em; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.btn svg { width: 18px; height: 18px; fill: currentColor; }
+.btn.filled { background: var(--md-primary); color: var(--md-on-primary); }
+.btn.tonal { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.btn.text { background: none; color: var(--md-primary); padding: 0 12px; }
+.btn.lg { height: 56px; border-radius: 28px; width: 100%; font-size: 1rem; }
+.btn:disabled { background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
+  color: color-mix(in srgb, var(--md-on-surface) 38%, transparent); cursor: default; }
+.btn:disabled::before { display: none; }
+
+/* --- список файлов --- */
+.list-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 8px 12px 24px; }
+ul.files { list-style: none; margin: 0; padding: 0 0 12px; max-height: 440px; overflow: auto; }
+ul.files li { display: flex; align-items: center; gap: 16px; padding: 8px 8px 8px 24px; min-height: 56px; }
+ul.files .ico { width: 40px; height: 40px; border-radius: 20px; flex: none; display: grid; place-items: center;
+  background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); font-size: .6875rem; font-weight: 700; }
+ul.files .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ul.files .size { color: var(--md-on-surface-variant); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.empty { padding: 8px 24px 28px; text-align: center; }
+
+/* --- настройки --- */
+.settings { padding: 24px; display: grid; gap: 24px; position: sticky; top: calc(var(--safe-t) + 16px); }
+.field { display: grid; gap: 8px; }
+.field > .lbl { color: var(--md-on-surface-variant); }
+.hint { margin: 0; color: var(--md-on-surface-variant); font-size: .75rem; line-height: 1rem; }
+
+/* segmented button */
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--md-outline); border-radius: 20px; overflow: hidden; }
+.seg.wrap { grid-auto-flow: row; grid-template-columns: repeat(3, 1fr); border-radius: 20px; }
+.seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.seg label { height: 40px; display: grid; place-items: center; text-align: center; padding: 0 8px; cursor: pointer;
+  font-size: .875rem; font-weight: 500; user-select: none; border-left: 1px solid var(--md-outline); line-height: 1.1; }
+.seg label:first-of-type { border-left: 0; }
+.seg.wrap label { border-top: 1px solid var(--md-outline); border-left: 1px solid var(--md-outline); }
+.seg.wrap label:nth-of-type(3n+1) { border-left: 0; }
+.seg.wrap label:nth-of-type(-n+3) { border-top: 0; }
+.seg input:checked + label { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.seg input:checked + label::after { content: ""; }
+.seg input:focus-visible + label { outline: 3px solid var(--md-primary); outline-offset: -3px; }
+
+/* filter chips для формата */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.chips label { height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--md-outline); display: inline-flex;
+  align-items: center; gap: 6px; cursor: pointer; font-size: .875rem; font-weight: 500; user-select: none; }
+.chips label:hover { background: color-mix(in srgb, var(--md-on-surface-variant) 8%, transparent); }
+.chips input:checked + label { background: var(--md-secondary-container); color: var(--md-on-secondary-container); border-color: transparent; }
+.chips input:checked + label::before { content: ""; width: 16px; height: 16px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z'/%3E%3C/svg%3E") center/contain no-repeat; }
+.chips input:focus-visible + label { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.chip-group { flex-basis: 100%; margin: 8px 0 -2px; }
+.chips.scroll { max-height: 172px; overflow: auto; padding: 2px 2px 20px; scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent); mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
+
+/* slider M3 */
+.slider-row { display: grid; gap: 4px; }
+.slider-row .top { display: flex; justify-content: space-between; align-items: baseline; }
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 40px; background: none; margin: 0; cursor: pointer; }
+input[type=range]::-webkit-slider-runnable-track { height: 16px; border-radius: 8px;
+  background: linear-gradient(to right, var(--md-primary) var(--p, 50%), var(--md-secondary-container) var(--p, 50%)); }
+input[type=range]::-moz-range-track { height: 16px; border-radius: 8px; background: var(--md-secondary-container); }
+input[type=range]::-moz-range-progress { height: 16px; border-radius: 8px; background: var(--md-primary); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 4px; height: 44px; border-radius: 2px; background: var(--md-primary); margin-top: -14px; }
+input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; border-radius: 2px; background: var(--md-primary); }
+
+/* text field (filled) */
+.tf { position: relative; display: block; }
+.tf input, .tf select { width: 100%; height: 56px; padding: 22px 16px 6px; border: 0; border-bottom: 1px solid var(--md-on-surface-variant);
+  border-radius: 4px 4px 0 0; background: var(--md-surface-container-highest); appearance: none; -webkit-appearance: none; outline: none; }
+.tf select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960' fill='%23888'%3E%3Cpath d='M480-360 280-560h400L480-360Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 24px; padding-right: 44px; }
+.tf > span { position: absolute; left: 16px; top: 8px; font-size: .75rem; line-height: 1rem; color: var(--md-on-surface-variant); pointer-events: none; }
+.tf:focus-within input, .tf:focus-within select { border-bottom: 2px solid var(--md-primary); }
+.tf:focus-within > span { color: var(--md-primary); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* switch M3 */
+.sw { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; min-height: 48px; }
+.sw input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.sw .track { width: 52px; height: 32px; border-radius: 16px; border: 2px solid var(--md-outline); background: var(--md-surface-container-highest);
+  position: relative; flex: none; transition: background .2s, border-color .2s; }
+.sw .track::after { content: ""; position: absolute; top: 6px; left: 6px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--md-outline); transition: all .2s cubic-bezier(.2,0,0,1); }
+.sw input:checked + .track { background: var(--md-primary); border-color: var(--md-primary); }
+.sw input:checked + .track::after { left: 26px; top: 2px; width: 24px; height: 24px; background: var(--md-on-primary); }
+.sw input:focus-visible + .track { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.sw .txt { display: grid; gap: 2px; }
+
+/* --- статус --- */
+.status { display: grid; gap: 12px; }
+.progress { height: 4px; border-radius: 2px; background: var(--md-secondary-container); overflow: hidden; }
+.progress i { display: block; height: 100%; width: 0; background: var(--md-primary); border-radius: 2px; transition: width .2s; }
+.progress.busy i { width: 35%; animation: slide 1.4s cubic-bezier(.4,0,.2,1) infinite; }
+@keyframes slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+.result { padding: 16px; border-radius: var(--sh-l); background: var(--md-primary-container); color: var(--md-on-primary-container); display: grid; gap: 12px; }
+.result .btn { justify-self: start; }
+.errs { list-style: none; margin: 0; padding: 12px 16px; border-radius: var(--sh-l); background: var(--md-error-container);
+  color: var(--md-on-error-container); font-size: .875rem; display: grid; gap: 4px; }
+
+.banner { padding: 12px 16px; border-radius: var(--sh-l); background: var(--md-error-container); color: var(--md-on-error-container);
+  margin-bottom: 16px; font-size: .875rem; }
+
+/* --- палитра "Material You": выбор цвета --- */
+.sheet { position: fixed; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--md-scrim) 32%, transparent); z-index: 50; padding: 16px; }
+.dialog { background: var(--md-surface-container-high); border-radius: var(--sh-xl); padding: 24px; width: min(360px, 100%); display: grid; gap: 20px; }
+.swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.swatches input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.swatches label { aspect-ratio: 1; border-radius: 50%; cursor: pointer; display: grid; place-items: center; border: 3px solid transparent; }
+.swatches input:checked + label { border-color: var(--md-on-surface); }
+.swatches input:checked + label::after { content: ""; width: 22px; height: 22px; background: #fff; mix-blend-mode: difference;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z'/%3E%3C/svg%3E") center/contain no-repeat; }
+.swatches input:focus-visible + label { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.row-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+/* --- узкий экран: navigation bar снизу --- */
+@media (max-width: 960px) { .grid { grid-template-columns: 1fr; } .settings { position: static; } }
+@media (max-width: 720px) {
+  .app { grid-template-columns: 1fr; padding-bottom: calc(var(--bar) + var(--safe-b)); }
+  .rail { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; top: auto; height: auto; width: 100%;
+    flex-direction: row; justify-content: flex-start; gap: 0; padding: 12px 8px calc(16px + var(--safe-b));
+    background: var(--md-surface-container); overflow-x: auto; overflow-y: hidden; }
+  .rail .sep { display: none; }
+  .nav { flex: 0 0 auto; width: 76px; }
+  main { padding: calc(var(--safe-t) + 12px) 16px 24px; }
+  .t-headline { font-size: 1.5rem; line-height: 2rem; }
+  .settings { padding: 20px; }
+  .drop { padding: 28px 16px; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="rail" aria-label="Что конвертируем" id="rail">
+    {% set icons = {
+      'image': 'M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm40-80h480L570-480 450-320l-90-120-120 160Zm-40 80v-560 560Z',
+      'audio': 'M400-120q-66 0-113-47t-47-113q0-66 47-113t113-47q23 0 42.5 5.500T480-418v-422h240v160H560v400q0 66-47 113t-113 47Z',
+      'video': 'M160-160q-33 0-56.500-23.500T80-240v-480q0-33 23.500-56.500T160-800h480q33 0 56.500 23.500T720-720v180l160-160v440L720-420v180q0 33-23.500 56.500T640-160H160Z',
+      'doc': 'M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.500-23.500T160-160v-640q0-33 23.500-56.500T240-880h320l240 240v480q0 33-23.500 56.500T720-80H240Zm280-520v-200H240v640h480v-440H520Z',
+      'pdf': 'M360-460h40v-80h40q17 0 28.500-11.500T480-580v-40q0-17-11.500-28.500T440-660h-80v200Zm40-120v-40h40v40h-40Zm120 120h80q17 0 28.500-11.500T640-500v-120q0-17-11.500-28.500T600-660h-80v200Zm40-40v-120h40v120h-40Zm120 40h40v-80h40v-40h-40v-40h40v-40h-80v200ZM320-240q-33 0-56.500-23.500T240-320v-480q0-33 23.500-56.500T320-880h480q33 0 56.500 23.500T880-800v480q0 33-23.500 56.500T800-240H320Zm0-80h480v-480H320v480ZM160-80q-33 0-56.500-23.500T80-160v-560h80v560h560v80H160Z',
+      'photo': 'M480-260q75 0 127.500-52.500T660-440q0-75-52.500-127.500T480-620q-75 0-127.500 52.500T300-440q0 75 52.500 127.500T480-260Zm0-80q-42 0-71-29t-29-71q0-42 29-71t71-29q42 0 71 29t29 71q0 42-29 71t-71 29ZM160-120q-33 0-56.500-23.500T80-200v-480q0-33 23.500-56.500T160-760h126l74-80h240l74 80h126q33 0 56.500 23.500T880-680v480q0 33-23.500 56.500T800-120H160Z',
+      'topdf': 'M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.500-23.500T160-160v-640q0-33 23.500-56.500T240-880h320l240 240v480q0 33-23.500 56.500T720-80H240Zm280-520h200L520-800v200Z'
+    } %}
+    {% for key, label in [('image','Картинки'),('audio','Аудио'),('video','Видео'),('doc','Документы')] %}
+    <label class="nav"><input type="radio" name="mode" value="{{ key }}" {% if key == 'image' %}checked{% endif %}>
+      <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
+      <span class="t-label-m">{{ label }}</span></label>
+    {% endfor %}
+    <span class="sep" role="separator"></span>
+    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF')] %}
+    <label class="nav"><input type="radio" name="mode" value="{{ key }}">
+      <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
+      <span class="t-label-m">{{ label }}</span></label>
+    {% endfor %}
+  </nav>
+
+  <main>
+    <header class="top">
+      <div>
+        <h1 class="t-headline" id="title">Картинки</h1>
+        <p class="t-body-m muted" id="subtitle">Файлы обрабатываются на твоём компьютере и никуда не отправляются.</p>
+      </div>
+      <button class="icon-btn state" id="themeBtn" aria-label="Выбрать цвет оформления" title="Цвет оформления">
+        <svg viewBox="0 -960 960 960"><path d="M480-80q-82 0-155-31.500t-127.500-86Q143-252 111.500-325T80-480q0-83 32.500-156t88-127Q256-817 330-848.500T488-880q80 0 151 27.500t124.500 76q53.500 48.500 85 115T880-518q0 115-70 176.500T640-280h-74q-9 0-12.500 5t-3.500 11q0 12 15 34.500t15 51.500q0 50-27.500 74T480-80Zm0-400Zm-220 40q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm120-160q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm200 0q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm120 160q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Z"/></svg>
+      </button>
+    </header>
+
+    <div class="banner" id="engineBanner" hidden></div>
+
+    <div class="grid">
+      <section aria-label="Файлы">
+        <label class="drop" id="drop">
+          <input type="file" id="picker" multiple>
+          <span class="big"><svg viewBox="0 -960 960 960"><path d="M440-320v-326L336-542l-56-58 200-200 200 200-56 58-104-104v326h-80ZM240-160q-33 0-56.500-23.500T160-240v-120h80v120h480v-120h80v120q0 33-23.500 56.500T720-160H240Z"/></svg></span>
+          <strong class="t-title-l" id="dropTitle">Перетащи файлы сюда</strong>
+          <span class="t-body-m muted" id="dropSub">или нажми, чтобы выбрать. Папку тоже можно перетащить.</span>
+          <button type="button" class="btn text state" id="pickDir">Выбрать папку</button>
+        </label>
+
+        <div class="card" style="margin-top:16px">
+          <div class="list-head">
+            <span class="t-title-m">Выбрано: <span id="count">0</span> <span class="muted" id="total">0 КБ</span></span>
+            <button class="btn text state" id="clear" disabled>Очистить</button>
+          </div>
+          <ul class="files" id="list"></ul>
+          <div class="empty t-body-m muted" id="empty">Пока ничего не выбрано</div>
+        </div>
+      </section>
+
+      <aside class="card high settings" aria-label="Настройки">
+        <!-- универсальные режимы -->
+        <div class="field" id="uniField" hidden>
+          <span class="lbl t-label-l" id="uniLbl">Конвертировать в</span>
+          <div class="chips scroll" id="uniChips" role="radiogroup"></div>
+          <p class="hint" id="uniHint"></p>
+        </div>
+
+        <!-- PDF -> картинки -->
+        <div class="field" id="formatsField" hidden>
+          <span class="lbl t-label-l">Формат</span>
+          <div class="chips" id="formats" role="radiogroup">
+            {% for f in formats %}
+            <input type="radio" name="fmt" id="f-{{ f }}" value="{{ f }}" {% if f == 'jpg' %}checked{% endif %}>
+            <label for="f-{{ f }}" data-f="{{ f }}">{{ f|upper }}</label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="slider-row" id="dpiField" hidden>
+          <div class="top"><label class="t-label-l muted" for="dpi">Разрешение</label><span class="t-label-l" id="dpiVal">150 DPI</span></div>
+          <input type="range" id="dpi" min="50" max="600" step="10" value="150">
+          <p class="hint" id="dpiHint"></p>
+        </div>
+
+        <div class="slider-row" id="qField" hidden>
+          <div class="top"><label class="t-label-l muted" for="quality">Качество</label><span class="t-label-l" id="qVal">90</span></div>
+          <input type="range" id="quality" min="10" max="100" step="1" value="90">
+        </div>
+
+        <!-- аудио/видео -->
+        <div class="two" id="avBox" hidden>
+          <label class="tf"><span>Битрейт звука</span>
+            <select id="bitrate">
+              <option value="auto">Авто</option><option>320</option><option>256</option><option>192</option>
+              <option>128</option><option>96</option><option>64</option><option>32</option>
+            </select></label>
+          <label class="tf"><span>Частота</span>
+            <select id="sampleRate">
+              <option value="auto">Авто</option><option value="48000">48000 Гц</option><option value="44100">44100 Гц</option>
+              <option value="32000">32000 Гц</option><option value="22050">22050 Гц</option>
+              <option value="16000">16000 Гц</option><option value="11025">11025 Гц</option><option value="8000">8000 Гц</option>
+            </select></label>
+        </div>
+
+        <label class="sw" id="metaRow" hidden><span class="txt"><span class="t-body-m">Сохранять метаданные</span><span class="hint">Теги, обложка, EXIF</span></span>
+          <input type="checkbox" id="keepMeta" checked><span class="track"></span></label>
+
+        <label class="tf" id="nameRow" hidden><span>Имя результата</span>
+          <input type="text" id="nameTpl" value="%name%" spellcheck="false" autocomplete="off"></label>
+        <p class="hint" id="nameHint" hidden style="margin-top:-16px">%name% заменяется на имя исходного файла, например VERT_%name%.</p>
+
+        <!-- PDF-режим и фото -->
+        <div id="pdfOpts" hidden style="display:grid;gap:24px">
+          <label class="sw" id="pagesRow"><span class="txt"><span class="t-body-m">Все страницы</span><span class="hint">Иначе только первая. Файлы получат суффикс -1, -2.</span></span>
+            <input type="checkbox" id="allPages"><span class="track"></span></label>
+          <label class="sw" id="grayRow"><span class="txt"><span class="t-body-m">Чёрно-белый</span></span>
+            <input type="checkbox" id="gray"><span class="track"></span></label>
+          <label class="sw" id="a4Row"><span class="txt"><span class="t-body-m">Формат A4</span><span class="hint" id="a4hint">Каждое изображение станет листом 210×297 мм.</span></span>
+            <input type="checkbox" id="a4"><span class="track"></span></label>
+          <div id="a4opts" hidden style="display:grid;gap:16px">
+            <label class="tf"><span>Как вписывать</span>
+              <select id="a4mode"><option value="contain">Целиком, с белыми полями</option><option value="cover">Заполнить лист, лишнее обрезать</option></select></label>
+            <label class="tf"><span>Ориентация</span>
+              <select id="a4orient"><option value="auto">Как у исходной страницы</option><option value="portrait">Всегда книжная</option><option value="landscape">Всегда альбомная</option></select></label>
+          </div>
+        </div>
+
+        <div id="pdfBox" hidden style="display:grid;gap:24px">
+          <div class="field">
+            <span class="lbl t-label-l">Фото на странице</span>
+            <div class="seg wrap" id="perPage" role="radiogroup">
+              <input type="radio" name="pp" id="pp1" value="1" checked><label for="pp1">1</label>
+              <input type="radio" name="pp" id="pp2" value="2"><label for="pp2">2</label>
+              <input type="radio" name="pp" id="pp4" value="4"><label for="pp4">4</label>
+              <input type="radio" name="pp" id="pp6" value="6"><label for="pp6">6</label>
+              <input type="radio" name="pp" id="pp8" value="8"><label for="pp8">8</label>
+              <input type="radio" name="pp" id="pp9" value="9"><label for="pp9">9</label>
+            </div>
+            <p class="hint" id="ppHint"></p>
+          </div>
+          <div class="field">
+            <span class="lbl t-label-l">Результат</span>
+            <div class="seg">
+              <input type="radio" name="out" id="out1" value="single" checked><label for="out1">Один PDF</label>
+              <input type="radio" name="out" id="out2" value="each"><label for="out2">PDF на каждое</label>
+            </div>
+          </div>
+          <div class="field">
+            <span class="lbl t-label-l">Порядок фото</span>
+            <div class="seg">
+              <input type="radio" name="ord" id="ord1" value="name" checked><label for="ord1">По имени</label>
+              <input type="radio" name="ord" id="ord2" value="keep"><label for="ord2">Как выбрано</label>
+            </div>
+            <p class="hint">По имени: IMG_2 идёт раньше IMG_10.</p>
+          </div>
+          <div class="two">
+            <label class="tf"><span>Поля, мм</span><input type="number" id="margin" min="0" max="50" value="10"></label>
+            <label class="tf" id="gapRow"><span>Между фото, мм</span><input type="number" id="gap" min="0" max="30" value="5"></label>
+          </div>
+        </div>
+
+        <button class="btn filled lg state" id="go" disabled>Конвертировать</button>
+        <div class="status" id="status" hidden aria-live="polite"></div>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<!-- выбор цвета оформления (Material You) -->
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="dialog">
+    <h2 class="t-title-l" id="sheetTitle">Цвет оформления</h2>
+    <div class="swatches" id="swatches"></div>
+    <div class="row-actions">
+      <button class="btn text state" id="sheetReset">Сбросить</button>
+      <button class="btn tonal state" id="sheetClose">Готово</button>
+    </div>
+  </div>
+</div>
+
+<script>
+
+(() => {
+  const $ = id => document.getElementById(id);
+  const qs = s => document.querySelector(s);
+
+  /* ===================================================================
+     Material You: динамическая палитра из seed-цвета.
+     Настоящий HCT в браузере не нужен: строим тональные ряды в OKLCH,
+     он даёт то же ощущение (постоянная светлота при смене оттенка).
+     =================================================================== */
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  function oklch(L, C, h) {                       // -> "rgb(r g b)"
+    const a = C * Math.cos(h * Math.PI / 180), b = C * Math.sin(h * Math.PI / 180);
+    let l = L + .3963377774 * a + .2158037573 * b, m = L - .1055613458 * a - .0638541728 * b, s = L - .0894841775 * a - 1.291485548 * b;
+    l = l ** 3; m = m ** 3; s = s ** 3;
+    let r = 4.0767416621 * l - 3.3077115913 * m + .2309699292 * s;
+    let g = -1.2684380046 * l + 2.6097574011 * m - .3413193965 * s;
+    let bl = -.0041960863 * l - .7034186147 * m + 1.707614701 * s;
+    const enc = x => { x = clamp(x, 0, 1); return Math.round((x <= .0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - .055) * 255); };
+    return `rgb(${enc(r)} ${enc(g)} ${enc(bl)})`;
+  }
+  function hueOf(hex) {                           // оттенок seed-цвета в OKLCH
+    const n = parseInt(hex.slice(1), 16), lin = v => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; };
+    const r = lin(n >> 16 & 255), g = lin(n >> 8 & 255), b = lin(n & 255);
+    const l = Math.cbrt(.4122214708 * r + .5363325363 * g + .0514459929 * b);
+    const m = Math.cbrt(.2119034982 * r + .6806995451 * g + .1073969566 * b);
+    const s = Math.cbrt(.0883024619 * r + .2817188376 * g + .6299787005 * b);
+    const A = 1.9779984951 * l - 2.428592205 * m + .4505937099 * s, B = .0259040371 * l + .7827717662 * m - .808675766 * s;
+    return (Math.atan2(B, A) * 180 / Math.PI + 360) % 360;
+  }
+  function applyPalette(hex) {
+    const h = hueOf(hex), dark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const P = (L, C = .13) => oklch(L, C, h), N = (L, C = .006) => oklch(L, C, h), S = (L, C = .03) => oklch(L, C, (h + 40) % 360);
+    const T = (L, C = .05) => oklch(L, C, (h + 80) % 360);
+    const light = {
+      primary: P(.5, .12), onPrimary: P(1, 0), primaryContainer: P(.9, .1), onPrimaryContainer: P(.25, .07),
+      secondary: S(.5, .04), secondaryContainer: S(.9, .035), onSecondaryContainer: S(.25, .04),
+      tertiaryContainer: T(.9, .04), onTertiaryContainer: T(.25, .05),
+      surface: N(.985, .004), onSurface: N(.2), onSurfaceVariant: N(.42, .012),
+      c0: N(1, 0), c1: N(.965), c2: N(.945), c3: N(.925), c4: N(.905),
+      outline: N(.58, .012), outlineVariant: N(.83, .012),
+    };
+    const drk = {
+      primary: P(.82, .11), onPrimary: P(.3, .07), primaryContainer: P(.38, .08), onPrimaryContainer: P(.92, .07),
+      secondary: S(.82, .035), secondaryContainer: S(.36, .03), onSecondaryContainer: S(.92, .03),
+      tertiaryContainer: T(.36, .04), onTertiaryContainer: T(.92, .04),
+      surface: N(.19, .005), onSurface: N(.92), onSurfaceVariant: N(.78, .012),
+      c0: N(.15), c1: N(.22), c2: N(.25), c3: N(.28), c4: N(.31),
+      outline: N(.6, .012), outlineVariant: N(.4, .012),
+    };
+    const c = dark ? drk : light, s = document.documentElement.style;
+    const map = { primary: c.primary, 'on-primary': c.onPrimary, 'primary-container': c.primaryContainer, 'on-primary-container': c.onPrimaryContainer,
+      secondary: c.secondary, 'secondary-container': c.secondaryContainer, 'on-secondary-container': c.onSecondaryContainer,
+      'tertiary-container': c.tertiaryContainer, 'on-tertiary-container': c.onTertiaryContainer,
+      surface: c.surface, 'on-surface': c.onSurface, 'on-surface-variant': c.onSurfaceVariant,
+      'surface-container-lowest': c.c0, 'surface-container-low': c.c1, 'surface-container': c.c2,
+      'surface-container-high': c.c3, 'surface-container-highest': c.c4, outline: c.outline, 'outline-variant': c.outlineVariant,
+      error: dark ? 'rgb(255 180 171)' : 'rgb(186 26 26)', 'error-container': dark ? 'rgb(147 0 10)' : 'rgb(255 218 214)',
+      'on-error-container': dark ? 'rgb(255 218 214)' : 'rgb(65 0 2)' };
+    for (const k in map) s.setProperty('--md-' + k, map[k]);
+    qs('meta[name=theme-color]').content = c.surface;
+  }
+  const SEEDS = ['#00696b', '#3f5bd8', '#8a4fc0', '#c2185b', '#d0452e', '#b06a00', '#5a8a00', '#2e7d5b'];
+  const NAMES = ['Бирюзовый', 'Синий', 'Фиолетовый', 'Малиновый', 'Красный', 'Янтарный', 'Лаймовый', 'Зелёный'];
+  let seed = localStorage.getItem('seed') || SEEDS[0];
+  applyPalette(seed);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyPalette(seed));
+
+  $('swatches').innerHTML = SEEDS.map((c, i) =>
+    `<input type="radio" name="seed" id="sd${i}" value="${c}" ${c === seed ? 'checked' : ''}><label for="sd${i}" title="${NAMES[i]}" style="background:${c}"></label>`).join('');
+  $('swatches').addEventListener('change', e => { seed = e.target.value; localStorage.setItem('seed', seed); applyPalette(seed); });
+  $('themeBtn').onclick = () => { $('sheet').hidden = false; qs('#swatches input:checked')?.focus(); };
+  const closeSheet = () => { $('sheet').hidden = true; $('themeBtn').focus(); };
+  $('sheetClose').onclick = closeSheet;
+  $('sheet').addEventListener('click', e => { if (e.target === $('sheet')) closeSheet(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
+  $('sheetReset').onclick = () => { seed = SEEDS[0]; localStorage.removeItem('seed'); applyPalette(seed); $('sd0').checked = true; };
+
+  /* ===================================================================
+     Режимы. Три старых (pdf / photo / topdf) работают как раньше,
+     четыре новых (image / audio / video / doc) идут через /api/universal.
+     =================================================================== */
+  const MODES = {
+    image: { title: 'Картинки', kind: 'uni' }, audio: { title: 'Аудио', kind: 'uni' },
+    video: { title: 'Видео', kind: 'uni' }, doc: { title: 'Документы', kind: 'uni' },
+    pdf: { title: 'PDF в картинки', kind: 'pdf' }, photo: { title: 'Фото в A4', kind: 'photo' }, topdf: { title: 'Фото в PDF', kind: 'topdf' },
+  };
+  const mode = () => qs('input[name=mode]:checked').value;
+  const isUni = () => MODES[mode()].kind === 'uni';
+  const isPhotoish = () => ['photo', 'topdf'].includes(mode());
+
+  let files = [];
+  let caps = null;                 // ответ /api/formats
+  let uniTarget = {};              // выбранный формат для каждой категории
+
+  const picker = $('picker'), list = $('list'), goBtn = $('go'), clearBtn = $('clear'), statusEl = $('status');
+  const fmtSize = b => b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' КБ' : (b / 1048576).toFixed(1) + ' МБ';
+  const key = f => f.name + '|' + f.size + '|' + f.lastModified;
+  const extOf = n => (n.split('.').pop() || '').toLowerCase();
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const IMG_RE = /\.(jpe?g|png|webp|tiff?|bmp)$/i;
+
+  function accepts(f) {
+    const m = mode();
+    if (m === 'pdf') return /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+    if (isPhotoish()) return IMG_RE.test(f.name) || f.type.startsWith('image/');
+    return !!caps && caps.categories[m].inputs.includes(extOf(f.name));
+  }
+
+  function addFiles(fl) {
+    const have = new Set(files.map(key)); let skipped = 0;
+    for (const f of fl) {
+      if (!accepts(f)) { skipped++; continue; }
+      if (have.has(key(f))) continue;
+      have.add(key(f)); files.push(f);
+    }
+    render();
+    if (skipped) setStatus(`<ul class="errs"><li>Пропущено файлов другого типа: ${skipped}. В режиме «${MODES[mode()].title}» они не подходят.</li></ul>`);
+  }
+
+  function render() {
+    list.innerHTML = '';
+    files.forEach((f, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="ico"></span><span class="name"></span><span class="size"></span>' +
+        '<button class="icon-btn state" title="Убрать из списка" aria-label="Убрать из списка"><svg viewBox="0 -960 960 960"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg></button>';
+      li.querySelector('.ico').textContent = extOf(f.name).slice(0, 4).toUpperCase() || '?';
+      li.querySelector('.name').textContent = f.name; li.querySelector('.name').title = f.name;
+      li.querySelector('.size').textContent = fmtSize(f.size);
+      li.querySelector('button').onclick = () => { files.splice(i, 1); render(); };
+      list.appendChild(li);
+    });
+    $('count').textContent = files.length;
+    $('total').textContent = files.length ? '· ' + fmtSize(files.reduce((s, f) => s + f.size, 0)) : '';
+    $('empty').hidden = files.length > 0;
+    clearBtn.disabled = goBtn.disabled = files.length === 0;
+    if (isUni()) refreshUniTargets();
+  }
+
+  picker.addEventListener('change', () => { addFiles(picker.files); picker.value = ''; });
+  clearBtn.onclick = () => { files = []; statusEl.hidden = true; render(); };
+
+  // выбор папки: запоминаем её имя для названия архива
+  const dirPicker = document.createElement('input');
+  dirPicker.type = 'file'; dirPicker.multiple = true; dirPicker.setAttribute('webkitdirectory', ''); dirPicker.hidden = true;
+  document.body.appendChild(dirPicker);
+  $('pickDir').addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); dirPicker.click(); });
+  dirPicker.addEventListener('change', () => {
+    for (const f of dirPicker.files) { const top = (f.webkitRelativePath || '').split('/')[0]; if (top) f._dir = top; }
+    addFiles(dirPicker.files); dirPicker.value = '';
+  });
+
+  // drag & drop, включая папки
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', async ev => {
+    const items = ev.dataTransfer.items;
+    if (items && items.length && items[0].webkitGetAsEntry) {
+      const out = [];
+      const walk = (entry, top) => new Promise(res => {
+        if (entry.isFile) entry.file(f => { if (top) f._dir = top; out.push(f); res(); }, res);
+        else if (entry.isDirectory) {
+          const reader = entry.createReader(), all = [];
+          const read = () => reader.readEntries(async es => {
+            if (!es.length) { await Promise.all(all.map(e => walk(e, top))); res(); return; }
+            all.push(...es); read();
+          }, res);
+          read();
+        } else res();
+      });
+      const entries = [...items].map(i => i.webkitGetAsEntry()).filter(Boolean);
+      await Promise.all(entries.map(e => walk(e, e.isDirectory ? e.name : null)));
+      addFiles(out);
+    } else addFiles(ev.dataTransfer.files);
+  });
+  addEventListener('dragover', e => e.preventDefault());
+  addEventListener('drop', e => e.preventDefault());
+
+  /* ---------- настройки ---------- */
+  const vector = ['svg', 'ps', 'eps'], noQuality = ['png', 'tiff', 'svg', 'ps', 'eps'], noGray = ['svg', 'ps', 'eps'];
+  const fmt = () => qs('input[name=fmt]:checked')?.value || 'jpg';
+  const ppVal = () => +qs('input[name=pp]:checked').value;
+  const GRID = { 1: [1, 1], 2: [1, 2], 4: [2, 2], 6: [2, 3], 8: [2, 4], 9: [3, 3] };
+
+  function paintSlider(el) { el.style.setProperty('--p', ((el.value - el.min) / (el.max - el.min) * 100) + '%'); }
+  ['dpi', 'quality'].forEach(id => paintSlider($(id)));
+
+  // какие форматы предлагать: с учётом выбранных файлов (видео -> ещё и аудио и т.д.)
+  function uniOutputs() {
+    const m = mode(); if (!caps) return [];
+    let out = [...caps.categories[m].outputs];
+    return out;
+  }
+  function renderUniChips() {
+    const m = mode(), cat = caps.categories[m], outs = cat.native.concat(cat.cross);
+    const dflt = { image: 'png', audio: 'mp3', video: 'mp4', doc: 'docx' }[m];
+    if (!uniTarget[m] || !outs.includes(uniTarget[m])) uniTarget[m] = outs.includes(dflt) ? dflt : outs[0];
+    const chip = f => `<input type="radio" name="uni" id="u-${f}" value="${f}" ${f === uniTarget[m] ? 'checked' : ''}><label for="u-${f}">${f.toUpperCase()}</label>`;
+    const crossName = { video: 'Достать звук', audio: 'Сделать видео' }[m];
+    $('uniChips').innerHTML = cat.native.map(chip).join('') +
+      (cat.cross.length ? `<span class="chip-group t-label-m muted">${crossName}</span>` + cat.cross.map(chip).join('') : '');
+    $('uniHint').textContent = m === 'audio' ? 'Видеоформаты делают ролик с обложкой альбома или чёрным фоном.' : m === 'video' ? 'Аудиоформаты вытаскивают из видео звук.' : '';
+  }
+  function refreshUniTargets() { /* список форматов зависит от режима, не от файлов */ }
+  $('uniChips').addEventListener('change', e => { uniTarget[mode()] = e.target.value; syncSettings(); });
+
+  function syncSettings() {
+    const m = mode(), k = MODES[m].kind, uni = k === 'uni', topdf = k === 'topdf', photo = k === 'photo' || topdf, pdf = k === 'pdf';
+    $('uniField').hidden = !uni;
+    $('formatsField').hidden = !(pdf || k === 'photo');
+    $('pdfOpts').hidden = uni || topdf; $('pdfOpts').style.display = (uni || topdf) ? 'none' : 'grid';
+    $('pdfBox').hidden = !topdf; $('pdfBox').style.display = topdf ? 'grid' : 'none';
+    $('pagesRow').hidden = photo; $('a4Row').hidden = photo;
+
+    // формат картинки в режиме "Фото в A4": только растровые
+    document.querySelectorAll('#formats label').forEach(l => {
+      const off = photo && vector.includes(l.dataset.f);
+      const inp = $('f-' + l.dataset.f), lab = l;
+      inp.disabled = off; lab.hidden = off; inp.hidden = false;
+      if (off && inp.checked) inp.checked = false;
+    });
+    if (photo && !qs('input[name=fmt]:checked')) $('f-jpg').checked = true;
+
+    // ползунки и переключатели
+    let f = pdf || k === 'photo' ? fmt() : 'jpg';
+    let showDpi = false, showQ = false, showMeta = false, showAV = false, showName = uni;
+    if (uni) {
+      const t = uniTarget[m];
+      if (m === 'image') { showQ = ['jpg', 'jpeg', 'webp', 'avif', 'heic', 'tiff', 'tif', 'jfif', 'jpe'].includes(t); showMeta = true; showDpi = ['pdf', 'eps'].includes(t) || false; }
+      if (m === 'audio' || m === 'video') { showAV = true; showMeta = true; }
+    } else {
+      showDpi = !vector.includes(f); showQ = !noQuality.includes(f) || topdf;
+    }
+    $('dpiField').hidden = !showDpi; $('qField').hidden = !showQ;
+    $('avBox').hidden = !showAV; $('metaRow').hidden = !showMeta;
+    $('nameRow').hidden = !showName; $('nameHint').hidden = !showName;
+    $('grayRow').hidden = noGray.includes(f) || uni;
+
+    const a4on = photo || $('a4').checked, raster = !vector.includes(f);
+    $('a4opts').hidden = !(a4on && raster) || uni; $('a4opts').style.display = (!(a4on && raster) || uni) ? 'none' : 'grid';
+    const mm = 'Каждое изображение станет листом 210×297 мм';
+    if (topdf) { updatePP(); $('a4hint').textContent = 'Страница PDF: A4, 210×297 мм.'; }
+    else if (!a4on) $('a4hint').textContent = mm + '.';
+    else if (!raster) $('a4hint').textContent = f === 'ps' ? mm + ' (бумага A4 в PostScript).' : 'Для ' + f.toUpperCase() + ' размер листа не задаётся: формат векторный.';
+    else { const d = +$('dpi').value; $('a4hint').textContent = `${mm}, это ${Math.round(210 / 25.4 * d)}×${Math.round(297 / 25.4 * d)} px при ${d} DPI.`; }
+  }
+  document.querySelectorAll('input[name=fmt]').forEach(r => r.addEventListener('change', syncSettings));
+  $('a4').addEventListener('change', syncSettings);
+  $('dpi').oninput = e => { $('dpiVal').textContent = e.target.value + ' DPI'; paintSlider(e.target); syncSettings(); };
+  $('quality').oninput = e => { $('qVal').textContent = e.target.value; paintSlider(e.target); };
+
+  function updatePP() {
+    const n = ppVal(), [c, r] = GRID[n];
+    $('gapRow').hidden = n === 1;
+    $('ppHint').textContent = n === 1 ? 'Каждое фото на своём листе.' : `Сетка ${c}×${r} на листе (в альбомной ориентации поворачивается).`;
+  }
+  document.querySelectorAll('input[name=pp]').forEach(r => r.addEventListener('change', updatePP));
+
+  const SUBS = {
+    image: 'PNG, JPG, WebP, GIF, AVIF, HEIC, ICO, TIFF, PSD и другие. RAW-снимки можно читать.',
+    audio: 'MP3, WAV, FLAC, OGG, Opus, AAC, M4A и другие. Можно сделать из аудио видео.',
+    video: 'MP4, MKV, WebM, AVI, MOV и другие. Можно вытащить звук в аудиофайл.',
+    doc: 'DOCX, DOC, Markdown, HTML, RTF, EPUB, ODT, CSV и другие.',
+    pdf: 'Пакетная конвертация страниц PDF в JPG, PNG, TIFF, WebP, SVG, PS, EPS.',
+    photo: 'Готовые фото приводятся к листу A4 с нужным разрешением.',
+    topdf: 'Фото раскладываются на листах A4: по одному на страницу или сеткой.',
+  };
+  function applyMode() {
+    const m = mode(), k = MODES[m].kind;
+    $('title').textContent = MODES[m].title; $('subtitle').textContent = SUBS[m];
+    const acc = { pdf: 'application/pdf,.pdf' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
+    picker.accept = acc; dirPicker.accept = acc;
+    const what = { pdf: 'PDF', image: 'картинки', audio: 'аудиофайлы', video: 'видео', doc: 'документы' }[m] || 'фото';
+    $('dropTitle').textContent = `Перетащи ${what} сюда`;
+    $('dropSub').textContent = k === 'pdf' ? 'Можно сразу сотню. Папку тоже можно перетащить.' : 'или нажми, чтобы выбрать. Папку тоже можно перетащить.';
+    const d = { topdf: 200, photo: 300 }[m] || 150; $('dpi').value = d; $('dpiVal').textContent = d + ' DPI';
+    const q = { topdf: 85, photo: 95 }[m] || 90; $('quality').value = q; $('qVal').textContent = q;
+    paintSlider($('dpi')); paintSlider($('quality'));
+    $('dpiHint').textContent = m === 'topdf' ? '200 хватит для печати и почты, 300 для качественной печати (файл тяжелее).' : m === 'photo' ? 'Для печати на A4 нужно 300 DPI.' : k === 'pdf' ? '150 хватит для экрана, 300 для печати.' : '';
+    files = []; statusEl.hidden = true; if (k === 'uni' && caps) renderUniChips();
+    const pb = $('engineBanner'); pb.hidden = true;
+    if (caps) {
+      const need = { image: ['imagemagick', 'ImageMagick'], audio: ['ffmpeg', 'ffmpeg'], video: ['ffmpeg', 'ffmpeg'], doc: ['pandoc', 'pandoc'] }[m];
+      if (need && !caps.engines[need[0]]) { pb.hidden = false; pb.textContent = `${need[1]} не найден в PATH. Установи его и перезапусти сервер, иначе этот режим не заработает.`; }
+    }
+    if (m === 'pdf' && !POPPLER_OK) { $('engineBanner').hidden = false; $('engineBanner').textContent = 'Poppler не найден в PATH. Установи poppler-utils и перезапусти сервер, иначе конвертация PDF не заработает.'; }
+    render(); syncSettings();
+  }
+  const POPPLER_OK = {{ 'true' if (poppler.pdftoppm and poppler.pdftocairo) else 'false' }};
+  document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', applyMode));
+
+  const setStatus = html => { statusEl.hidden = false; statusEl.innerHTML = html; };
+
+  /* ---------- отправка ---------- */
+  goBtn.onclick = () => {
+    if (!files.length) return;
+    const m = mode(), k = MODES[m].kind, fd = new FormData();
+    files.forEach(f => fd.append('files', f, f.name));
+    const dirs = [...new Set(files.map(f => f._dir).filter(Boolean))];
+    if (dirs.length) fd.append('archive_name', dirs.length === 1 ? dirs[0] : `${dirs[0]} (+${dirs.length - 1})`);
+
+    let url;
+    if (k === 'uni') {
+      url = '/api/universal';
+      fd.append('to', uniTarget[m]);
+      fd.append('quality', $('quality').value);
+      fd.append('density', $('dpi').value);
+      fd.append('bitrate', $('bitrate').value);
+      fd.append('sample_rate', $('sampleRate').value);
+      fd.append('keep_metadata', $('keepMeta').checked ? '1' : '0');
+      fd.append('name_template', $('nameTpl').value || '%name%');
+    } else {
+      url = { pdf: '/api/convert', photo: '/api/photos', topdf: '/api/photos2pdf' }[k];
+      fd.append('format', k === 'topdf' ? 'jpg' : fmt());
+      fd.append('dpi', $('dpi').value);
+      fd.append('quality', $('quality').value);
+      fd.append('all_pages', $('allPages').checked ? '1' : '0');
+      fd.append('gray', $('gray').checked ? '1' : '0');
+      fd.append('a4', (k !== 'pdf' || $('a4').checked) ? '1' : '0');
+      fd.append('a4_mode', $('a4mode').value);
+      fd.append('a4_orient', $('a4orient').value);
+      if (k === 'topdf') {
+        fd.append('per_page', ppVal());
+        fd.append('output', qs('input[name=out]:checked').value);
+        fd.append('order', qs('input[name=ord]:checked').value);
+        fd.append('margin', $('margin').value || 0);
+        fd.append('gap', $('gap').value || 0);
+      }
+    }
+
+    goBtn.disabled = true;
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.upload.onprogress = e => {
+      if (!e.lengthComputable) return;
+      const p = Math.round(e.loaded / e.total * 100);
+      if (p < 100) setStatus(`<span class="t-body-m">Загружаю файлы… ${p}%</span><div class="progress"><i style="width:${p}%"></i></div>`);
+      else setStatus('<span class="t-body-m">Конвертирую…</span><div class="progress busy"><i></i></div>');
+    };
+    xhr.onload = () => {
+      goBtn.disabled = false;
+      let data = {}; try { data = JSON.parse(xhr.responseText); } catch (_) {}
+      if (xhr.status !== 200) { setStatus(`<ul class="errs"><li>${esc(data.error || 'Сервер вернул ошибку ' + xhr.status)}</li></ul>`); return; }
+      const unit = m === 'pdf' ? 'PDF' : 'файлов';
+      const dl = (raw, label) => `<a class="btn filled state" href="/api/download/${data.job}${raw ? '?raw=1' : ''}" download>Скачать ${esc(label)}</a>`;
+      let html;
+      if (k === 'topdf') {
+        const single = !!data.single_pdf;
+        html = `<div class="result"><span class="t-body-m">Готово: ${data.done} из ${data.total} фото, страниц A4: ${data.pages}.</span>${dl(single, single ? data.single_pdf : data.archive)}</div>`;
+      } else if (k === 'uni') {
+        const single = !!data.single_file;
+        html = data.done ? `<div class="result"><span class="t-body-m">Готово: ${data.done} из ${data.total}.</span>${dl(single, single ? data.single_file : data.archive)}</div>` : '';
+      } else {
+        html = `<div class="result"><span class="t-body-m">Готово: ${data.done} из ${data.total} ${unit}, получилось файлов: ${data.files}.</span>${dl(false, data.archive)}</div>`;
+      }
+      if ((data.failed || []).length) html += `<ul class="errs">` + data.failed.map(f => `<li><b>${esc(f.name)}</b>: ${esc(f.error)}</li>`).join('') + `</ul>`;
+      setStatus(html);
+    };
+    xhr.onerror = () => { goBtn.disabled = false; setStatus('<ul class="errs"><li>Не удалось связаться с сервером. Он запущен?</li></ul>'); };
+    setStatus('<span class="t-body-m">Загружаю файлы… 0%</span><div class="progress"><i></i></div>');
+    xhr.send(fd);
+  };
+
+  /* ---------- старт ---------- */
+  fetch('/api/formats').then(r => r.json()).then(d => { caps = d; applyMode(); }).catch(() => { applyMode(); });
+  applyMode();
+})();
+
+</script>
+</body>
+</html>
