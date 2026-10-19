@@ -1,0 +1,40 @@
+name: Релиз
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия, например 1.0.0 (тег v1.0.0 создастся сам)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Версия
+        id: v
+        run: |
+          V="${{ github.event.inputs.version }}"
+          [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: Архив
+        run: git archive --format=zip --prefix="universal-${{ steps.v.outputs.version }}/" -o "universal-${{ steps.v.outputs.version }}.zip" HEAD
+      - name: Описание из CHANGELOG.md
+        run: |
+          awk -v v="v${{ steps.v.outputs.version }}" '
+            /^## / { if (on) exit; if (index($0, "## " v " ") == 1 || $0 == "## " v) { on = 1; next } }
+            on' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Версия ${{ steps.v.outputs.version }}" > notes.md
+          cat notes.md
+      - name: Релиз
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          gh release create "v$V" "universal-$V.zip" --title "Universal $V" --notes-file notes.md --target "$GITHUB_SHA"

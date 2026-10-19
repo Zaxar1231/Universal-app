@@ -1,0 +1,4 @@
+# в архив релиза не кладём сайт и служебное GitHub
+/site export-ignore
+/.github export-ignore
+/.gitattributes export-ignore
