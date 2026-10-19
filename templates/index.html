@@ -1,0 +1,1404 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4fbfa">
+<title>Universal</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2300696b'/%3E%3Cpath d='M9 8v10a7 7 0 0 0 14 0V8h-4v10a3 3 0 0 1-6 0V8z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+/* =====================================================================
+   Material You (Material 3). Цвета строятся из одного seed-цвета в JS,
+   ниже только запасная бирюзовая палитра, чтобы страница не мигала.
+   Elevation передаётся тоном поверхности, а не тенью, как в M3.
+   ===================================================================== */
+:root {
+  --md-primary: #00696b; --md-on-primary: #fff;
+  --md-primary-container: #6ff7f9; --md-on-primary-container: #002020;
+  --md-secondary: #4a6363; --md-secondary-container: #cce8e8; --md-on-secondary-container: #051f20;
+  --md-tertiary-container: #d7e3ff; --md-on-tertiary-container: #061b3c;
+  --md-error: #ba1a1a; --md-error-container: #ffdad6; --md-on-error-container: #410002;
+  --md-surface: #f4fbfa; --md-on-surface: #161d1d; --md-on-surface-variant: #3f4948;
+  --md-surface-container-lowest: #fff; --md-surface-container-low: #eef5f4;
+  --md-surface-container: #e8efee; --md-surface-container-high: #e3e9e9;
+  --md-surface-container-highest: #dde4e3;
+  --md-outline: #6f7979; --md-outline-variant: #bec9c8;
+  --md-scrim: #000;
+  --sh-xs: 4px; --sh-s: 8px; --sh-m: 12px; --sh-l: 16px; --sh-xl: 28px;
+  --font: "Roboto Flex", Roboto, "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px);
+  --rail: 80px; --bar: 80px;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; color-scheme: light dark; }
+body {
+  margin: 0; background: var(--md-surface); color: var(--md-on-surface);
+  font: 400 16px/1.5 var(--font); letter-spacing: .01em;
+}
+button, input, select { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+/* --- типографика M3 --- */
+.t-headline { font-size: 1.75rem; line-height: 2.25rem; font-weight: 400; margin: 0; }
+.t-title-l { font-size: 1.375rem; line-height: 1.75rem; font-weight: 400; margin: 0; }
+.t-title-m { font-size: 1rem; line-height: 1.5rem; font-weight: 500; letter-spacing: .009em; margin: 0; }
+.t-body-m { font-size: .875rem; line-height: 1.25rem; }
+.t-label-l { font-size: .875rem; line-height: 1.25rem; font-weight: 500; letter-spacing: .007em; }
+.t-label-m { font-size: .75rem; line-height: 1rem; font-weight: 500; letter-spacing: .04em; }
+.muted { color: var(--md-on-surface-variant); }
+
+/* --- state layer: наведение/фокус/нажатие как в M3 --- */
+.state { position: relative; overflow: hidden; isolation: isolate; }
+.state::before { content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0; z-index: -1; transition: opacity .15s; }
+.state:hover::before { opacity: .08; }
+.state:focus-visible::before { opacity: .12; }
+.state:active::before { opacity: .12; }
+:focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+
+/* --- раскладка: rail слева на широком, bar снизу на узком --- */
+.app { min-height: 100dvh; display: grid; grid-template-columns: var(--rail) 1fr; }
+.rail {
+  position: sticky; top: 0; height: 100dvh; padding: calc(var(--safe-t) + 44px) 0 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  background: var(--md-surface); overflow-y: auto; scrollbar-width: none;
+}
+.rail::-webkit-scrollbar { display: none; }
+.nav { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%;
+  background: none; border: 0; padding: 0; cursor: pointer; color: var(--md-on-surface-variant); }
+.nav input { position: absolute; opacity: 0; pointer-events: none; }
+.nav .pill { width: 56px; height: 32px; border-radius: 16px; display: grid; place-items: center;
+  transition: background .2s, width .2s; }
+.nav svg { width: 24px; height: 24px; fill: currentColor; }
+.nav .t-label-m { text-align: center; max-width: 76px; line-height: 1rem; }
+.nav { padding: 2px 0; }
+.nav:hover .pill { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+.nav:has(input:checked) { color: var(--md-on-surface); }
+.nav:has(input:checked) .pill { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.nav:has(input:checked) .t-label-m { font-weight: 700; }
+.nav:has(input:focus-visible) .pill { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.rail .sep { width: 40px; height: 1px; background: var(--md-outline-variant); margin: 4px 0; }
+
+main { padding: calc(var(--safe-t) + 20px) 24px 48px; max-width: 1180px; width: 100%; }
+header.top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin: 8px 0 24px; }
+header.top p { margin: 4px 0 0; }
+.icon-btn { width: 48px; height: 48px; border-radius: 24px; border: 0; background: none; cursor: pointer;
+  display: grid; place-items: center; color: var(--md-on-surface-variant); flex: none; }
+.icon-btn svg { width: 24px; height: 24px; fill: currentColor; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+
+/* --- карточки: filled, тон вместо тени --- */
+.card { background: var(--md-surface-container-low); border-radius: var(--sh-xl); }
+.card.high { background: var(--md-surface-container); }
+
+/* --- зона загрузки --- */
+.drop { display: grid; justify-items: center; text-align: center; gap: 4px; padding: 40px 24px;
+  border: 2px dashed var(--md-outline); border-radius: var(--sh-xl); background: var(--md-surface-container-low);
+  cursor: pointer; transition: background .15s, border-color .15s; position: relative; }
+.drop:hover, .drop.over { background: var(--md-secondary-container); border-color: var(--md-primary); }
+.drop:focus-within { border-color: var(--md-primary); }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.drop .big { width: 72px; height: 72px; border-radius: 28px; background: var(--md-primary-container);
+  color: var(--md-on-primary-container); display: grid; place-items: center; margin-bottom: 12px; }
+.drop .big svg { width: 32px; height: 32px; fill: currentColor; }
+
+/* --- кнопки --- */
+.btn { height: 40px; padding: 0 24px; border-radius: 20px; border: 0; cursor: pointer; font-weight: 500;
+  font-size: .875rem; letter-spacing: .007em; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.btn svg { width: 18px; height: 18px; fill: currentColor; }
+.btn.filled { background: var(--md-primary); color: var(--md-on-primary); }
+.btn.tonal { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.btn.text { background: none; color: var(--md-primary); padding: 0 12px; }
+.btn.lg { height: 56px; border-radius: 28px; width: 100%; font-size: 1rem; }
+.btn:disabled { background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
+  color: color-mix(in srgb, var(--md-on-surface) 38%, transparent); cursor: default; }
+.btn:disabled::before { display: none; }
+
+/* --- список файлов --- */
+.list-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 8px 12px 24px; }
+ul.files { list-style: none; margin: 0; padding: 0 0 12px; max-height: 440px; overflow: auto; }
+ul.files li { display: flex; align-items: center; gap: 16px; padding: 8px 8px 8px 24px; min-height: 56px; }
+ul.files .ico { width: 40px; height: 40px; border-radius: 20px; flex: none; display: grid; place-items: center;
+  background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); font-size: .6875rem; font-weight: 700; }
+ul.files .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ul.files .size { color: var(--md-on-surface-variant); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.empty { padding: 8px 24px 28px; text-align: center; }
+
+/* --- настройки --- */
+.settings { padding: 24px; display: grid; gap: 24px; position: sticky; top: calc(var(--safe-t) + 16px); }
+.field { display: grid; gap: 8px; }
+.field > .lbl { color: var(--md-on-surface-variant); }
+.hint { margin: 0; color: var(--md-on-surface-variant); font-size: .75rem; line-height: 1rem; }
+
+/* segmented button */
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--md-outline); border-radius: 20px; overflow: hidden; }
+.seg.wrap { grid-auto-flow: row; grid-template-columns: repeat(3, 1fr); border-radius: 20px; }
+.seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.seg label { height: 40px; display: grid; place-items: center; text-align: center; padding: 0 8px; cursor: pointer;
+  font-size: .875rem; font-weight: 500; user-select: none; border-left: 1px solid var(--md-outline); line-height: 1.1; }
+.seg label:first-of-type { border-left: 0; }
+.seg.wrap label { border-top: 1px solid var(--md-outline); border-left: 1px solid var(--md-outline); }
+.seg.wrap label:nth-of-type(3n+1) { border-left: 0; }
+.seg.wrap label:nth-of-type(-n+3) { border-top: 0; }
+.seg input:checked + label { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.seg input:focus-visible + label { outline: 3px solid var(--md-primary); outline-offset: -3px; }
+
+/* filter chips для формата */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.chips label { height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--md-outline); display: inline-flex;
+  align-items: center; gap: 6px; cursor: pointer; font-size: .875rem; font-weight: 500; user-select: none; }
+.chips label:hover { background: color-mix(in srgb, var(--md-on-surface-variant) 8%, transparent); }
+.chips input:checked + label { background: var(--md-secondary-container); color: var(--md-on-secondary-container); border-color: transparent; }
+.chips input:checked + label::before { content: ""; width: 16px; height: 16px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z'/%3E%3C/svg%3E") center/contain no-repeat; }
+.chips input:focus-visible + label { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.chip-group { flex-basis: 100%; margin: 8px 0 -2px; }
+.chips.scroll { max-height: 172px; overflow: auto; padding: 2px 2px 20px; scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent); mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
+
+/* slider M3 */
+.slider-row { display: grid; gap: 4px; }
+.slider-row .top { display: flex; justify-content: space-between; align-items: baseline; }
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 40px; background: none; margin: 0; cursor: pointer; }
+input[type=range]::-webkit-slider-runnable-track { height: 16px; border-radius: 8px;
+  background: linear-gradient(to right, var(--md-primary) var(--p, 50%), var(--md-secondary-container) var(--p, 50%)); }
+input[type=range]::-moz-range-track { height: 16px; border-radius: 8px; background: var(--md-secondary-container); }
+input[type=range]::-moz-range-progress { height: 16px; border-radius: 8px; background: var(--md-primary); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 4px; height: 44px; border-radius: 2px; background: var(--md-primary); margin-top: -14px; }
+input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; border-radius: 2px; background: var(--md-primary); }
+
+/* text field (filled) */
+.tf { position: relative; display: block; }
+.tf input, .tf select { width: 100%; height: 56px; padding: 22px 16px 6px; border: 0; border-bottom: 1px solid var(--md-on-surface-variant);
+  border-radius: 4px 4px 0 0; background: var(--md-surface-container-highest); appearance: none; -webkit-appearance: none; outline: none; }
+.tf select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960' fill='%23888'%3E%3Cpath d='M480-360 280-560h400L480-360Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 24px; padding-right: 44px; }
+.tf > span { position: absolute; left: 16px; top: 8px; font-size: .75rem; line-height: 1rem; color: var(--md-on-surface-variant); pointer-events: none; }
+.tf:focus-within input, .tf:focus-within select { border-bottom: 2px solid var(--md-primary); }
+.tf:focus-within > span { color: var(--md-primary); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* switch M3 */
+.sw { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; min-height: 48px; }
+.sw input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.sw .track { width: 52px; height: 32px; border-radius: 16px; border: 2px solid var(--md-outline); background: var(--md-surface-container-highest);
+  position: relative; flex: none; transition: background .2s, border-color .2s; }
+.sw .track::after { content: ""; position: absolute; top: 6px; left: 6px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--md-outline); transition: all .2s cubic-bezier(.2,0,0,1); }
+.sw input:checked + .track { background: var(--md-primary); border-color: var(--md-primary); }
+.sw input:checked + .track::after { left: 26px; top: 2px; width: 24px; height: 24px; background: var(--md-on-primary); }
+.sw input:focus-visible + .track { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.sw .txt { display: grid; gap: 2px; }
+
+/* --- статус --- */
+.status { display: grid; gap: 12px; }
+.progress { height: 4px; border-radius: 2px; background: var(--md-secondary-container); overflow: hidden; }
+.progress i { display: block; height: 100%; width: 0; background: var(--md-primary); border-radius: 2px; transition: width .2s; }
+.progress.busy i { width: 35%; animation: slide 1.4s cubic-bezier(.4,0,.2,1) infinite; }
+@keyframes slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+.result { padding: 16px; border-radius: var(--sh-l); background: var(--md-primary-container); color: var(--md-on-primary-container); display: grid; gap: 12px; }
+.result .btn { justify-self: start; }
+.errs { list-style: none; margin: 0; padding: 12px 16px; border-radius: var(--sh-l); background: var(--md-error-container);
+  color: var(--md-on-error-container); font-size: .875rem; display: grid; gap: 4px; }
+
+.banner { padding: 12px 16px; border-radius: var(--sh-l); background: var(--md-error-container); color: var(--md-on-error-container);
+  margin-bottom: 16px; font-size: .875rem; }
+
+/* --- палитра "Material You": выбор цвета --- */
+.sheet { position: fixed; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--md-scrim) 32%, transparent); z-index: 50; padding: 16px; }
+.dialog { background: var(--md-surface-container-high); border-radius: var(--sh-xl); padding: 24px; width: min(360px, 100%); display: grid; gap: 20px; }
+.swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.swatches input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.swatches label { aspect-ratio: 1; border-radius: 50%; cursor: pointer; display: grid; place-items: center; border: 3px solid transparent; }
+.swatches input:checked + label { border-color: var(--md-on-surface); }
+.swatches input:checked + label::after { content: ""; width: 22px; height: 22px; background: #fff; mix-blend-mode: difference;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z'/%3E%3C/svg%3E") center/contain no-repeat; }
+.swatches input:focus-visible + label { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.row-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+/* --- новые режимы: редактор, загрузчик, QR --- */
+.pane { display: grid; gap: 16px; margin-bottom: 16px; }
+.pane .card { padding: 20px 24px; display: grid; gap: 16px; }
+.ta { width: 100%; min-height: 140px; resize: vertical; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--md-on-surface-variant);
+  border-radius: 4px 4px 0 0; background: var(--md-surface-container-highest); font: inherit; color: inherit; outline: none; line-height: 1.45; }
+.ta:focus { border-bottom: 2px solid var(--md-primary); }
+.ta.code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .875rem; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sect { display: grid; gap: 16px; }
+.sect > h3 { margin: 0; border-top: 1px solid var(--md-outline-variant); padding-top: 20px; }
+.sect:first-child > h3 { border-top: 0; padding-top: 0; }
+.tf input[type=color] { padding: 22px 12px 4px; cursor: pointer; }
+.player { width: 100%; max-height: 360px; border-radius: var(--sh-l); background: #000; display: block; }
+audio.player { background: none; max-height: none; }
+.vinfo { display: grid; grid-template-columns: 120px 1fr; gap: 12px 16px; align-items: center; }
+.vinfo + .vinfo { padding-top: 12px; border-top: 1px solid var(--md-outline-variant); }
+.vinfo img, .vinfo .noimg { width: 120px; aspect-ratio: 16/9; object-fit: cover; border-radius: var(--sh-s); background: var(--md-surface-container-highest); }
+.vinfo .ttl { font-weight: 500; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.vinfo .err { color: var(--md-error); }
+.badge { display: inline-block; padding: 0 8px; border-radius: 8px; background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); font-size: .75rem; font-weight: 500; line-height: 1.5rem; }
+.qrprev { display: grid; place-items: center; min-height: 260px; border-radius: var(--sh-l);
+  background: repeating-conic-gradient(var(--md-surface-container-high) 0 25%, var(--md-surface-container-lowest) 0 50%) 0 0/20px 20px; padding: 16px; }
+.qrprev img { max-width: min(100%, 320px); image-rendering: pixelated; }
+.result .names { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; max-height: 220px; overflow: auto; font-size: .8125rem; }
+.result .names a { color: inherit; }
+.filebtn { position: relative; }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+ul.files .up { width: 40px; height: 40px; }
+
+/* --- узкий экран: navigation bar снизу --- */
+@media (max-width: 960px) { .grid { grid-template-columns: 1fr; } .settings { position: static; } }
+@media (max-width: 720px) {
+  .app { grid-template-columns: 1fr; padding-bottom: calc(var(--bar) + var(--safe-b)); }
+  .rail { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; top: auto; height: auto; width: 100%;
+    flex-direction: row; justify-content: flex-start; gap: 0; padding: 12px 8px calc(16px + var(--safe-b));
+    background: var(--md-surface-container); overflow-x: auto; overflow-y: hidden; }
+  .rail .sep { display: none; }
+  .nav { flex: 0 0 auto; width: 76px; }
+  main { padding: calc(var(--safe-t) + 12px) 16px 24px; }
+  .t-headline { font-size: 1.5rem; line-height: 2rem; }
+  .settings { padding: 20px; }
+  .drop { padding: 28px 16px; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="rail" aria-label="Режимы" id="rail">
+    {% set icons = {
+      'image': 'M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm40-80h480L570-480 450-320l-90-120-120 160Zm-40 80v-560 560Z',
+      'audio': 'M400-120q-66 0-113-47t-47-113q0-66 47-113t113-47q23 0 42.5 5.500T480-418v-422h240v160H560v400q0 66-47 113t-113 47Z',
+      'video': 'M160-160q-33 0-56.500-23.500T80-240v-480q0-33 23.500-56.500T160-800h480q33 0 56.500 23.500T720-720v180l160-160v440L720-420v180q0 33-23.500 56.500T640-160H160Z',
+      'doc': 'M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.500-23.500T160-160v-640q0-33 23.500-56.500T240-880h320l240 240v480q0 33-23.500 56.500T720-80H240Zm280-520v-200H240v640h480v-440H520Z',
+      'pdf': 'M360-460h40v-80h40q17 0 28.500-11.500T480-580v-40q0-17-11.500-28.500T440-660h-80v200Zm40-120v-40h40v40h-40Zm120 120h80q17 0 28.500-11.500T640-500v-120q0-17-11.500-28.500T600-660h-80v200Zm40-40v-120h40v120h-40Zm120 40h40v-80h40v-40h-40v-40h40v-40h-80v200ZM320-240q-33 0-56.500-23.500T240-320v-480q0-33 23.500-56.500T320-880h480q33 0 56.500 23.500T880-800v480q0 33-23.500 56.500T800-240H320Zm0-80h480v-480H320v480ZM160-80q-33 0-56.500-23.500T80-160v-560h80v560h560v80H160Z',
+      'photo': 'M480-260q75 0 127.500-52.500T660-440q0-75-52.500-127.500T480-620q-75 0-127.500 52.500T300-440q0 75 52.500 127.500T480-260Zm0-80q-42 0-71-29t-29-71q0-42 29-71t71-29q42 0 71 29t29 71q0 42-29 71t-71 29ZM160-120q-33 0-56.500-23.500T80-200v-480q0-33 23.500-56.500T160-760h126l74-80h240l74 80h126q33 0 56.500 23.500T880-680v480q0 33-23.500 56.500T800-120H160Z',
+      'topdf': 'M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.500-23.500T160-160v-640q0-33 23.500-56.500T240-880h320l240 240v480q0 33-23.500 56.500T720-80H240Zm280-520h200L520-800v200Z',
+      'pdft': 'M120-120v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80ZM240-280q-33 0-56.500-23.500T160-360v-400q0-33 23.500-56.500T240-840h480q33 0 56.500 23.500T800-760v400q0 33-23.500 56.500T720-280H240Zm0-80h480v-400H240v400Zm80-80h320v-80H320v80Zm0-160h320v-80H320v80Z',
+      'edit': 'M760-120 480-400l-94 94q8 15 11 32t3 34q0 66-47 113T240-80q-66 0-113-47T80-240q0-66 47-113t113-47q18 0 34.500 3t31.500 11l94-94-94-94q-15 8-31.500 11t-34.500 3q-66 0-113-47T80-720q0-66 47-113t113-47q66 0 113 47t47 113q0 18-3 34t-11 32l494 494v40H760ZM600-520l-80-80 240-240h120v40L600-520ZM240-640q33 0 56.500-23.500T320-720q0-33-23.500-56.500T240-800q-33 0-56.500 23.500T160-720q0 33 23.500 56.500T240-640Zm240 180q8 0 14-6t6-14q0-8-6-14t-14-6q-8 0-14 6t-6 14q0 8 6 14t14 6ZM240-160q33 0 56.500-23.500T320-240q0-33-23.500-56.500T240-320q-33 0-56.500 23.500T160-240q0 33 23.500 56.500T240-160Z',
+      'dl': 'M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.500-23.500T160-240v-120h80v120h480v-120h80v120q0 33-23.500 56.500T720-160H240Z',
+      'qr': 'M120-520v-320h320v320H120Zm80-80h160v-160H200v160Zm-80 480v-320h320v320H120Zm80-80h160v-160H200v160Zm320-320v-320h320v320H520Zm80-80h160v-160H600v160Zm160 480v-80h80v80h-80ZM520-360v-80h80v80h-80Zm80 80v-80h80v80h-80Zm-80 80v-80h80v80h-80Zm80 80v-80h80v80h-80Zm80-80v-80h80v80h-80Zm0-160v-80h80v80h-80Zm80 80v-80h80v80h-80Z'
+    } %}
+    {% for key, label in [('image','Картинки'),('audio','Аудио'),('video','Видео'),('doc','Документы')] %}
+    <label class="nav"><input type="radio" name="mode" value="{{ key }}" {% if key == 'image' %}checked{% endif %}>
+      <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
+      <span class="t-label-m">{{ label }}</span></label>
+    {% endfor %}
+    <span class="sep" role="separator"></span>
+    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF'),('pdft','Правка PDF')] %}
+    <label class="nav"><input type="radio" name="mode" value="{{ key }}">
+      <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
+      <span class="t-label-m">{{ label }}</span></label>
+    {% endfor %}
+    <span class="sep" role="separator"></span>
+    {% for key, label in [('edit','Редактор'),('dl','Скачать видео'),('qr','QR-коды')] %}
+    <label class="nav"><input type="radio" name="mode" value="{{ key }}">
+      <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
+      <span class="t-label-m">{{ label }}</span></label>
+    {% endfor %}
+  </nav>
+
+  <main>
+    <header class="top">
+      <div>
+        <h1 class="t-headline" id="title">Картинки</h1>
+        <p class="t-body-m muted" id="subtitle">Файлы обрабатываются на твоём компьютере и никуда не отправляются.</p>
+      </div>
+      <button class="icon-btn state" id="themeBtn" aria-label="Выбрать цвет оформления" title="Цвет оформления">
+        <svg viewBox="0 -960 960 960"><path d="M480-80q-82 0-155-31.500t-127.500-86Q143-252 111.500-325T80-480q0-83 32.500-156t88-127Q256-817 330-848.500T488-880q80 0 151 27.500t124.500 76q53.500 48.500 85 115T880-518q0 115-70 176.500T640-280h-74q-9 0-12.500 5t-3.500 11q0 12 15 34.500t15 51.500q0 50-27.500 74T480-80Zm0-400Zm-220 40q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm120-160q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm200 0q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm120 160q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Z"/></svg>
+      </button>
+    </header>
+
+    <div class="banner" id="engineBanner" hidden></div>
+
+    <div class="grid">
+      <section aria-label="Файлы">
+        <!-- скачивание видео -->
+        <div class="pane" id="dlPane" hidden>
+          <div class="card">
+            <label class="field"><span class="lbl t-label-l">Ссылки на видео, плейлисты или треки</span>
+              <textarea class="ta code" id="urls" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…&#10;https://vt.tiktok.com/…&#10;Можно по одной в строке или вставить текст целиком: ссылки найдутся сами"></textarea></label>
+            <div class="row">
+              <button class="btn tonal state" id="pasteUrls" type="button">Вставить из буфера</button>
+              <button class="btn text state" id="peekUrls" type="button">Посмотреть, что по ссылкам</button>
+            </div>
+            <p class="hint">YouTube, TikTok, VK, Rutube, Дзен, Instagram, X, Twitch, Reddit, Vimeo, SoundCloud, OK и ещё около 1800 сайтов. Если сайт вдруг перестал качаться, обнови yt-dlp (run.bat/run.sh делают это сами при запуске).</p>
+          </div>
+          <div class="card" id="dlInfo" hidden></div>
+        </div>
+
+        <!-- QR-коды -->
+        <div class="pane" id="qrPane" hidden>
+          <div class="card">
+            <div class="seg" role="radiogroup" aria-label="Что зашить в QR">
+              <input type="radio" name="qrk" id="qrk1" value="text" checked><label for="qrk1">Текст</label>
+              <input type="radio" name="qrk" id="qrk2" value="wifi"><label for="qrk2">Wi‑Fi</label>
+              <input type="radio" name="qrk" id="qrk3" value="vcard"><label for="qrk3">Контакт</label>
+              <input type="radio" name="qrk" id="qrk4" value="list"><label for="qrk4">Пачка</label>
+            </div>
+            <div id="qrText" class="sect">
+              <textarea class="ta" id="qrData" placeholder="Ссылка или любой текст"></textarea>
+            </div>
+            <div id="qrWifi" class="sect" hidden>
+              <label class="tf"><span>Имя сети (SSID)</span><input type="text" id="wSsid" autocomplete="off"></label>
+              <label class="tf"><span>Пароль</span><input type="text" id="wPass" autocomplete="off" spellcheck="false"></label>
+              <div class="two">
+                <label class="tf"><span>Защита</span><select id="wSec"><option value="WPA">WPA/WPA2/WPA3</option><option value="WEP">WEP</option><option value="nopass">Без пароля</option></select></label>
+                <label class="sw"><span class="t-body-m">Скрытая сеть</span><input type="checkbox" id="wHidden"><span class="track"></span></label>
+              </div>
+            </div>
+            <div id="qrCard" class="sect" hidden>
+              <label class="tf"><span>Имя и фамилия</span><input type="text" id="cName" autocomplete="off"></label>
+              <div class="two">
+                <label class="tf"><span>Телефон</span><input type="tel" id="cPhone" autocomplete="off"></label>
+                <label class="tf"><span>Почта</span><input type="email" id="cEmail" autocomplete="off"></label>
+              </div>
+              <div class="two">
+                <label class="tf"><span>Компания</span><input type="text" id="cOrg" autocomplete="off"></label>
+                <label class="tf"><span>Сайт</span><input type="url" id="cUrl" autocomplete="off"></label>
+              </div>
+            </div>
+            <div id="qrList" class="sect" hidden>
+              <textarea class="ta code" id="qrLinks" spellcheck="false" placeholder="https://site.ru/1&#10;https://site.ru/2&#10;# строки с решёткой пропускаются"></textarea>
+              <p class="hint">Или перетащи ниже файлы .txt, .csv, .docx: из Word достаются гиперссылки, кнопки-ссылки и адреса в тексте. Каждый код станет отдельным файлом, плюс index.csv с соответствием.</p>
+            </div>
+            <div class="qrprev" id="qrPrev"><span class="t-body-m muted">Здесь появится QR-код</span></div>
+          </div>
+        </div>
+
+        <div id="filesPane">
+        <label class="drop" id="drop">
+          <input type="file" id="picker" multiple>
+          <span class="big"><svg viewBox="0 -960 960 960"><path d="M440-320v-326L336-542l-56-58 200-200 200 200-56 58-104-104v326h-80ZM240-160q-33 0-56.500-23.500T160-240v-120h80v120h480v-120h80v120q0 33-23.500 56.500T720-160H240Z"/></svg></span>
+          <strong class="t-title-l" id="dropTitle">Перетащи файлы сюда</strong>
+          <span class="t-body-m muted" id="dropSub">или нажми, чтобы выбрать. Папку тоже можно перетащить.</span>
+          <button type="button" class="btn text state" id="pickDir">Выбрать папку</button>
+        </label>
+
+        <div class="card" style="margin-top:16px">
+          <div class="list-head">
+            <span class="t-title-m">Выбрано: <span id="count">0</span> <span class="muted" id="total">0 КБ</span></span>
+            <button class="btn text state" id="clear" disabled>Очистить</button>
+          </div>
+          <ul class="files" id="list"></ul>
+          <div class="empty t-body-m muted" id="empty">Пока ничего не выбрано</div>
+        </div>
+
+        <div class="card" id="previewCard" style="margin-top:16px;padding:16px;display:grid;gap:12px" hidden>
+          <span class="t-title-m" id="previewTitle">Предпросмотр</span>
+          <div id="previewSlot"></div>
+          <div class="row">
+            <button class="btn tonal state" id="setStart" type="button">Начало отсюда</button>
+            <button class="btn tonal state" id="setEnd" type="button">Конец здесь</button>
+            <span class="t-body-m muted" id="previewInfo"></span>
+          </div>
+        </div>
+        </div>
+      </section>
+
+      <aside class="card high settings" aria-label="Настройки">
+        <div id="classicBox" style="display:contents">
+        <!-- универсальные режимы -->
+        <div class="field" id="uniField" hidden>
+          <span class="lbl t-label-l" id="uniLbl">Конвертировать в</span>
+          <div class="chips scroll" id="uniChips" role="radiogroup"></div>
+          <p class="hint" id="uniHint"></p>
+        </div>
+
+        <!-- PDF -> картинки -->
+        <div class="field" id="formatsField" hidden>
+          <span class="lbl t-label-l">Формат</span>
+          <div class="chips" id="formats" role="radiogroup">
+            {% for f in formats %}
+            <input type="radio" name="fmt" id="f-{{ f }}" value="{{ f }}" {% if f == 'jpg' %}checked{% endif %}>
+            <label for="f-{{ f }}" data-f="{{ f }}">{{ f|upper }}</label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="slider-row" id="dpiField" hidden>
+          <div class="top"><label class="t-label-l muted" for="dpi">Разрешение</label><span class="t-label-l" id="dpiVal">150 DPI</span></div>
+          <input type="range" id="dpi" min="50" max="600" step="10" value="150">
+          <p class="hint" id="dpiHint"></p>
+        </div>
+
+        <label class="tf" id="resizeRow" hidden><span>Уменьшить до, px по длинной стороне</span>
+          <input type="number" id="uniResize" min="0" max="20000" step="10" placeholder="не уменьшать"></label>
+
+        <div class="slider-row" id="qField" hidden>
+          <div class="top"><label class="t-label-l muted" for="quality">Качество</label><span class="t-label-l" id="qVal">90</span></div>
+          <input type="range" id="quality" min="10" max="100" step="1" value="90">
+        </div>
+
+        <!-- аудио/видео -->
+        <div class="two" id="avBox" hidden>
+          <label class="tf"><span>Битрейт звука</span>
+            <select id="bitrate">
+              <option value="auto">Авто</option><option>320</option><option>256</option><option>192</option>
+              <option>128</option><option>96</option><option>64</option><option>32</option>
+            </select></label>
+          <label class="tf"><span>Частота</span>
+            <select id="sampleRate">
+              <option value="auto">Авто</option><option value="48000">48000 Гц</option><option value="44100">44100 Гц</option>
+              <option value="32000">32000 Гц</option><option value="22050">22050 Гц</option>
+              <option value="16000">16000 Гц</option><option value="11025">11025 Гц</option><option value="8000">8000 Гц</option>
+            </select></label>
+        </div>
+
+        <label class="sw" id="metaRow" hidden><span class="txt"><span class="t-body-m">Сохранять метаданные</span><span class="hint">Теги, обложка, EXIF</span></span>
+          <input type="checkbox" id="keepMeta" checked><span class="track"></span></label>
+
+        <label class="tf" id="nameRow" hidden><span>Имя результата</span>
+          <input type="text" id="nameTpl" value="%name%" spellcheck="false" autocomplete="off"></label>
+        <p class="hint" id="nameHint" hidden style="margin-top:-16px">%name% заменяется на имя исходного файла, например VERT_%name%.</p>
+
+        <!-- PDF-режим и фото -->
+        <div id="pdfOpts" hidden style="display:grid;gap:24px">
+          <label class="sw" id="pagesRow"><span class="txt"><span class="t-body-m">Все страницы</span><span class="hint">Иначе только первая. Файлы получат суффикс -1, -2.</span></span>
+            <input type="checkbox" id="allPages"><span class="track"></span></label>
+          <label class="sw" id="grayRow"><span class="txt"><span class="t-body-m">Чёрно-белый</span></span>
+            <input type="checkbox" id="gray"><span class="track"></span></label>
+          <label class="sw" id="a4Row"><span class="txt"><span class="t-body-m">Формат A4</span><span class="hint" id="a4hint">Каждое изображение станет листом 210×297 мм.</span></span>
+            <input type="checkbox" id="a4"><span class="track"></span></label>
+          <div id="a4opts" hidden style="display:grid;gap:16px">
+            <label class="tf"><span>Как вписывать</span>
+              <select id="a4mode"><option value="contain">Целиком, с белыми полями</option><option value="cover">Заполнить лист, лишнее обрезать</option></select></label>
+            <label class="tf"><span>Ориентация</span>
+              <select id="a4orient"><option value="auto">Как у исходной страницы</option><option value="portrait">Всегда книжная</option><option value="landscape">Всегда альбомная</option></select></label>
+          </div>
+        </div>
+
+        <div id="pdfBox" hidden style="display:grid;gap:24px">
+          <div class="field">
+            <span class="lbl t-label-l">Фото на странице</span>
+            <div class="seg wrap" id="perPage" role="radiogroup">
+              <input type="radio" name="pp" id="pp1" value="1" checked><label for="pp1">1</label>
+              <input type="radio" name="pp" id="pp2" value="2"><label for="pp2">2</label>
+              <input type="radio" name="pp" id="pp4" value="4"><label for="pp4">4</label>
+              <input type="radio" name="pp" id="pp6" value="6"><label for="pp6">6</label>
+              <input type="radio" name="pp" id="pp8" value="8"><label for="pp8">8</label>
+              <input type="radio" name="pp" id="pp9" value="9"><label for="pp9">9</label>
+            </div>
+            <p class="hint" id="ppHint"></p>
+          </div>
+          <div class="field">
+            <span class="lbl t-label-l">Результат</span>
+            <div class="seg">
+              <input type="radio" name="out" id="out1" value="single" checked><label for="out1">Один PDF</label>
+              <input type="radio" name="out" id="out2" value="each"><label for="out2">PDF на каждое</label>
+            </div>
+          </div>
+          <div class="field">
+            <span class="lbl t-label-l">Порядок фото</span>
+            <div class="seg">
+              <input type="radio" name="ord" id="ord1" value="name" checked><label for="ord1">По имени</label>
+              <input type="radio" name="ord" id="ord2" value="keep"><label for="ord2">Как выбрано</label>
+            </div>
+            <p class="hint">По имени: IMG_2 идёт раньше IMG_10.</p>
+          </div>
+          <div class="two">
+            <label class="tf"><span>Поля, мм</span><input type="number" id="margin" min="0" max="50" value="10"></label>
+            <label class="tf" id="gapRow"><span>Между фото, мм</span><input type="number" id="gap" min="0" max="30" value="5"></label>
+          </div>
+        </div>
+        </div>
+
+        <!-- PDF-инструменты -->
+        <div id="pdftBox" class="sect" hidden>
+          <div class="field">
+            <span class="lbl t-label-l">Что сделать</span>
+            <div class="chips" id="pOps">
+              {% for v, l in [('merge','Склеить'),('split','Разделить'),('extract','Вытащить страницы'),('rotate','Повернуть'),('compress','Сжать'),('protect','Поставить пароль'),('unlock','Снять пароль')] %}
+              <input type="radio" name="pop" id="pop-{{ v }}" value="{{ v }}" {% if v == 'merge' %}checked{% endif %}><label for="pop-{{ v }}">{{ l }}</label>
+              {% endfor %}
+            </div>
+            <p class="hint" id="pHint"></p>
+          </div>
+          <label class="tf" id="pRangesRow"><span>Страницы</span><input type="text" id="pRanges" placeholder="все" spellcheck="false" autocomplete="off"></label>
+          <label class="tf" id="pAngleRow"><span>Поворот</span><select id="pAngle"><option value="90">90° по часовой</option><option value="270">90° против</option><option value="180">180°</option></select></label>
+          <div id="pCompress" class="sect">
+            <div class="slider-row">
+              <div class="top"><label class="t-label-l muted" for="pQ">Качество картинок</label><span class="t-label-l" id="pQVal">70</span></div>
+              <input type="range" id="pQ" min="20" max="95" step="5" value="70">
+            </div>
+            <label class="tf"><span>Картинки не больше</span><select id="pMax"><option value="1000">1000 px (для экрана)</option><option value="1600" selected>1600 px (сбалансировано)</option><option value="2500">2500 px (для печати)</option><option value="0">не уменьшать</option></select></label>
+          </div>
+          <label class="tf" id="pNewPassRow"><span>Новый пароль</span><input type="text" id="pNewPass" autocomplete="off" spellcheck="false"></label>
+          <label class="tf" id="pPassRow"><span>Текущий пароль PDF</span><input type="password" id="pPass" autocomplete="off"></label>
+        </div>
+
+        <!-- редактор видео и аудио -->
+        <div id="editBox" class="sect" hidden>
+          <div class="sect">
+            <h3 class="t-title-m">Результат</h3>
+            <div class="chips" id="eOut" role="radiogroup">
+              {% for v, l in [('same','Как у исходника'),('mp4','MP4'),('mkv','MKV'),('webm','WebM'),('mov','MOV'),('gif','GIF')] %}
+              <input type="radio" name="eout" id="eo-{{ v }}" value="{{ v }}" {% if v == 'same' %}checked{% endif %}><label for="eo-{{ v }}">{{ l }}</label>
+              {% endfor %}
+              <span class="chip-group t-label-m muted">Только звук</span>
+              {% for v in ['mp3','m4a','wav','flac','ogg','opus'] %}
+              <input type="radio" name="eout" id="eo-{{ v }}" value="{{ v }}"><label for="eo-{{ v }}">{{ v|upper }}</label>
+              {% endfor %}
+            </div>
+            <label class="sw" id="mergeRow" hidden><span class="txt"><span class="t-body-m">Склеить в один файл</span><span class="hint">По порядку списка, стрелкой ↑ можно поднять файл. Размер кадра берётся у первого.</span></span>
+              <input type="checkbox" id="eMerge"><span class="track"></span></label>
+          </div>
+
+          <div class="sect">
+            <h3 class="t-title-m">Обрезка</h3>
+            <div class="two">
+              <label class="tf"><span>Начало</span><input type="text" id="eStart" placeholder="0:00" spellcheck="false" autocomplete="off"></label>
+              <label class="tf"><span>Конец</span><input type="text" id="eEnd" placeholder="до конца" spellcheck="false" autocomplete="off"></label>
+            </div>
+            <p class="hint" style="margin-top:-8px">Например 90, 1:30 или 1:02:03.5. Пусто: с начала / до конца.</p>
+            <label class="sw" id="fastRow"><span class="txt"><span class="t-body-m">Быстро, без перекодирования</span><span class="hint">Только для обрезки в тот же формат. Мгновенно, но режет по ключевым кадрам (±пара секунд).</span></span>
+              <input type="checkbox" id="eFast"><span class="track"></span></label>
+          </div>
+
+          <div class="sect" id="eVideoSect">
+            <h3 class="t-title-m">Кадр</h3>
+            <div class="field">
+              <span class="lbl t-label-l">Пропорции (обрезка по центру)</span>
+              <div class="seg wrap">
+                {% for v, l in [('','Исходные'),('16:9','16:9'),('9:16','9:16'),('1:1','1:1'),('4:5','4:5'),('4:3','4:3')] %}
+                <input type="radio" name="easp" id="ea{{ loop.index }}" value="{{ v }}" {% if not v %}checked{% endif %}><label for="ea{{ loop.index }}">{{ l }}</label>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="two">
+              <label class="tf"><span>Поворот</span><select id="eRot"><option value="0">Нет</option><option value="90">90° по часовой</option><option value="270">90° против</option><option value="180">180°</option></select></label>
+              <label class="tf"><span>Отражение</span><select id="eFlip"><option value="">Нет</option><option value="h">Зеркально</option><option value="v">Вверх ногами</option></select></label>
+            </div>
+            <div class="two" id="eResRow">
+              <label class="tf"><span>Разрешение</span><select id="eHeight"><option value="0">Исходное</option><option value="2160">2160p (4K)</option><option value="1440">1440p</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option><option value="240">240p</option></select></label>
+              <label class="tf"><span>Кадров в секунду</span><select id="eFps"><option value="0">Исходная</option><option>60</option><option>50</option><option>30</option><option>25</option><option>24</option><option>15</option></select></label>
+            </div>
+            <div class="two" id="eGifRow" hidden>
+              <label class="tf"><span>Ширина GIF, px</span><input type="number" id="eGifW" min="64" max="1920" value="480"></label>
+              <label class="tf"><span>Кадров в секунду</span><input type="number" id="eGifFps" min="1" max="50" value="12"></label>
+            </div>
+          </div>
+
+          <div class="sect">
+            <h3 class="t-title-m">Скорость и звук</h3>
+            <div class="slider-row">
+              <div class="top"><label class="t-label-l muted" for="eSpeed">Скорость</label><span class="t-label-l" id="eSpeedVal">1×</span></div>
+              <input type="range" id="eSpeed" min="0.25" max="4" step="0.25" value="1">
+            </div>
+            <div id="eAudioOpts" style="display:grid;gap:16px">
+              <div class="slider-row">
+                <div class="top"><label class="t-label-l muted" for="eVol">Громкость</label><span class="t-label-l" id="eVolVal">100%</span></div>
+                <input type="range" id="eVol" min="0" max="300" step="5" value="100">
+              </div>
+              <label class="sw"><span class="txt"><span class="t-body-m">Выровнять громкость</span><span class="hint">Нормализация по EBU R128 (−16 LUFS), как на стримингах.</span></span>
+                <input type="checkbox" id="eNorm"><span class="track"></span></label>
+              <label class="sw" id="eMuteRow"><span class="txt"><span class="t-body-m">Убрать звук</span></span>
+                <input type="checkbox" id="eMute"><span class="track"></span></label>
+            </div>
+            <div class="two">
+              <label class="tf"><span>Появление, сек</span><input type="number" id="eFadeIn" min="0" max="60" step="0.5" value="0"></label>
+              <label class="tf"><span>Затухание, сек</span><input type="number" id="eFadeOut" min="0" max="60" step="0.5" value="0"></label>
+            </div>
+          </div>
+
+          <div class="sect" id="eQualSect">
+            <h3 class="t-title-m">Качество и размер</h3>
+            <div class="two" id="eCodecRow">
+              <label class="tf"><span>Видеокодек</span><select id="eCodec"><option value="auto">Авто</option><option value="h264">H.264 (везде)</option><option value="h265">H.265 (меньше)</option><option value="vp9">VP9</option><option value="av1">AV1 (самый лёгкий)</option></select></label>
+              <label class="tf"><span>Скорость сжатия</span><select id="ePreset"><option value="veryfast">Быстро</option><option value="medium" selected>Обычно</option><option value="slow">Медленно, но меньше</option></select></label>
+            </div>
+            <div class="slider-row" id="eCrfRow">
+              <div class="top"><label class="t-label-l muted" for="eCrf">Качество видео</label><span class="t-label-l" id="eCrfVal">23 · хорошее</span></div>
+              <input type="range" id="eCrf" min="14" max="40" step="1" value="23" style="direction:rtl">
+              <p class="hint">Правее: лучше картинка и тяжелее файл. Это CRF: 18 почти без потерь, 23 стандарт, 28+ заметно мыльнее.</p>
+            </div>
+            <label class="tf" id="eTargetRow"><span>Сжать до размера, МБ (необязательно)</span><input type="number" id="eTarget" min="0" step="1" placeholder="например 25 для Discord, 50 для почты"></label>
+            <label class="tf"><span>Битрейт звука</span>
+              <select id="eAbr"><option value="auto">Авто</option><option>320</option><option>256</option><option>192</option><option>160</option><option>128</option><option>96</option><option>64</option></select></label>
+          </div>
+
+          <label class="tf"><span>Имя результата</span><input type="text" id="eName" value="%name%_edit" spellcheck="false" autocomplete="off"></label>
+        </div>
+
+        <!-- скачивание -->
+        <div id="dlBox" class="sect" hidden>
+          <div class="field">
+            <span class="lbl t-label-l">Что качать</span>
+            <div class="seg">
+              <input type="radio" name="dlm" id="dlm1" value="video" checked><label for="dlm1">Видео</label>
+              <input type="radio" name="dlm" id="dlm2" value="audio"><label for="dlm2">Только звук</label>
+            </div>
+          </div>
+          <div id="dlVideo" class="sect">
+            <label class="tf"><span>Качество</span><select id="dlQ"><option value="best">Лучшее доступное</option><option value="2160">до 2160p (4K)</option><option value="1440">до 1440p</option><option value="1080">до 1080p</option><option value="720">до 720p</option><option value="480">до 480p</option><option value="360">до 360p</option></select></label>
+            <div class="field">
+              <span class="lbl t-label-l">Формат</span>
+              <div class="chips">
+                {% for v in ['mp4','mkv','webm'] %}<input type="radio" name="dlc" id="dlc-{{ v }}" value="{{ v }}" {% if v == 'mp4' %}checked{% endif %}><label for="dlc-{{ v }}">{{ v|upper }}</label>{% endfor %}
+              </div>
+            </div>
+            <label class="sw" id="compatRow"><span class="txt"><span class="t-body-m">Максимальная совместимость</span><span class="hint">H.264 + AAC: откроется на любом телефоне и телевизоре. Выключи ради 4K/8K: там обычно VP9/AV1.</span></span>
+              <input type="checkbox" id="dlCompat" checked><span class="track"></span></label>
+            <label class="sw"><span class="txt"><span class="t-body-m">Субтитры</span><span class="hint">Русские и английские, если есть. Вшиваются в файл.</span></span>
+              <input type="checkbox" id="dlSubs"><span class="track"></span></label>
+          </div>
+          <div id="dlAudio" class="sect" hidden>
+            <div class="field">
+              <span class="lbl t-label-l">Формат</span>
+              <div class="chips">
+                {% for v in ['mp3','m4a','opus','flac','wav'] %}<input type="radio" name="dla" id="dla-{{ v }}" value="{{ v }}" {% if v == 'mp3' %}checked{% endif %}><label for="dla-{{ v }}">{{ v|upper }}</label>{% endfor %}
+              </div>
+            </div>
+            <label class="tf" id="dlAbrRow"><span>Битрейт</span><select id="dlAbr"><option value="best">Как в источнике</option><option>320</option><option>256</option><option>192</option><option>128</option><option>96</option></select></label>
+          </div>
+          <label class="sw"><span class="txt"><span class="t-body-m">Весь плейлист</span><span class="hint">Иначе по ссылке на видео из плейлиста качается только оно.</span></span>
+            <input type="checkbox" id="dlPl"><span class="track"></span></label>
+          <label class="sw"><span class="txt"><span class="t-body-m">Обложка</span></span>
+            <input type="checkbox" id="dlThumb" checked><span class="track"></span></label>
+          <label class="sw"><span class="txt"><span class="t-body-m">Теги и главы</span><span class="hint">Название, автор, дата, главы YouTube.</span></span>
+            <input type="checkbox" id="dlMeta" checked><span class="track"></span></label>
+          <div class="field">
+            <span class="lbl t-label-l">Cookies для закрытого контента</span>
+            <div class="row">
+              <span class="btn tonal state filebtn"><input type="file" id="dlCookies" accept=".txt,text/plain">Выбрать cookies.txt</span>
+              <button class="btn text state" id="dlCookiesClear" type="button" hidden>Убрать</button>
+            </div>
+            <p class="hint" id="dlCookiesHint">Нужны для приватных видео, 18+ и Instagram. Выгрузи расширением «Get cookies.txt LOCALLY». Файл используется один раз и удаляется.</p>
+          </div>
+          <p class="hint" id="ytdlpVer"></p>
+        </div>
+
+        <!-- QR -->
+        <div id="qrBox" class="sect" hidden>
+          <div class="field">
+            <span class="lbl t-label-l">Формат файла</span>
+            <div class="chips">
+              {% for v in ['png','svg','jpg'] %}<input type="radio" name="qrf" id="qrf-{{ v }}" value="{{ v }}" {% if v == 'png' %}checked{% endif %}><label for="qrf-{{ v }}">{{ v|upper }}</label>{% endfor %}
+            </div>
+            <p class="hint">SVG масштабируется без потерь: лучший вариант для печати и макетов.</p>
+          </div>
+          <div class="slider-row">
+            <div class="top"><label class="t-label-l muted" for="qrBox_">Размер точки</label><span class="t-label-l" id="qrBoxVal">10 px</span></div>
+            <input type="range" id="qrBox_" min="2" max="40" step="1" value="10">
+          </div>
+          <div class="slider-row">
+            <div class="top"><label class="t-label-l muted" for="qrBorder">Белая рамка</label><span class="t-label-l" id="qrBorderVal">4</span></div>
+            <input type="range" id="qrBorder" min="0" max="10" step="1" value="4">
+            <p class="hint">По стандарту нужно 4 модуля, иначе некоторые сканеры промахиваются.</p>
+          </div>
+          <div class="field">
+            <span class="lbl t-label-l">Защита от повреждений</span>
+            <div class="seg">
+              {% for v, l in [('L','7%'),('M','15%'),('Q','25%'),('H','30%')] %}<input type="radio" name="qre" id="qre-{{ v }}" value="{{ v }}" {% if v == 'M' %}checked{% endif %}><label for="qre-{{ v }}">{{ v }} · {{ l }}</label>{% endfor %}
+            </div>
+            <p class="hint">Выше защита: код читается даже затёртым, но точек больше.</p>
+          </div>
+          <div class="two">
+            <label class="tf"><span>Цвет точек</span><input type="color" id="qrFg" value="#000000"></label>
+            <label class="tf"><span>Цвет фона</span><input type="color" id="qrBg" value="#ffffff"></label>
+          </div>
+          <label class="sw" id="qrTrRow"><span class="t-body-m">Прозрачный фон</span><input type="checkbox" id="qrTr"><span class="track"></span></label>
+          <div id="qrListOpts" class="sect" hidden>
+            <label class="sw"><span class="t-body-m">Убрать повторы</span><input type="checkbox" id="qrDedupe" checked><span class="track"></span></label>
+            <label class="tf"><span>Колонка CSV со ссылками (если есть заголовок)</span><input type="text" id="qrCol" placeholder="например url" autocomplete="off"></label>
+          </div>
+        </div>
+
+        <button class="btn filled lg state" id="go" disabled>Конвертировать</button>
+        <button class="btn text state" id="cancel" hidden>Отменить</button>
+        <div class="status" id="status" hidden aria-live="polite"></div>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<!-- выбор цвета оформления (Material You) -->
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="dialog">
+    <h2 class="t-title-l" id="sheetTitle">Цвет оформления</h2>
+    <div class="swatches" id="swatches"></div>
+    <div class="row-actions">
+      <button class="btn text state" id="sheetReset">Сбросить</button>
+      <button class="btn tonal state" id="sheetClose">Готово</button>
+    </div>
+  </div>
+</div>
+
+<script>
+
+(() => {
+  const $ = id => document.getElementById(id);
+  const qs = s => document.querySelector(s);
+
+  /* ===================================================================
+     Material You: динамическая палитра из seed-цвета.
+     Настоящий HCT в браузере не нужен: строим тональные ряды в OKLCH,
+     он даёт то же ощущение (постоянная светлота при смене оттенка).
+     =================================================================== */
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  function oklch(L, C, h) {                       // -> "rgb(r g b)"
+    const a = C * Math.cos(h * Math.PI / 180), b = C * Math.sin(h * Math.PI / 180);
+    let l = L + .3963377774 * a + .2158037573 * b, m = L - .1055613458 * a - .0638541728 * b, s = L - .0894841775 * a - 1.291485548 * b;
+    l = l ** 3; m = m ** 3; s = s ** 3;
+    let r = 4.0767416621 * l - 3.3077115913 * m + .2309699292 * s;
+    let g = -1.2684380046 * l + 2.6097574011 * m - .3413193965 * s;
+    let bl = -.0041960863 * l - .7034186147 * m + 1.707614701 * s;
+    const enc = x => { x = clamp(x, 0, 1); return Math.round((x <= .0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - .055) * 255); };
+    return `rgb(${enc(r)} ${enc(g)} ${enc(bl)})`;
+  }
+  function hueOf(hex) {                           // оттенок seed-цвета в OKLCH
+    const n = parseInt(hex.slice(1), 16), lin = v => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; };
+    const r = lin(n >> 16 & 255), g = lin(n >> 8 & 255), b = lin(n & 255);
+    const l = Math.cbrt(.4122214708 * r + .5363325363 * g + .0514459929 * b);
+    const m = Math.cbrt(.2119034982 * r + .6806995451 * g + .1073969566 * b);
+    const s = Math.cbrt(.0883024619 * r + .2817188376 * g + .6299787005 * b);
+    const A = 1.9779984951 * l - 2.428592205 * m + .4505937099 * s, B = .0259040371 * l + .7827717662 * m - .808675766 * s;
+    return (Math.atan2(B, A) * 180 / Math.PI + 360) % 360;
+  }
+  function applyPalette(hex) {
+    const h = hueOf(hex), dark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const P = (L, C = .13) => oklch(L, C, h), N = (L, C = .006) => oklch(L, C, h), S = (L, C = .03) => oklch(L, C, (h + 40) % 360);
+    const T = (L, C = .05) => oklch(L, C, (h + 80) % 360);
+    const light = {
+      primary: P(.5, .12), onPrimary: P(1, 0), primaryContainer: P(.9, .1), onPrimaryContainer: P(.25, .07),
+      secondary: S(.5, .04), secondaryContainer: S(.9, .035), onSecondaryContainer: S(.25, .04),
+      tertiaryContainer: T(.9, .04), onTertiaryContainer: T(.25, .05),
+      surface: N(.985, .004), onSurface: N(.2), onSurfaceVariant: N(.42, .012),
+      c0: N(1, 0), c1: N(.965), c2: N(.945), c3: N(.925), c4: N(.905),
+      outline: N(.58, .012), outlineVariant: N(.83, .012),
+    };
+    const drk = {
+      primary: P(.82, .11), onPrimary: P(.3, .07), primaryContainer: P(.38, .08), onPrimaryContainer: P(.92, .07),
+      secondary: S(.82, .035), secondaryContainer: S(.36, .03), onSecondaryContainer: S(.92, .03),
+      tertiaryContainer: T(.36, .04), onTertiaryContainer: T(.92, .04),
+      surface: N(.19, .005), onSurface: N(.92), onSurfaceVariant: N(.78, .012),
+      c0: N(.15), c1: N(.22), c2: N(.25), c3: N(.28), c4: N(.31),
+      outline: N(.6, .012), outlineVariant: N(.4, .012),
+    };
+    const c = dark ? drk : light, s = document.documentElement.style;
+    const map = { primary: c.primary, 'on-primary': c.onPrimary, 'primary-container': c.primaryContainer, 'on-primary-container': c.onPrimaryContainer,
+      secondary: c.secondary, 'secondary-container': c.secondaryContainer, 'on-secondary-container': c.onSecondaryContainer,
+      'tertiary-container': c.tertiaryContainer, 'on-tertiary-container': c.onTertiaryContainer,
+      surface: c.surface, 'on-surface': c.onSurface, 'on-surface-variant': c.onSurfaceVariant,
+      'surface-container-lowest': c.c0, 'surface-container-low': c.c1, 'surface-container': c.c2,
+      'surface-container-high': c.c3, 'surface-container-highest': c.c4, outline: c.outline, 'outline-variant': c.outlineVariant,
+      error: dark ? 'rgb(255 180 171)' : 'rgb(186 26 26)', 'error-container': dark ? 'rgb(147 0 10)' : 'rgb(255 218 214)',
+      'on-error-container': dark ? 'rgb(255 218 214)' : 'rgb(65 0 2)' };
+    for (const k in map) s.setProperty('--md-' + k, map[k]);
+    qs('meta[name=theme-color]').content = c.surface;
+  }
+  const SEEDS = ['#00696b', '#3f5bd8', '#8a4fc0', '#c2185b', '#d0452e', '#b06a00', '#5a8a00', '#2e7d5b'];
+  const NAMES = ['Бирюзовый', 'Синий', 'Фиолетовый', 'Малиновый', 'Красный', 'Янтарный', 'Лаймовый', 'Зелёный'];
+  let seed = localStorage.getItem('seed') || SEEDS[0];
+  applyPalette(seed);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyPalette(seed));
+
+  $('swatches').innerHTML = SEEDS.map((c, i) =>
+    `<input type="radio" name="seed" id="sd${i}" value="${c}" ${c === seed ? 'checked' : ''}><label for="sd${i}" title="${NAMES[i]}" style="background:${c}"></label>`).join('');
+  $('swatches').addEventListener('change', e => { seed = e.target.value; localStorage.setItem('seed', seed); applyPalette(seed); });
+  $('themeBtn').onclick = () => { $('sheet').hidden = false; qs('#swatches input:checked')?.focus(); };
+  const closeSheet = () => { $('sheet').hidden = true; $('themeBtn').focus(); };
+  $('sheetClose').onclick = closeSheet;
+  $('sheet').addEventListener('click', e => { if (e.target === $('sheet')) closeSheet(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
+  $('sheetReset').onclick = () => { seed = SEEDS[0]; localStorage.removeItem('seed'); applyPalette(seed); $('sd0').checked = true; };
+
+  /* ===================================================================
+     Режимы. Три старых (pdf / photo / topdf) работают как раньше,
+     четыре новых (image / audio / video / doc) идут через /api/universal.
+     =================================================================== */
+  const MODES = {
+    image: { title: 'Картинки', kind: 'uni' }, audio: { title: 'Аудио', kind: 'uni' },
+    video: { title: 'Видео', kind: 'uni' }, doc: { title: 'Документы', kind: 'uni' },
+    pdf: { title: 'PDF в картинки', kind: 'pdf' }, photo: { title: 'Фото в A4', kind: 'photo' }, topdf: { title: 'Фото в PDF', kind: 'topdf' },
+    pdft: { title: 'PDF-инструменты', kind: 'pdft' },
+    edit: { title: 'Редактор видео и аудио', kind: 'edit' }, dl: { title: 'Скачать видео', kind: 'dl' }, qr: { title: 'QR-коды', kind: 'qr' },
+  };
+  const isNew = () => ['edit', 'dl', 'qr', 'pdft'].includes(MODES[mode()].kind);
+  const pOp = () => qs('input[name=pop]:checked').value;
+  const qrKind = () => qs('input[name=qrk]:checked').value;
+  const mode = () => qs('input[name=mode]:checked').value;
+  const isUni = () => MODES[mode()].kind === 'uni';
+  const isPhotoish = () => ['photo', 'topdf'].includes(mode());
+
+  let files = [];
+  let caps = null;                 // ответ /api/formats
+  let uniTarget = {};              // выбранный формат для каждой категории
+
+  const picker = $('picker'), list = $('list'), goBtn = $('go'), clearBtn = $('clear'), statusEl = $('status');
+  const fmtSize = b => b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' КБ' : (b / 1048576).toFixed(1) + ' МБ';
+  const key = f => f.name + '|' + f.size + '|' + f.lastModified;
+  const extOf = n => (n.split('.').pop() || '').toLowerCase();
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const IMG_RE = /\.(jpe?g|png|webp|tiff?|bmp)$/i;
+
+  function accepts(f) {
+    const m = mode();
+    if (m === 'pdf' || m === 'pdft') return /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+    if (isPhotoish()) return IMG_RE.test(f.name) || f.type.startsWith('image/');
+    if (m === 'qr') return /\.(txt|csv|docx)$/i.test(f.name);
+    if (m === 'dl') return false;
+    return !!caps && caps.categories[m].inputs.includes(extOf(f.name));
+  }
+
+  function addFiles(fl) {
+    const have = new Set(files.map(key)); let skipped = 0;
+    for (const f of fl) {
+      if (!accepts(f)) { skipped++; continue; }
+      if (have.has(key(f))) continue;
+      have.add(key(f)); files.push(f);
+    }
+    render();
+    if (skipped) setStatus(`<ul class="errs"><li>Пропущено файлов другого типа: ${skipped}. В режиме «${MODES[mode()].title}» они не подходят.</li></ul>`);
+  }
+
+  function render() {
+    list.innerHTML = '';
+    files.forEach((f, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="ico"></span><span class="name"></span><span class="size"></span>' +
+        '<button class="icon-btn state" title="Убрать из списка" aria-label="Убрать из списка"><svg viewBox="0 -960 960 960"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg></button>';
+      li.querySelector('.ico').textContent = extOf(f.name).slice(0, 4).toUpperCase() || '?';
+      li.querySelector('.name').textContent = f.name; li.querySelector('.name').title = f.name;
+      li.querySelector('.size').textContent = fmtSize(f.size);
+      li.querySelector('button').onclick = () => { files.splice(i, 1); render(); };
+      if ((mode() === 'edit' || (mode() === 'pdft' && pOp() === 'merge')) && files.length > 1 && i > 0) {
+        const up = document.createElement('button');
+        up.className = 'icon-btn state up'; up.title = up.ariaLabel = 'Поднять выше';
+        up.innerHTML = '<svg viewBox="0 -960 960 960"><path d="M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z"/></svg>';
+        up.onclick = () => { [files[i - 1], files[i]] = [files[i], files[i - 1]]; render(); };
+        li.insertBefore(up, li.lastChild);
+      }
+      list.appendChild(li);
+    });
+    $('count').textContent = files.length;
+    $('total').textContent = files.length ? '· ' + fmtSize(files.reduce((s, f) => s + f.size, 0)) : '';
+    $('empty').hidden = files.length > 0;
+    clearBtn.disabled = files.length === 0;
+    if (isUni()) refreshUniTargets();
+    if (mode() === 'edit') { $('mergeRow').hidden = files.length < 2; updatePreview(); syncEdit(); }
+    updateGo();
+  }
+
+  /* кнопка запуска: текст и доступность зависят от режима */
+  let busy = false;
+  function updateGo() {
+    const m = mode(); let ok = files.length > 0, label = 'Конвертировать';
+    if (m === 'edit') label = $('eMerge').checked && files.length > 1 ? 'Склеить и сохранить' : 'Применить';
+    if (m === 'pdft') { ok = pOp() === 'merge' ? files.length > 1 : files.length > 0; label = { merge: 'Склеить', split: 'Разделить', extract: 'Вытащить', rotate: 'Повернуть', compress: 'Сжать', protect: 'Защитить', unlock: 'Снять пароль' }[pOp()]; }
+    if (m === 'dl') { ok = /https?:\/\//i.test($('urls').value); label = 'Скачать'; }
+    if (m === 'qr') {
+      const k = qrKind();
+      if (k === 'list') {
+        const n = $('qrLinks').value.split('\n').filter(l => l.trim() && !l.trim().startsWith('#')).length;
+        ok = n > 0 || files.length > 0; label = files.length ? 'Сделать QR-коды' : (n ? `Сделать QR-коды: ${n}` : 'Сделать QR-коды');
+      } else { ok = !!qrPayloadReady(); label = 'Скачать QR-код'; }
+    }
+    goBtn.textContent = label;
+    goBtn.disabled = busy || !ok;
+  }
+
+  picker.addEventListener('change', () => { addFiles(picker.files); picker.value = ''; });
+  clearBtn.onclick = () => { files = []; statusEl.hidden = true; render(); };
+
+  // выбор папки: запоминаем её имя для названия архива
+  const dirPicker = document.createElement('input');
+  dirPicker.type = 'file'; dirPicker.multiple = true; dirPicker.setAttribute('webkitdirectory', ''); dirPicker.hidden = true;
+  document.body.appendChild(dirPicker);
+  $('pickDir').addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); dirPicker.click(); });
+  dirPicker.addEventListener('change', () => {
+    for (const f of dirPicker.files) { const top = (f.webkitRelativePath || '').split('/')[0]; if (top) f._dir = top; }
+    addFiles(dirPicker.files); dirPicker.value = '';
+  });
+
+  // drag & drop, включая папки
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', async ev => {
+    const items = ev.dataTransfer.items;
+    if (items && items.length && items[0].webkitGetAsEntry) {
+      const out = [];
+      const walk = (entry, top) => new Promise(res => {
+        if (entry.isFile) entry.file(f => { if (top) f._dir = top; out.push(f); res(); }, res);
+        else if (entry.isDirectory) {
+          const reader = entry.createReader(), all = [];
+          const read = () => reader.readEntries(async es => {
+            if (!es.length) { await Promise.all(all.map(e => walk(e, top))); res(); return; }
+            all.push(...es); read();
+          }, res);
+          read();
+        } else res();
+      });
+      const entries = [...items].map(i => i.webkitGetAsEntry()).filter(Boolean);
+      await Promise.all(entries.map(e => walk(e, e.isDirectory ? e.name : null)));
+      addFiles(out);
+    } else addFiles(ev.dataTransfer.files);
+  });
+  addEventListener('dragover', e => e.preventDefault());
+  addEventListener('drop', e => e.preventDefault());
+
+  /* ---------- настройки ---------- */
+  const vector = ['svg', 'ps', 'eps'], noQuality = ['png', 'tiff', 'svg', 'ps', 'eps'], noGray = ['svg', 'ps', 'eps'];
+  const fmt = () => qs('input[name=fmt]:checked')?.value || 'jpg';
+  const ppVal = () => +qs('input[name=pp]:checked').value;
+  const GRID = { 1: [1, 1], 2: [1, 2], 4: [2, 2], 6: [2, 3], 8: [2, 4], 9: [3, 3] };
+
+  function paintSlider(el) { el.style.setProperty('--p', ((el.value - el.min) / (el.max - el.min) * 100) + '%'); }
+  ['dpi', 'quality'].forEach(id => paintSlider($(id)));
+
+  // какие форматы предлагать: с учётом выбранных файлов (видео -> ещё и аудио и т.д.)
+  function uniOutputs() {
+    const m = mode(); if (!caps) return [];
+    let out = [...caps.categories[m].outputs];
+    return out;
+  }
+  function renderUniChips() {
+    const m = mode(), cat = caps.categories[m], outs = cat.native.concat(cat.cross);
+    const dflt = { image: 'png', audio: 'mp3', video: 'mp4', doc: 'docx' }[m];
+    if (!uniTarget[m] || !outs.includes(uniTarget[m])) uniTarget[m] = outs.includes(dflt) ? dflt : outs[0];
+    const chip = f => `<input type="radio" name="uni" id="u-${f}" value="${f}" ${f === uniTarget[m] ? 'checked' : ''}><label for="u-${f}">${f.toUpperCase()}</label>`;
+    const crossName = { video: 'Достать звук', audio: 'Сделать видео' }[m];
+    $('uniChips').innerHTML = cat.native.map(chip).join('') +
+      (cat.cross.length ? `<span class="chip-group t-label-m muted">${crossName}</span>` + cat.cross.map(chip).join('') : '');
+    $('uniHint').textContent = m === 'audio' ? 'Видеоформаты делают ролик с обложкой альбома или чёрным фоном.' : m === 'video' ? 'Аудиоформаты вытаскивают из видео звук.' : '';
+  }
+  function refreshUniTargets() { /* список форматов зависит от режима, не от файлов */ }
+  $('uniChips').addEventListener('change', e => { uniTarget[mode()] = e.target.value; syncSettings(); });
+
+  function syncSettings() {
+    const m = mode(), k = MODES[m].kind, uni = k === 'uni', topdf = k === 'topdf', photo = k === 'photo' || topdf, pdf = k === 'pdf';
+    $('classicBox').hidden = isNew();
+    $('editBox').hidden = k !== 'edit'; $('pdftBox').hidden = k !== 'pdft'; if (k === 'pdft') syncPdft(); $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
+    if (isNew()) { if (k === 'edit') syncEdit(); if (k === 'dl') syncDl(); if (k === 'qr') syncQr(); return; }
+    $('uniField').hidden = !uni;
+    $('formatsField').hidden = !(pdf || k === 'photo');
+    $('pdfOpts').hidden = uni || topdf; $('pdfOpts').style.display = (uni || topdf) ? 'none' : 'grid';
+    $('pdfBox').hidden = !topdf; $('pdfBox').style.display = topdf ? 'grid' : 'none';
+    $('pagesRow').hidden = photo; $('a4Row').hidden = photo;
+
+    // формат картинки в режиме "Фото в A4": только растровые
+    document.querySelectorAll('#formats label').forEach(l => {
+      const off = photo && vector.includes(l.dataset.f);
+      const inp = $('f-' + l.dataset.f), lab = l;
+      inp.disabled = off; lab.hidden = off; inp.hidden = false;
+      if (off && inp.checked) inp.checked = false;
+    });
+    if (photo && !qs('input[name=fmt]:checked')) $('f-jpg').checked = true;
+
+    // ползунки и переключатели
+    let f = pdf || k === 'photo' ? fmt() : 'jpg';
+    let showDpi = false, showQ = false, showMeta = false, showAV = false, showName = uni;
+    if (uni) {
+      const t = uniTarget[m];
+      if (m === 'image') { showQ = ['jpg', 'jpeg', 'webp', 'avif', 'heic', 'tiff', 'tif', 'jfif', 'jpe'].includes(t); showMeta = true; showDpi = ['pdf', 'eps'].includes(t) || false; }
+      if (m === 'audio' || m === 'video') { showAV = true; showMeta = true; }
+    } else {
+      showDpi = !vector.includes(f); showQ = !noQuality.includes(f) || topdf;
+    }
+    $('dpiField').hidden = !showDpi; $('qField').hidden = !showQ; $('resizeRow').hidden = m !== 'image';
+    $('avBox').hidden = !showAV; $('metaRow').hidden = !showMeta;
+    $('nameRow').hidden = !showName; $('nameHint').hidden = !showName;
+    $('grayRow').hidden = noGray.includes(f) || uni;
+
+    const a4on = photo || $('a4').checked, raster = !vector.includes(f);
+    $('a4opts').hidden = !(a4on && raster) || uni; $('a4opts').style.display = (!(a4on && raster) || uni) ? 'none' : 'grid';
+    const mm = 'Каждое изображение станет листом 210×297 мм';
+    if (topdf) { updatePP(); $('a4hint').textContent = 'Страница PDF: A4, 210×297 мм.'; }
+    else if (!a4on) $('a4hint').textContent = mm + '.';
+    else if (!raster) $('a4hint').textContent = f === 'ps' ? mm + ' (бумага A4 в PostScript).' : 'Для ' + f.toUpperCase() + ' размер листа не задаётся: формат векторный.';
+    else { const d = +$('dpi').value; $('a4hint').textContent = `${mm}, это ${Math.round(210 / 25.4 * d)}×${Math.round(297 / 25.4 * d)} px при ${d} DPI.`; }
+  }
+  document.querySelectorAll('input[name=fmt]').forEach(r => r.addEventListener('change', syncSettings));
+  $('a4').addEventListener('change', syncSettings);
+  $('dpi').oninput = e => { $('dpiVal').textContent = e.target.value + ' DPI'; paintSlider(e.target); syncSettings(); };
+  $('quality').oninput = e => { $('qVal').textContent = e.target.value; paintSlider(e.target); };
+
+  function updatePP() {
+    const n = ppVal(), [c, r] = GRID[n];
+    $('gapRow').hidden = n === 1;
+    $('ppHint').textContent = n === 1 ? 'Каждое фото на своём листе.' : `Сетка ${c}×${r} на листе (в альбомной ориентации поворачивается).`;
+  }
+  document.querySelectorAll('input[name=pp]').forEach(r => r.addEventListener('change', updatePP));
+
+  const SUBS = {
+    image: 'PNG, JPG, WebP, GIF, AVIF, HEIC, ICO, TIFF, PSD и другие. RAW-снимки можно читать.',
+    audio: 'MP3, WAV, FLAC, OGG, Opus, AAC, M4A и другие. Можно сделать из аудио видео.',
+    video: 'MP4, MKV, WebM, AVI, MOV и другие. Можно вытащить звук в аудиофайл.',
+    doc: 'DOCX, DOC, Markdown, HTML, RTF, EPUB, ODT, CSV и другие.',
+    pdf: 'Пакетная конвертация страниц PDF в JPG, PNG, TIFF, WebP, SVG, PS, EPS.',
+    photo: 'Готовые фото приводятся к листу A4 с нужным разрешением.',
+    topdf: 'Фото раскладываются на листах A4: по одному на страницу или сеткой.',
+    edit: 'Обрезка, склейка, кадрирование, поворот, скорость, громкость, сжатие до нужного размера и GIF. Работает ffmpeg.',
+    dl: 'Видео и музыка с YouTube, TikTok, VK, Rutube и ещё ~1800 сайтов. Качается сюда, на этот компьютер.',
+    pdft: 'Склеить, разделить, вытащить страницы, повернуть, сжать, поставить или снять пароль.',
+    qr: 'Один код для ссылки, Wi‑Fi или контакта, либо сотни кодов разом из списка.',
+  };
+  function applyMode() {
+    const m = mode(), k = MODES[m].kind;
+    $('title').textContent = MODES[m].title; $('subtitle').textContent = SUBS[m];
+    const acc = { pdf: 'application/pdf,.pdf', pdft: 'application/pdf,.pdf', qr: '.txt,.csv,.docx', dl: '', edit: caps ? caps.categories.edit.inputs.map(e => '.' + e).join(',') : 'audio/*,video/*' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps && caps.categories[m] ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
+    picker.accept = acc; dirPicker.accept = acc;
+    const what = { pdf: 'PDF', image: 'картинки', audio: 'аудиофайлы', video: 'видео', doc: 'документы', pdft: 'PDF', edit: 'видео или аудио', qr: 'списки ссылок' }[m] || 'фото';
+    $('dropTitle').textContent = `Перетащи ${what} сюда`;
+    $('dropSub').textContent = k === 'pdf' ? 'Можно сразу сотню. Папку тоже можно перетащить.' : 'или нажми, чтобы выбрать. Папку тоже можно перетащить.';
+    const d = { topdf: 200, photo: 300 }[m] || 150; $('dpi').value = d; $('dpiVal').textContent = d + ' DPI';
+    const q = { topdf: 85, photo: 95 }[m] || 90; $('quality').value = q; $('qVal').textContent = q;
+    paintSlider($('dpi')); paintSlider($('quality'));
+    $('dpiHint').textContent = m === 'topdf' ? '200 хватит для печати и почты, 300 для качественной печати (файл тяжелее).' : m === 'photo' ? 'Для печати на A4 нужно 300 DPI.' : k === 'pdf' ? '150 хватит для экрана, 300 для печати.' : '';
+    files = []; statusEl.hidden = true; if (k === 'uni' && caps) renderUniChips();
+    $('dlPane').hidden = m !== 'dl'; $('qrPane').hidden = m !== 'qr';
+    $('filesPane').hidden = m === 'dl' || (m === 'qr' && qrKind() !== 'list');
+    $('previewCard').hidden = true; cancelBtn.hidden = true;
+    const pb = $('engineBanner'); pb.hidden = true;
+    if (caps) {
+      const need = { image: ['imagemagick', 'ImageMagick'], audio: ['ffmpeg', 'ffmpeg'], video: ['ffmpeg', 'ffmpeg'], doc: ['pandoc', 'pandoc'],
+        edit: ['ffmpeg', 'ffmpeg'], pdft: ['pypdf', 'Пакет pypdf (pip install pypdf)'], dl: ['ytdlp', 'yt-dlp (pip install yt-dlp)'], qr: ['qrcode', 'Пакет qrcode (pip install qrcode)'] }[m];
+      if (need && !caps.engines[need[0]]) { pb.hidden = false; pb.textContent = `${need[1]} не найден в PATH. Установи его и перезапусти сервер, иначе этот режим не заработает.`; }
+    }
+    if (m === 'pdf' && !POPPLER_OK) { $('engineBanner').hidden = false; $('engineBanner').textContent = 'Poppler не найден в PATH. Установи poppler-utils и перезапусти сервер, иначе конвертация PDF не заработает.'; }
+    render(); syncSettings();
+    if (m === 'qr') qrRefresh();
+  }
+  const POPPLER_OK = {{ 'true' if (poppler.pdftoppm and poppler.pdftocairo) else 'false' }};
+  document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', applyMode));
+
+  const setStatus = html => { statusEl.hidden = false; statusEl.innerHTML = html; };
+
+  /* ---------- отправка ---------- */
+  goBtn.onclick = () => {
+    const m = mode(), k = MODES[m].kind, fd = new FormData();
+    if (k === 'qr' && qrKind() !== 'list') { qrDownload(); return; }
+    if (!files.length && !['dl', 'qr'].includes(k)) return;
+    files.forEach(f => fd.append('files', f, f.name));
+    const dirs = [...new Set(files.map(f => f._dir).filter(Boolean))];
+    if (dirs.length) fd.append('archive_name', dirs.length === 1 ? dirs[0] : `${dirs[0]} (+${dirs.length - 1})`);
+
+    let url;
+    if (k === 'edit') { url = '/api/edit'; editForm(fd); }
+    else if (k === 'pdft') {
+      url = '/api/pdf';
+      fd.append('op', pOp()); fd.append('ranges', $('pRanges').value); fd.append('angle', $('pAngle').value);
+      fd.append('quality', $('pQ').value); fd.append('max_px', $('pMax').value);
+      fd.append('password', $('pPass').value); fd.append('new_password', $('pNewPass').value);
+      fd.append('merge_name', files[0].name.replace(/\.[^.]+$/, '') + '_merged');
+    }
+    else if (k === 'dl') { url = '/api/dl'; dlForm(fd); }
+    else if (k === 'qr') { url = '/api/qr/bulk'; qrStyle(fd); fd.append('links', $('qrLinks').value); fd.append('dedupe', $('qrDedupe').checked ? '1' : '0'); fd.append('column', $('qrCol').value.trim()); }
+    else if (k === 'uni') {
+      url = '/api/universal';
+      fd.append('to', uniTarget[m]);
+      fd.append('quality', $('quality').value);
+      fd.append('density', $('dpi').value);
+      fd.append('bitrate', $('bitrate').value);
+      fd.append('sample_rate', $('sampleRate').value);
+      fd.append('keep_metadata', $('keepMeta').checked ? '1' : '0');
+      fd.append('name_template', $('nameTpl').value || '%name%');
+      fd.append('resize', m === 'image' ? ($('uniResize').value || 0) : 0);
+    } else {
+      url = { pdf: '/api/convert', photo: '/api/photos', topdf: '/api/photos2pdf' }[k];
+      fd.append('format', k === 'topdf' ? 'jpg' : fmt());
+      fd.append('dpi', $('dpi').value);
+      fd.append('quality', $('quality').value);
+      fd.append('all_pages', $('allPages').checked ? '1' : '0');
+      fd.append('gray', $('gray').checked ? '1' : '0');
+      fd.append('a4', (k !== 'pdf' || $('a4').checked) ? '1' : '0');
+      fd.append('a4_mode', $('a4mode').value);
+      fd.append('a4_orient', $('a4orient').value);
+      if (k === 'topdf') {
+        fd.append('per_page', ppVal());
+        fd.append('output', qs('input[name=out]:checked').value);
+        fd.append('order', qs('input[name=ord]:checked').value);
+        fd.append('margin', $('margin').value || 0);
+        fd.append('gap', $('gap').value || 0);
+      }
+    }
+
+    busy = true; updateGo();
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.upload.onprogress = e => {
+      if (!e.lengthComputable) return;
+      const p = Math.round(e.loaded / e.total * 100);
+      if (p < 100) setStatus(`<span class="t-body-m">Загружаю файлы… ${p}%</span><div class="progress"><i style="width:${p}%"></i></div>`);
+      else setStatus('<span class="t-body-m">Конвертирую…</span><div class="progress busy"><i></i></div>');
+    };
+    xhr.onload = () => {
+      let data = {}; try { data = JSON.parse(xhr.responseText); } catch (_) {}
+      if (xhr.status !== 200) { busy = false; updateGo(); setStatus(`<ul class="errs"><li>${esc(data.error || 'Сервер вернул ошибку ' + xhr.status)}</li></ul>`); return; }
+      if (data.task) { pollTask(data); return; }
+      busy = false; updateGo();
+      const unit = m === 'pdf' ? 'PDF' : 'файлов';
+      const dl = (raw, label) => `<a class="btn filled state" href="/api/download/${data.job}${raw ? '?raw=1' : ''}" download>Скачать ${esc(label)}</a>`;
+      let html;
+      if (k === 'topdf') {
+        const single = !!data.single_pdf;
+        html = `<div class="result"><span class="t-body-m">Готово: ${data.done} из ${data.total} фото, страниц A4: ${data.pages}.</span>${dl(single, single ? data.single_pdf : data.archive)}</div>`;
+      } else if (k === 'qr') {
+        html = data.done ? `<div class="result"><span class="t-body-m">Готово: ${data.done} из ${data.total} QR-кодов, в архиве ещё index.csv со списком.</span>${dl(false, data.archive)}</div>` : '';
+      } else if (k === 'uni') {
+        const single = !!data.single_file;
+        html = data.done ? `<div class="result"><span class="t-body-m">Готово: ${data.done} из ${data.total}.</span>${dl(single, single ? data.single_file : data.archive)}</div>` : '';
+      } else {
+        html = `<div class="result"><span class="t-body-m">Готово: ${data.done} из ${data.total} ${unit}, получилось файлов: ${data.files}.</span>${dl(false, data.archive)}</div>`;
+      }
+      if ((data.failed || []).length) html += `<ul class="errs">` + data.failed.map(f => `<li><b>${esc(f.name)}</b>: ${esc(f.error)}</li>`).join('') + `</ul>`;
+      setStatus(html);
+    };
+    xhr.onerror = () => { busy = false; updateGo(); setStatus('<ul class="errs"><li>Не удалось связаться с сервером. Он запущен?</li></ul>'); };
+    setStatus(k === 'dl' ? '<span class="t-body-m">Отправляю ссылки…</span><div class="progress busy"><i></i></div>' : '<span class="t-body-m">Загружаю файлы… 0%</span><div class="progress"><i></i></div>');
+    xhr.send(fd);
+  };
+
+  /* ---------- фоновые задачи: прогресс и отмена ---------- */
+  const cancelBtn = $('cancel');
+  let currentTask = null;
+  function pollTask(t) {
+    currentTask = t.task; cancelBtn.hidden = false; cancelBtn.disabled = false;
+    const tick = () => fetch('/api/task/' + t.task).then(r => r.json()).then(d => {
+      if (d.task !== currentTask) return;
+      if (['queued', 'running'].includes(d.status)) {
+        const p = d.progress == null ? null : Math.round(d.progress * 100);
+        setStatus(`<span class="t-body-m">${esc(d.message || 'Работаю…')}${p == null ? '' : ' · ' + p + '%'}</span>` +
+          `<div class="progress${p == null ? ' busy' : ''}"><i style="width:${p ?? 0}%"></i></div>`);
+        setTimeout(tick, 700); return;
+      }
+      currentTask = null; cancelBtn.hidden = true; busy = false; updateGo();
+      setStatus(taskResult(d));
+    }).catch(() => setTimeout(tick, 1500));
+    tick();
+  }
+  function plural(n, [one, few, many]) {
+    const m10 = n % 10, m100 = n % 100;
+    return n + ' ' + (m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many);
+  }
+  function taskResult(d) {
+    let html = '';
+    const unit = d.kind === 'dl' ? ['ссылки', 'ссылок', 'ссылок'] : ['файла', 'файлов', 'файлов'];
+    if (d.files) {
+      const one = !!d.single_file, href = `/api/download/${d.job}${one ? '?raw=1' : ''}`;
+      const got = plural(d.files, ['файл', 'файла', 'файлов']);
+      const head = d.status === 'cancelled' ? `Отменено. Успело сохраниться: ${got}.`
+        : d.total > 1 ? `Готово ${d.done} из ${plural(d.total, unit)}, на выходе ${got}.` : `Готово, на выходе ${got}.`;
+      html += `<div class="result"><span class="t-body-m">${head}</span>` +
+        `<a class="btn filled state" href="${href}" download>Скачать ${esc(one ? d.single_file : d.archive)}</a>`;
+      if (!one && d.names && d.names.length) html += '<ul class="names">' + d.names.map(n => `<li><a href="/api/file/${d.job}/${encodeURIComponent(n)}" download>${esc(n)}</a></li>`).join('') + '</ul>';
+      html += '</div>';
+    } else if (d.status === 'cancelled') html += '<div class="result"><span class="t-body-m">Отменено.</span></div>';
+    const errs = (d.failed || []).map(f => `<li><b>${esc(f.name)}</b>: ${esc(f.error)}</li>`);
+    if (d.status === 'error' && !errs.length) errs.push(`<li>${esc(d.error)}</li>`);
+    if (errs.length) html += `<ul class="errs">${errs.join('')}</ul>`;
+    return html;
+  }
+  cancelBtn.onclick = () => { if (!currentTask) return; cancelBtn.disabled = true; fetch(`/api/task/${currentTask}/cancel`, { method: 'POST' }); };
+
+  /* ---------- редактор ---------- */
+  const eOut = () => qs('input[name=eout]:checked').value;
+  const AUDIO_OUT = ['mp3', 'm4a', 'wav', 'flac', 'ogg', 'opus'];
+  const CRF_NAMES = [[17, 'почти без потерь'], [20, 'отличное'], [24, 'хорошее'], [28, 'среднее'], [33, 'низкое'], [99, 'очень низкое']];
+  function syncEdit() {
+    const o = eOut(), audioOnly = AUDIO_OUT.includes(o), gif = o === 'gif';
+    const anyVideo = files.some(f => (caps ? caps.categories.video.inputs : []).includes(extOf(f.name)));
+    $('eVideoSect').hidden = audioOnly || (o === 'same' && files.length > 0 && !anyVideo);
+    $('eResRow').hidden = gif; $('eGifRow').hidden = !gif;
+    $('eQualSect').hidden = false;
+    $('eCodecRow').hidden = $('eCrfRow').hidden = $('eTargetRow').hidden = audioOnly || gif || (o === 'same' && files.length > 0 && !anyVideo);
+    $('eMuteRow').hidden = audioOnly || gif;
+    $('eAudioOpts').hidden = gif;
+    const crf = +$('eCrf').value; $('eCrfVal').textContent = `${crf} · ${CRF_NAMES.find(([n]) => crf <= n)[1]}`;
+    $('eSpeedVal').textContent = (+$('eSpeed').value) + '×'; $('eVolVal').textContent = $('eVol').value + '%';
+    ['eSpeed', 'eVol', 'eCrf'].forEach(id => paintSlider($(id)));
+    $('eCrf').style.setProperty('--p', (100 - (crf - 14) / 26 * 100) + '%');
+    updateGo();
+  }
+  ['eOut', 'eMerge', 'eSpeed', 'eVol', 'eCrf'].forEach(id => $(id).addEventListener('input', () => { syncEdit(); if (id === 'eMerge') render(); }));
+  $('eOut').addEventListener('change', syncEdit);
+  function editForm(fd) {
+    const v = id => $(id).value.trim();
+    fd.append('out', eOut()); fd.append('start', v('eStart')); fd.append('end', v('eEnd'));
+    fd.append('fast', $('eFast').checked ? '1' : '0'); fd.append('merge', $('eMerge').checked ? '1' : '0');
+    fd.append('aspect', qs('input[name=easp]:checked').value); fd.append('rotate', v('eRot'));
+    fd.append('hflip', v('eFlip') === 'h' ? '1' : '0'); fd.append('vflip', v('eFlip') === 'v' ? '1' : '0');
+    fd.append('height', v('eHeight')); fd.append('fps', v('eFps'));
+    fd.append('gif_width', v('eGifW')); fd.append('gif_fps', v('eGifFps'));
+    fd.append('speed', v('eSpeed')); fd.append('volume', v('eVol'));
+    fd.append('normalize', $('eNorm').checked ? '1' : '0'); fd.append('mute', $('eMute').checked ? '1' : '0');
+    fd.append('fade_in', v('eFadeIn') || 0); fd.append('fade_out', v('eFadeOut') || 0);
+    fd.append('vcodec', v('eCodec')); fd.append('preset', v('ePreset')); fd.append('crf', v('eCrf'));
+    fd.append('target_mb', v('eTarget')); fd.append('abitrate', v('eAbr'));
+    fd.append('name_template', v('eName') || '%name%_edit');
+    if (files[0]) fd.append('merge_name', files[0].name.replace(/\.[^.]+$/, '') + '_merged');
+  }
+
+  // предпросмотр первого файла: браузер играет mp4/webm/mp3/ogg/wav, остальное просто пропускаем
+  let previewFile = null, previewUrl = null;
+  const fmtT = t => { t = Math.max(0, t); const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = (t % 60).toFixed(1).padStart(4, '0'); return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + s; };
+  function updatePreview() {
+    const f = files[0];
+    if (f === previewFile) return;
+    previewFile = f; if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = null;
+    $('previewSlot').innerHTML = ''; $('previewCard').hidden = true;
+    if (!f) return;
+    const isAudio = (caps ? caps.categories.audio.inputs : []).includes(extOf(f.name));
+    const el = document.createElement(isAudio ? 'audio' : 'video');
+    el.className = 'player'; el.controls = true; el.preload = 'metadata';
+    previewUrl = el.src = URL.createObjectURL(f);
+    el.onloadedmetadata = () => {
+      $('previewCard').hidden = false;
+      $('previewTitle').textContent = 'Предпросмотр: ' + f.name;
+      $('previewInfo').textContent = 'Длительность ' + fmtT(el.duration) + (el.videoWidth ? ` · ${el.videoWidth}×${el.videoHeight}` : '');
+    };
+    el.onerror = () => { $('previewCard').hidden = true; };
+    $('previewSlot').appendChild(el);
+  }
+  const player = () => $('previewSlot').firstChild;
+  $('setStart').onclick = () => { if (player()) $('eStart').value = fmtT(player().currentTime); };
+  $('setEnd').onclick = () => { if (player()) $('eEnd').value = fmtT(player().currentTime); };
+
+  /* ---------- PDF-инструменты ---------- */
+  const P_HINTS = {
+    merge: 'Файлы склеиваются по порядку списка, стрелкой ↑ можно поднять файл.',
+    split: 'Каждая страница станет отдельным PDF. Можно указать, какие страницы нужны.',
+    extract: 'Выбранные страницы соберутся в новый PDF в указанном порядке.',
+    rotate: 'Если страницы не указаны, повернутся все.',
+    compress: 'Пережимает картинки внутри PDF. Сильнее всего помогает сканам и фото. Текст не трогается.',
+    protect: 'PDF будет открываться только с паролем (шифрование AES-256).',
+    unlock: 'Нужен текущий пароль: взломать PDF без него нельзя.',
+  };
+  function syncPdft() {
+    const op = pOp();
+    $('pHint').textContent = P_HINTS[op];
+    $('pRangesRow').hidden = !['split', 'extract', 'rotate'].includes(op);
+    $('pRanges').placeholder = op === 'extract' ? 'например 1-3, 5, 8-' : 'все';
+    $('pAngleRow').hidden = op !== 'rotate'; $('pCompress').hidden = op !== 'compress';
+    $('pNewPassRow').hidden = op !== 'protect';
+    $('pPassRow').querySelector('span').textContent = op === 'unlock' ? 'Текущий пароль PDF' : 'Пароль, если PDF защищён';
+    $('pQVal').textContent = $('pQ').value; paintSlider($('pQ'));
+    updateGo();
+  }
+  $('pdftBox').addEventListener('input', syncPdft);
+  $('pOps').addEventListener('change', () => { statusEl.hidden = true; syncPdft(); render(); });
+
+  /* ---------- скачивание ---------- */
+  const dlMode = () => qs('input[name=dlm]:checked').value;
+  function syncDl() {
+    const a = dlMode() === 'audio';
+    $('dlVideo').hidden = a; $('dlAudio').hidden = !a;
+    $('compatRow').hidden = qs('input[name=dlc]:checked').value !== 'mp4';
+    $('dlAbrRow').hidden = ['flac', 'wav'].includes(qs('input[name=dla]:checked').value);
+    $('dlCookiesClear').hidden = !$('dlCookies').files.length;
+    $('dlCookiesHint').textContent = $('dlCookies').files.length ? 'Выбрано: ' + $('dlCookies').files[0].name : 'Нужны для приватных видео, 18+ и Instagram. Выгрузи расширением «Get cookies.txt LOCALLY». Файл используется один раз и удаляется.';
+    if (caps && caps.engines.ytdlp_version) $('ytdlpVer').textContent = 'yt-dlp ' + caps.engines.ytdlp_version;
+    updateGo();
+  }
+  $('dlBox').addEventListener('change', syncDl);
+  $('dlCookiesClear').onclick = () => { $('dlCookies').value = ''; syncDl(); };
+  $('urls').addEventListener('input', updateGo);
+  $('pasteUrls').onclick = async () => {
+    try { const t = await navigator.clipboard.readText(); $('urls').value = ($('urls').value.trim() + '\n' + t).trim(); updateGo(); }
+    catch (_) { $('urls').focus(); setStatus('<ul class="errs"><li>Браузер не дал доступ к буферу. Вставь через Ctrl+V.</li></ul>'); }
+  };
+  function dlForm(fd) {
+    fd.append('urls', $('urls').value); fd.append('mode', dlMode());
+    fd.append('quality', $('dlQ').value); fd.append('container', qs('input[name=dlc]:checked').value);
+    fd.append('audio_format', qs('input[name=dla]:checked').value); fd.append('abitrate', $('dlAbr').value);
+    fd.append('compat', $('dlCompat').checked ? '1' : '0'); fd.append('subs', $('dlSubs').checked ? '1' : '0');
+    fd.append('playlist', $('dlPl').checked ? '1' : '0'); fd.append('thumbnail', $('dlThumb').checked ? '1' : '0');
+    fd.append('metadata', $('dlMeta').checked ? '1' : '0');
+    if ($('dlCookies').files[0]) fd.append('cookies', $('dlCookies').files[0]);
+  }
+  $('peekUrls').onclick = () => {
+    const fd = new FormData(); fd.append('urls', $('urls').value);
+    if ($('dlCookies').files[0]) fd.append('cookies', $('dlCookies').files[0]);
+    const box = $('dlInfo'); box.hidden = false;
+    box.innerHTML = '<span class="t-body-m">Смотрю ссылки…</span><div class="progress busy"><i></i></div>';
+    fetch('/api/dl/info', { method: 'POST', body: fd }).then(r => r.json()).then(d => {
+      if (d.error) { box.innerHTML = `<span class="t-body-m err" style="color:var(--md-error)">${esc(d.error)}</span>`; return; }
+      box.innerHTML = d.items.map(it => it.error
+        ? `<div class="vinfo"><span class="noimg"></span><div><div class="ttl">${esc(it.url)}</div><div class="t-body-m err">${esc(it.error)}</div></div></div>`
+        : `<div class="vinfo">${it.thumbnail ? `<img src="${esc(it.thumbnail)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'noimg'}))">` : '<span class="noimg"></span>'}` +
+          `<div><div class="ttl">${esc(it.title)}</div><div class="t-body-m muted">${[it.uploader, it.duration ? fmtT(it.duration).replace(/\.\d$/, '') : '', it.site].filter(Boolean).map(esc).join(' · ')}</div>` +
+          `${it.playlist ? `<span class="badge">Плейлист: ${it.count}${it.count >= 50 ? '+' : ''} шт.</span>` : ''}${it.heights && it.heights.length ? ` <span class="badge">до ${it.heights[0]}p</span>` : ''}</div></div>`).join('');
+    }).catch(() => { box.innerHTML = '<span class="t-body-m">Не удалось связаться с сервером.</span>'; });
+  };
+
+  /* ---------- QR ---------- */
+  function syncQr() {
+    const k = qrKind();
+    $('qrText').hidden = k !== 'text'; $('qrWifi').hidden = k !== 'wifi'; $('qrCard').hidden = k !== 'vcard'; $('qrList').hidden = k !== 'list';
+    $('qrPrev').hidden = k === 'list'; $('qrListOpts').hidden = k !== 'list';
+    $('filesPane').hidden = k !== 'list';
+    const jpg = qs('input[name=qrf]:checked').value === 'jpg';
+    $('qrTrRow').hidden = jpg; if (jpg) $('qrTr').checked = false;
+    $('qrBoxVal').textContent = $('qrBox_').value + ' px'; $('qrBorderVal').textContent = $('qrBorder').value;
+    paintSlider($('qrBox_')); paintSlider($('qrBorder'));
+    updateGo();
+  }
+  function qrStyle(fd) {
+    fd.append('format', qs('input[name=qrf]:checked').value); fd.append('box_size', $('qrBox_').value);
+    fd.append('border', $('qrBorder').value); fd.append('ec', qs('input[name=qre]:checked').value);
+    fd.append('fg', $('qrFg').value); fd.append('bg', $('qrBg').value); fd.append('transparent', $('qrTr').checked ? '1' : '0');
+  }
+  function qrPayloadReady() {
+    const k = qrKind();
+    if (k === 'text') return $('qrData').value.trim();
+    if (k === 'wifi') return $('wSsid').value.trim();
+    if (k === 'vcard') return $('cName').value.trim() || $('cPhone').value.trim() || $('cEmail').value.trim();
+    return '';
+  }
+  function qrForm(previewOnly) {
+    const fd = new FormData(), k = qrKind();
+    qrStyle(fd); fd.append('kind', k);
+    if (previewOnly) { fd.set('format', 'png'); fd.set('box_size', '8'); }
+    if (k === 'text') fd.append('text', $('qrData').value);
+    if (k === 'wifi') { fd.append('ssid', $('wSsid').value); fd.append('password', $('wPass').value); fd.append('security', $('wSec').value); fd.append('hidden', $('wHidden').checked ? '1' : '0'); }
+    if (k === 'vcard') { fd.append('name', $('cName').value); fd.append('phone', $('cPhone').value); fd.append('email', $('cEmail').value); fd.append('org', $('cOrg').value); fd.append('url', $('cUrl').value); }
+    return fd;
+  }
+  let qrTimer = 0, qrSeq = 0, qrImgUrl = null;
+  function qrRefresh() {
+    syncQr(); clearTimeout(qrTimer);
+    if (qrKind() === 'list') return;
+    qrTimer = setTimeout(() => {
+      const seq = ++qrSeq, box = $('qrPrev');
+      if (!qrPayloadReady()) { box.innerHTML = '<span class="t-body-m muted">Здесь появится QR-код</span>'; return; }
+      fetch('/api/qr', { method: 'POST', body: qrForm(true) }).then(async r => {
+        if (seq !== qrSeq) return;
+        if (!r.ok) { const d = await r.json().catch(() => ({})); box.innerHTML = `<span class="t-body-m" style="color:var(--md-error)">${esc(d.error || 'Ошибка')}</span>`; return; }
+        if (qrImgUrl) URL.revokeObjectURL(qrImgUrl);
+        qrImgUrl = URL.createObjectURL(await r.blob());
+        box.innerHTML = `<img src="${qrImgUrl}" alt="QR-код">`;
+      }).catch(() => {});
+    }, 250);
+  }
+  $('qrPane').addEventListener('input', qrRefresh);
+  $('qrPane').addEventListener('change', () => { qrRefresh(); applyQrKind(); });
+  $('qrBox').addEventListener('input', qrRefresh);
+  $('qrBox').addEventListener('change', qrRefresh);
+  let lastQrKind = 'text';
+  function applyQrKind() {
+    const k = qrKind(); if (k === lastQrKind) return;
+    if ((k === 'list') !== (lastQrKind === 'list')) { files = []; render(); }
+    lastQrKind = k; statusEl.hidden = true; syncQr();
+  }
+  async function qrDownload() {
+    const st = qs('input[name=qrf]:checked').value;
+    const r = await fetch('/api/qr?download=1', { method: 'POST', body: qrForm(false) });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); setStatus(`<ul class="errs"><li>${esc(d.error || 'Ошибка')}</li></ul>`); return; }
+    const a = document.createElement('a'), u = URL.createObjectURL(await r.blob());
+    const base = (qrKind() === 'wifi' ? 'wifi_' + $('wSsid').value : qrKind() === 'vcard' ? 'contact_' + ($('cName').value || 'qr') : 'qr').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60);
+    a.href = u; a.download = `${base}.${st}`; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 5000);
+  }
+  $('qrLinks').addEventListener('input', updateGo);
+
+  /* ---------- старт ---------- */
+  fetch('/api/formats').then(r => r.json()).then(d => { caps = d; applyMode(); }).catch(() => { applyMode(); });
+  applyMode();
+})();
+
+</script>
+</body>
+</html>

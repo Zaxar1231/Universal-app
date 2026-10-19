@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Universal</title>
+<meta name="description" content="Конвертер файлов, редактор видео на ffmpeg, скачивание видео и QR-коды. QR, картинки и PDF работают прямо в браузере.">
+<meta name="theme-color" content="#f4fbfa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171d1d" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="img/icon-192.png">
+<link rel="apple-touch-icon" href="img/icon-192.png">
+<style>
+/* Material You, та же палитра, что в приложении */
+:root {
+  --primary: #00696b; --on-primary: #fff; --primary-container: #9cf1f2; --on-primary-container: #002020;
+  --secondary-container: #cce8e8; --on-secondary-container: #051f20;
+  --tertiary-container: #d7e3ff; --on-tertiary-container: #061b3c;
+  --error: #ba1a1a; --error-container: #ffdad6; --on-error-container: #410002;
+  --surface: #f4fbfa; --on-surface: #161d1d; --on-surface-variant: #3f4948;
+  --c-low: #eef5f4; --c: #e8efee; --c-high: #e3e9e9; --c-highest: #dde4e3;
+  --outline: #6f7979; --outline-variant: #bec9c8;
+  --font: Roboto, "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #80d4d6; --on-primary: #003738; --primary-container: #004f51; --on-primary-container: #9cf1f2;
+    --secondary-container: #324b4b; --on-secondary-container: #cce8e8;
+    --tertiary-container: #2f4670; --on-tertiary-container: #d7e3ff;
+    --error: #ffb4ab; --error-container: #93000a; --on-error-container: #ffdad6;
+    --surface: #0e1515; --on-surface: #dde4e3; --on-surface-variant: #bec9c8;
+    --c-low: #171d1d; --c: #1b2121; --c-high: #252b2b; --c-highest: #303636;
+    --outline: #889392; --outline-variant: #3f4948;
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { color-scheme: light dark; -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/1.5 var(--font); }
+button, input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+a { color: var(--primary); }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+h1 { font-size: 2.6rem; line-height: 1.15; font-weight: 400; margin: 0 0 12px; letter-spacing: -.01em; }
+h2 { font-size: 1.6rem; line-height: 2.1rem; font-weight: 400; margin: 0 0 16px; }
+h3 { font-size: 1rem; font-weight: 500; margin: 0; }
+.muted { color: var(--on-surface-variant); }
+.small { font-size: .8125rem; line-height: 1.25rem; }
+
+header.bar { position: sticky; top: 0; z-index: 10; background: var(--surface); padding-top: env(safe-area-inset-top); }
+header.bar .wrap { display: flex; align-items: center; gap: 12px; height: 64px; }
+header.bar img { width: 32px; height: 32px; border-radius: 9px; }
+header.bar b { font-weight: 500; font-size: 1.25rem; flex: 1; }
+
+.hero { padding: 32px 0 24px; display: grid; gap: 24px; grid-template-columns: 1.1fr 1fr; align-items: center; }
+.hero p { margin: 0 0 20px; font-size: 1.0625rem; }
+.hero img { width: 100%; border-radius: 20px; border: 1px solid var(--outline-variant); display: block; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.btn { height: 40px; padding: 0 24px; border-radius: 20px; border: 0; cursor: pointer; font-weight: 500; font-size: .875rem;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; position: relative; overflow: hidden; }
+.btn::before { content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0; transition: opacity .15s; }
+.btn:hover::before { opacity: .08; } .btn:active::before { opacity: .12; }
+.btn.filled { background: var(--primary); color: var(--on-primary); }
+.btn.tonal { background: var(--secondary-container); color: var(--on-secondary-container); }
+.btn.text { background: none; color: var(--primary); padding: 0 12px; }
+.btn.lg { height: 52px; border-radius: 26px; width: 100%; font-size: 1rem; }
+.btn:disabled { background: color-mix(in srgb, var(--on-surface) 12%, transparent); color: color-mix(in srgb, var(--on-surface) 38%, transparent); cursor: default; }
+:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+section { padding: 32px 0; }
+.card { background: var(--c-low); border-radius: 28px; padding: 24px; }
+.card.high { background: var(--c); }
+
+/* сегменты и чипы */
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--outline); border-radius: 20px; overflow: hidden; }
+.seg input, .chips input, .sw input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.seg label { height: 40px; display: grid; place-items: center; padding: 0 6px; cursor: pointer; font-size: .875rem; font-weight: 500;
+  border-left: 1px solid var(--outline); text-align: center; line-height: 1.1; }
+.seg label:first-of-type { border-left: 0; }
+.seg input:checked + label { background: var(--secondary-container); color: var(--on-secondary-container); }
+.seg input:focus-visible + label { outline: 3px solid var(--primary); outline-offset: -3px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips label { height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--outline); display: inline-flex; align-items: center;
+  cursor: pointer; font-size: .875rem; font-weight: 500; }
+.chips input:checked + label { background: var(--secondary-container); color: var(--on-secondary-container); border-color: transparent; }
+.chips input:focus-visible + label { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+.tool { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; margin-top: 16px; align-items: start; }
+.stack { display: grid; gap: 16px; }
+.tf { position: relative; display: block; }
+.tf input, .tf select { width: 100%; height: 56px; padding: 22px 16px 6px; border: 0; border-bottom: 1px solid var(--on-surface-variant);
+  border-radius: 4px 4px 0 0; background: var(--c-highest); appearance: none; -webkit-appearance: none; outline: none; }
+.tf input[type=color] { padding: 24px 12px 6px; cursor: pointer; }
+.tf > span { position: absolute; left: 16px; top: 8px; font-size: .75rem; color: var(--on-surface-variant); pointer-events: none; }
+.tf:focus-within input, .tf:focus-within select { border-bottom: 2px solid var(--primary); }
+.ta { width: 100%; min-height: 110px; resize: vertical; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--on-surface-variant);
+  border-radius: 4px 4px 0 0; background: var(--c-highest); outline: none; }
+.ta:focus { border-bottom: 2px solid var(--primary); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.range { display: grid; gap: 2px; }
+.range .top { display: flex; justify-content: space-between; font-size: .875rem; font-weight: 500; }
+input[type=range] { width: 100%; accent-color: var(--primary); height: 32px; margin: 0; }
+.sw { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; min-height: 44px; }
+.sw .track { width: 52px; height: 32px; border-radius: 16px; border: 2px solid var(--outline); background: var(--c-highest); position: relative; flex: none; transition: .2s; }
+.sw .track::after { content: ""; position: absolute; top: 6px; left: 6px; width: 16px; height: 16px; border-radius: 50%; background: var(--outline); transition: .2s; }
+.sw input:checked + .track { background: var(--primary); border-color: var(--primary); }
+.sw input:checked + .track::after { left: 26px; top: 2px; width: 24px; height: 24px; background: var(--on-primary); }
+.sw input:focus-visible + .track { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+.qrprev { display: grid; place-items: center; min-height: 240px; border-radius: 16px; padding: 16px;
+  background: repeating-conic-gradient(var(--c-high) 0 25%, var(--c-low) 0 50%) 0 0/20px 20px; }
+.qrprev canvas { max-width: min(100%, 300px); image-rendering: pixelated; }
+.drop { display: grid; justify-items: center; gap: 4px; text-align: center; padding: 28px 16px; border: 2px dashed var(--outline); border-radius: 28px;
+  cursor: pointer; position: relative; background: var(--c-low); }
+.drop.over, .drop:hover { background: var(--secondary-container); border-color: var(--primary); }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.files { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.files li { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.files .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files .ext { width: 40px; height: 40px; border-radius: 20px; display: grid; place-items: center; flex: none; font-size: .6875rem; font-weight: 700;
+  background: var(--tertiary-container); color: var(--on-tertiary-container); }
+.files .x { width: 40px; height: 40px; border: 0; border-radius: 20px; background: none; cursor: pointer; color: var(--on-surface-variant); font-size: 1.25rem; }
+.result { padding: 16px; border-radius: 16px; background: var(--primary-container); color: var(--on-primary-container); display: grid; gap: 12px; }
+.result .btn { justify-self: start; }
+.errs { margin: 0; padding: 12px 16px; border-radius: 16px; background: var(--error-container); color: var(--on-error-container); font-size: .875rem; list-style: none; }
+
+.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.feat { background: var(--c-low); border-radius: 20px; padding: 20px; display: grid; gap: 6px; align-content: start; }
+.feat .where { font-size: .75rem; font-weight: 500; color: var(--on-tertiary-container); background: var(--tertiary-container);
+  justify-self: start; padding: 0 8px; border-radius: 8px; line-height: 1.5rem; }
+.gallery { display: grid; grid-auto-flow: column; grid-auto-columns: min(86%, 720px); gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
+  padding-bottom: 8px; scrollbar-width: thin; }
+.gallery figure { margin: 0; scroll-snap-align: start; }
+.gallery img { width: 100%; border-radius: 16px; border: 1px solid var(--outline-variant); display: block; }
+.gallery figcaption { font-size: .875rem; color: var(--on-surface-variant); padding: 8px 4px 0; }
+.phones { display: flex; gap: 16px; flex-wrap: wrap; }
+.phones img { width: 220px; max-width: 46%; border-radius: 24px; border: 1px solid var(--outline-variant); }
+pre { background: var(--c-high); padding: 14px 16px; border-radius: 12px; overflow-x: auto; font-size: .8125rem; margin: 8px 0 0; }
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+ol.steps { padding-left: 20px; margin: 8px 0 0; display: grid; gap: 8px; }
+ol.steps > li { min-width: 0; }
+p code, li > code { overflow-wrap: anywhere; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.grid2 > *, .tool > *, .hero > * { min-width: 0; }
+footer { padding: 32px 0 calc(32px + env(safe-area-inset-bottom)); border-top: 1px solid var(--outline-variant); margin-top: 16px; }
+
+@media (max-width: 860px) {
+  .hero, .tool, .grid2 { grid-template-columns: minmax(0, 1fr); }
+  h1 { font-size: 2rem; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <img src="img/icon-192.png" alt=""><b>Universal</b>
+  <a class="btn text" href="https://github.com/Zaxar1231/Universal-app">GitHub</a>
+</div></header>
+
+<main class="wrap">
+  <div class="hero">
+    <div>
+      <h1>Один инструмент для файлов, видео и QR</h1>
+      <p class="muted">Конвертер форматов в духе vert.sh, редактор видео и аудио на ffmpeg, скачивание видео с YouTube, TikTok, VK и ещё ~1800 сайтов, правка PDF и QR-коды. Ставится на компьютер или домашний сервер, файлы никуда не уходят.</p>
+      <div class="actions">
+        <a class="btn filled" href="#try">Попробовать в браузере</a>
+        <a class="btn tonal" href="https://github.com/Zaxar1231/Universal-app/archive/refs/heads/main.zip">Скачать ZIP</a>
+        <a class="btn text" href="#run">Как запустить</a>
+      </div>
+    </div>
+    <img src="img/convert.webp" alt="Окно конвертера: список файлов и выбор формата" width="1100" height="705">
+  </div>
+
+  <!-- ===================== браузерная версия ===================== -->
+  <section id="try">
+    <h2>Попробовать прямо здесь</h2>
+    <p class="muted small" style="margin-top:-8px">Эти три инструмента работают целиком в браузере, даже на телефоне: файлы не загружаются ни на какой сервер. Видео, аудио и скачивание требуют полной версии (см. ниже).</p>
+    <div class="seg" role="tablist" style="max-width:520px">
+      <input type="radio" name="tool" id="t1" value="qr" checked><label for="t1">QR-код</label>
+      <input type="radio" name="tool" id="t2" value="img"><label for="t2">Картинки</label>
+      <input type="radio" name="tool" id="t3" value="pdf"><label for="t3">PDF</label>
+    </div>
+
+    <!-- QR -->
+    <div class="tool" id="toolQr">
+      <div class="card stack">
+        <div class="seg">
+          <input type="radio" name="qk" id="qk1" value="text" checked><label for="qk1">Текст</label>
+          <input type="radio" name="qk" id="qk2" value="wifi"><label for="qk2">Wi‑Fi</label>
+          <input type="radio" name="qk" id="qk3" value="vcard"><label for="qk3">Контакт</label>
+        </div>
+        <div id="qText"><textarea class="ta" id="qData" placeholder="Ссылка или любой текст">https://github.com/Zaxar1231/Universal-app</textarea></div>
+        <div id="qWifi" class="stack" hidden>
+          <label class="tf"><span>Имя сети (SSID)</span><input id="wS" autocomplete="off"></label>
+          <label class="tf"><span>Пароль</span><input id="wP" autocomplete="off" spellcheck="false"></label>
+          <div class="two">
+            <label class="tf"><span>Защита</span><select id="wT"><option value="WPA">WPA/WPA2/WPA3</option><option value="WEP">WEP</option><option value="nopass">Без пароля</option></select></label>
+            <label class="sw"><span class="small">Скрытая сеть</span><input type="checkbox" id="wH"><span class="track"></span></label>
+          </div>
+        </div>
+        <div id="qCard" class="stack" hidden>
+          <label class="tf"><span>Имя и фамилия</span><input id="cN" autocomplete="off"></label>
+          <div class="two">
+            <label class="tf"><span>Телефон</span><input id="cP" type="tel" autocomplete="off"></label>
+            <label class="tf"><span>Почта</span><input id="cE" type="email" autocomplete="off"></label>
+          </div>
+        </div>
+        <div class="qrprev"><canvas id="qCanvas" width="10" height="10" aria-label="QR-код"></canvas><span class="small" id="qErr" style="color:var(--error)" hidden></span></div>
+      </div>
+      <div class="card high stack">
+        <div class="chips">
+          <input type="radio" name="qf" id="qf1" value="png" checked><label for="qf1">PNG</label>
+          <input type="radio" name="qf" id="qf2" value="svg"><label for="qf2">SVG</label>
+          <input type="radio" name="qf" id="qf3" value="jpg"><label for="qf3">JPG</label>
+        </div>
+        <div class="range"><div class="top"><span>Размер точки</span><span id="qBoxV">10 px</span></div><input type="range" id="qBox" min="2" max="40" value="10"></div>
+        <div class="range"><div class="top"><span>Белая рамка</span><span id="qBorderV">4</span></div><input type="range" id="qBorder" min="0" max="10" value="4"></div>
+        <div class="seg">
+          <input type="radio" name="qe" id="qe1" value="L"><label for="qe1">L</label>
+          <input type="radio" name="qe" id="qe2" value="M" checked><label for="qe2">M</label>
+          <input type="radio" name="qe" id="qe3" value="Q"><label for="qe3">Q</label>
+          <input type="radio" name="qe" id="qe4" value="H"><label for="qe4">H</label>
+        </div>
+        <p class="small muted" style="margin:-8px 0 0">Защита от повреждений: L 7%, M 15%, Q 25%, H 30%.</p>
+        <div class="two">
+          <label class="tf"><span>Точки</span><input type="color" id="qFg" value="#000000"></label>
+          <label class="tf"><span>Фон</span><input type="color" id="qBg" value="#ffffff"></label>
+        </div>
+        <label class="sw" id="qTrRow"><span class="small">Прозрачный фон</span><input type="checkbox" id="qTr"><span class="track"></span></label>
+        <button class="btn filled lg" id="qGo">Скачать QR-код</button>
+      </div>
+    </div>
+
+    <!-- картинки -->
+    <div class="tool" id="toolImg" hidden>
+      <div class="stack">
+        <label class="drop" id="iDrop"><input type="file" id="iPick" multiple accept="image/*">
+          <strong>Выбери или перетащи картинки</strong><span class="small muted">PNG, JPG, WebP, GIF, BMP, AVIF (и HEIC на iPhone)</span></label>
+        <div class="card"><ul class="files" id="iList"></ul><p class="small muted" id="iEmpty" style="margin:0">Пока ничего не выбрано</p></div>
+      </div>
+      <div class="card high stack">
+        <div class="chips" id="iFmt">
+          <input type="radio" name="if" id="if1" value="image/jpeg" checked><label for="if1">JPG</label>
+          <input type="radio" name="if" id="if2" value="image/png"><label for="if2">PNG</label>
+          <input type="radio" name="if" id="if3" value="image/webp"><label for="if3">WebP</label>
+        </div>
+        <div class="range" id="iQRow"><div class="top"><span>Качество</span><span id="iQV">85</span></div><input type="range" id="iQ" min="10" max="100" value="85"></div>
+        <label class="tf"><span>Уменьшить до, px по длинной стороне</span><input type="number" id="iMax" min="0" step="10" placeholder="не уменьшать"></label>
+        <button class="btn filled lg" id="iGo" disabled>Конвертировать</button>
+        <div id="iStatus"></div>
+      </div>
+    </div>
+
+    <!-- PDF -->
+    <div class="tool" id="toolPdf" hidden>
+      <div class="stack">
+        <label class="drop" id="pDrop"><input type="file" id="pPick" multiple accept="application/pdf,.pdf">
+          <strong>Выбери или перетащи PDF</strong><span class="small muted">Для склейки порядок как в списке, стрелка ↑ поднимает файл</span></label>
+        <div class="card"><ul class="files" id="pList"></ul><p class="small muted" id="pEmpty" style="margin:0">Пока ничего не выбрано</p></div>
+      </div>
+      <div class="card high stack">
+        <div class="chips" id="pOps">
+          <input type="radio" name="po" id="po1" value="merge" checked><label for="po1">Склеить</label>
+          <input type="radio" name="po" id="po2" value="extract"><label for="po2">Вытащить страницы</label>
+          <input type="radio" name="po" id="po3" value="split"><label for="po3">Разделить</label>
+          <input type="radio" name="po" id="po4" value="rotate"><label for="po4">Повернуть</label>
+        </div>
+        <label class="tf" id="pRangeRow" hidden><span>Страницы</span><input id="pRange" placeholder="например 1-3, 5, 8-" autocomplete="off"></label>
+        <label class="tf" id="pAngleRow" hidden><span>Поворот</span><select id="pAngle"><option value="90">90° по часовой</option><option value="270">90° против</option><option value="180">180°</option></select></label>
+        <p class="small muted" style="margin:0">Сжатие и пароли есть в полной версии.</p>
+        <button class="btn filled lg" id="pGo" disabled>Склеить</button>
+        <div id="pStatus"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== возможности ===================== -->
+  <section>
+    <h2>Что умеет полная версия</h2>
+    <div class="features">
+      <div class="feat"><span class="where">ImageMagick · ffmpeg · pandoc</span><h3>Конвертер, как vert.sh</h3><span class="small muted">Картинки (вкл. HEIC, RAW, PSD), аудио, видео и документы пачками. Видео в звук и наоборот.</span></div>
+      <div class="feat"><span class="where">ffmpeg</span><h3>Редактор видео и аудио</h3><span class="small muted">Обрезка, склейка, 9:16 для шортсов, поворот, скорость, громкость, затухания, сжатие до N МБ, H.265/AV1, GIF.</span></div>
+      <div class="feat"><span class="where">yt-dlp</span><h3>Скачать видео</h3><span class="small muted">YouTube, TikTok, VK, Rutube, Instagram, X, Twitch и ~1800 сайтов. До 4K или MP3, плейлисты, субтитры, обложки.</span></div>
+      <div class="feat"><span class="where">pypdf · poppler</span><h3>PDF</h3><span class="small muted">Склеить, разделить, повернуть, сжать сканы, пароль. PDF в картинки и фото в PDF на листах A4.</span></div>
+      <div class="feat"><span class="where">qrcode</span><h3>QR-коды</h3><span class="small muted">Ссылка, Wi‑Fi, контакт. Сотни кодов разом из .txt, .csv или Word-документа.</span></div>
+      <div class="feat"><span class="where">Material You</span><h3>Удобно на телефоне</h3><span class="small muted">Светлая и тёмная тема, 8 цветов оформления, прогресс и отмена долгих задач.</span></div>
+    </div>
+    <div class="gallery" style="margin-top:16px">
+      <figure><img src="img/editor.webp" alt="Редактор видео" loading="lazy" width="1100" height="705"><figcaption>Редактор видео и аудио</figcaption></figure>
+      <figure><img src="img/download.webp" alt="Скачивание видео" loading="lazy" width="1100" height="705"><figcaption>Скачивание с YouTube, TikTok и других сайтов</figcaption></figure>
+      <figure><img src="img/pdf.webp" alt="Правка PDF" loading="lazy" width="1100" height="705"><figcaption>Правка PDF</figcaption></figure>
+      <figure><img src="img/qr.webp" alt="QR-коды" loading="lazy" width="1100" height="705"><figcaption>QR-коды</figcaption></figure>
+    </div>
+    <div class="phones" style="margin-top:16px">
+      <img src="img/mobile_qr.webp" alt="QR для Wi‑Fi на телефоне" loading="lazy" width="390" height="844">
+      <img src="img/mobile_editor.webp" alt="Редактор на телефоне" loading="lazy" width="390" height="844">
+    </div>
+  </section>
+
+  <!-- ===================== запуск ===================== -->
+  <section id="run">
+    <h2>Как запустить полную версию</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3>На компьютере</h3>
+        <ol class="steps small">
+          <li>Поставь <a href="https://www.python.org/downloads/">Python 3.10+</a> (на Windows отметь «Add Python to PATH»).</li>
+          <li>Поставь программы. Windows: <code>choco install ffmpeg imagemagick pandoc poppler</code>, Ubuntu: <code>sudo apt install ffmpeg imagemagick pandoc poppler-utils</code>.</li>
+          <li><a href="https://github.com/Zaxar1231/Universal-app/archive/refs/heads/main.zip">Скачай ZIP</a>, распакуй и запусти <code>run.bat</code> (Windows) или <code>./run.sh</code>.</li>
+          <li>Открой <code>http://localhost:5000</code>.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h3>Открыть с телефона</h3>
+        <ol class="steps small">
+          <li>Телефон и компьютер в одной Wi‑Fi сети.</li>
+          <li>Запусти сервер открытым в сеть и с паролем:
+            <pre><code># Windows (cmd)
+set HOST=0.0.0.0&amp;&amp; set APP_PASSWORD=мой-пароль&amp;&amp; run.bat
+# Linux / macOS
+HOST=0.0.0.0 APP_PASSWORD=мой-пароль ./run.sh</code></pre></li>
+          <li>Узнай IP компьютера (<code>ipconfig</code> или <code>ip a</code>), например 192.168.1.20.</li>
+          <li>На телефоне открой <code>http://192.168.1.20:5000</code>, логин любой, пароль твой. Windows может спросить про брандмауэр: разреши для частной сети.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h3>Домашний сервер (Docker)</h3>
+        <pre><code>git clone https://github.com/Zaxar1231/Universal-app
+cd Universal-app
+# поменяй APP_PASSWORD в docker-compose.yml
+docker compose up -d --build</code></pre>
+        <p class="small muted">Внутри уже есть ffmpeg, ImageMagick, pandoc, poppler и LibreOffice.</p>
+      </div>
+      <div class="card">
+        <h3>Почему не всё работает на этом сайте</h3>
+        <p class="small muted" style="margin:0">GitHub Pages отдаёт только статические страницы: на нём нельзя запустить ffmpeg, yt-dlp и Python. Поэтому здесь браузерные инструменты и витрина, а полная версия живёт у тебя на компьютере или сервере. Сайт можно добавить на главный экран телефона, он работает и офлайн.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer><div class="wrap small muted">
+  Universal · <a href="https://github.com/Zaxar1231/Universal-app">исходный код</a> · AGPL-3.0 (часть логики форматов взята из <a href="https://github.com/VERT-sh/VERT">VERT</a>).
+  Скачивай только то, на что у тебя есть права.
+</div></footer>
+
+<script src="vendor/qrcode.js"></script>
+<script src="vendor/pdf-lib.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id), qs = s => document.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const extOf = n => (n.split('.').pop() || '').toLowerCase();
+  const fmtSize = b => b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' КБ' : (b / 1048576).toFixed(1) + ' МБ';
+  function save(blob, name) {
+    const a = document.createElement('a'), u = URL.createObjectURL(blob);
+    a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 10000);
+  }
+  function result(el, html, ok = true) { el.innerHTML = ok ? `<div class="result">${html}</div>` : `<ul class="errs"><li>${html}</li></ul>`; }
+
+  /* вкладки */
+  document.querySelectorAll('input[name=tool]').forEach(r => r.addEventListener('change', () => {
+    const t = qs('input[name=tool]:checked').value;
+    $('toolQr').hidden = t !== 'qr'; $('toolImg').hidden = t !== 'img'; $('toolPdf').hidden = t !== 'pdf';
+  }));
+
+  /* ========================= QR ========================= */
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+  const qk = () => qs('input[name=qk]:checked').value;
+  const escW = s => s.replace(/([\\;,:"])/g, '\\$1');
+  function payload() {
+    const k = qk();
+    if (k === 'wifi') {
+      if (!$('wS').value) return '';
+      const t = $('wT').value;
+      return `WIFI:T:${t};S:${escW($('wS').value)};` + (t !== 'nopass' ? `P:${escW($('wP').value)};` : '') + ($('wH').checked ? 'H:true;' : '') + ';';
+    }
+    if (k === 'vcard') {
+      const n = $('cN').value.trim(), p = $('cP').value.trim(), e = $('cE').value.trim();
+      if (!n && !p && !e) return '';
+      return ['BEGIN:VCARD', 'VERSION:3.0', `FN:${n}`, `N:${n};;;;`, p && `TEL;TYPE=CELL:${p}`, e && `EMAIL:${e}`, 'END:VCARD'].filter(Boolean).join('\n');
+    }
+    return $('qData').value;
+  }
+  function matrix(data) {
+    const q = qrcode(0, qs('input[name=qe]:checked').value);
+    q.addData(data, 'Byte'); q.make();
+    const n = q.getModuleCount(), m = [];
+    for (let r = 0; r < n; r++) { m.push([]); for (let c = 0; c < n; c++) m[r].push(q.isDark(r, c)); }
+    return m;
+  }
+  function drawQr(canvas, m, box, border, fg, bg, transparent) {
+    const n = m.length, px = (n + 2 * border) * box;
+    canvas.width = canvas.height = px;
+    const g = canvas.getContext('2d');
+    g.clearRect(0, 0, px, px);
+    if (!transparent) { g.fillStyle = bg; g.fillRect(0, 0, px, px); }
+    g.fillStyle = fg;
+    m.forEach((row, y) => row.forEach((v, x) => { if (v) g.fillRect((x + border) * box, (y + border) * box, box, box); }));
+  }
+  function svgQr(m, box, border, fg, bg, transparent) {
+    const size = m.length + 2 * border; let d = '';
+    m.forEach((row, y) => row.forEach((v, x) => { if (v) d += `M${x + border},${y + border}h1v1h-1z`; }));
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size * box}" height="${size * box}" shape-rendering="crispEdges">` +
+      (transparent ? '' : `<rect width="100%" height="100%" fill="${bg}"/>`) + `<path fill="${fg}" d="${d}"/></svg>`;
+  }
+  const qOpts = () => ({ box: +$('qBox').value, border: +$('qBorder').value, fg: $('qFg').value, bg: $('qBg').value,
+    tr: $('qTr').checked && qs('input[name=qf]:checked').value !== 'jpg', fmt: qs('input[name=qf]:checked').value });
+  function qrRefresh() {
+    const k = qk();
+    $('qText').hidden = k !== 'text'; $('qWifi').hidden = k !== 'wifi'; $('qCard').hidden = k !== 'vcard';
+    $('qBoxV').textContent = $('qBox').value + ' px'; $('qBorderV').textContent = $('qBorder').value;
+    $('qTrRow').hidden = qs('input[name=qf]:checked').value === 'jpg';
+    const data = payload(), o = qOpts();
+    $('qErr').hidden = true; $('qCanvas').hidden = false; $('qGo').disabled = !data.trim();
+    if (!data.trim()) { $('qCanvas').hidden = true; return; }
+    try { drawQr($('qCanvas'), matrix(data), 8, o.border, o.fg, o.bg, o.tr); }
+    catch (_) { $('qCanvas').hidden = true; $('qErr').hidden = false; $('qErr').textContent = 'Слишком много текста для одного QR-кода'; $('qGo').disabled = true; }
+  }
+  $('toolQr').addEventListener('input', qrRefresh); $('toolQr').addEventListener('change', qrRefresh);
+  $('qGo').onclick = () => {
+    const o = qOpts(), m = matrix(payload());
+    const base = qk() === 'wifi' ? 'wifi_' + $('wS').value : qk() === 'vcard' ? 'contact_' + ($('cN').value || 'qr') : 'qr';
+    const name = base.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60) + '.' + o.fmt;
+    if (o.fmt === 'svg') { save(new Blob([svgQr(m, o.box, o.border, o.fg, o.bg, o.tr)], { type: 'image/svg+xml' }), name); return; }
+    const c = document.createElement('canvas');
+    drawQr(c, m, o.box, o.border, o.fg, o.bg, o.tr);
+    c.toBlob(b => save(b, name), o.fmt === 'jpg' ? 'image/jpeg' : 'image/png', .95);
+  };
+  qrRefresh();
+
+  /* ===================== списки файлов ===================== */
+  function fileList(listEl, emptyEl, pick, drop, accept, onChange, reorder) {
+    let files = [];
+    const render = () => {
+      listEl.innerHTML = '';
+      files.forEach((f, i) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span class="ext">${esc(extOf(f.name).slice(0, 4).toUpperCase())}</span><span class="name">${esc(f.name)}</span><span class="small muted">${fmtSize(f.size)}</span>` +
+          (reorder() && i ? '<button class="x up" title="Поднять выше" aria-label="Поднять выше">↑</button>' : '') +
+          '<button class="x del" title="Убрать" aria-label="Убрать">×</button>';
+        li.querySelector('.del').onclick = () => { files.splice(i, 1); render(); };
+        const up = li.querySelector('.up'); if (up) up.onclick = () => { [files[i - 1], files[i]] = [files[i], files[i - 1]]; render(); };
+        listEl.appendChild(li);
+      });
+      emptyEl.hidden = files.length > 0; onChange(files);
+    };
+    const add = fl => { for (const f of fl) if (accept(f)) files.push(f); render(); };
+    pick.addEventListener('change', () => { add(pick.files); pick.value = ''; });
+    ['dragenter', 'dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+    ['dragleave', 'drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('over'); }));
+    drop.addEventListener('drop', ev => add(ev.dataTransfer.files));
+    return { get: () => files, render };
+  }
+
+  /* ===================== картинки ===================== */
+  const iFmt = () => qs('input[name=if]:checked').value;
+  const imgs = fileList($('iList'), $('iEmpty'), $('iPick'), $('iDrop'), f => f.type.startsWith('image/') || /\.(heic|heif|avif|webp)$/i.test(f.name),
+    fs => { $('iGo').disabled = !fs.length; }, () => false);
+  const syncImg = () => { $('iQRow').hidden = iFmt() === 'image/png'; $('iQV').textContent = $('iQ').value; };
+  $('toolImg').addEventListener('input', syncImg); $('toolImg').addEventListener('change', syncImg); syncImg();
+  async function convertImage(f, type, q, max) {
+    let bmp;
+    try { bmp = await createImageBitmap(f, { imageOrientation: 'from-image' }); }
+    catch (_) {   // старый Safari: через <img>
+      bmp = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('Браузер не умеет открывать этот формат')); im.src = URL.createObjectURL(f); });
+    }
+    let w = bmp.width, h = bmp.height;
+    if (max && Math.max(w, h) > max) { const k = max / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    if (type === 'image/jpeg') { g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); }   // прозрачность в JPG станет белой
+    g.imageSmoothingQuality = 'high'; g.drawImage(bmp, 0, 0, w, h);
+    const blob = await new Promise(r => c.toBlob(r, type, q / 100));
+    if (!blob || blob.type !== type) throw new Error('Этот браузер не умеет сохранять в ' + type.split('/')[1].toUpperCase());
+    return blob;
+  }
+  $('iGo').onclick = async () => {
+    const files = imgs.get(), type = iFmt(), ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[type];
+    const q = +$('iQ').value, max = +$('iMax').value || 0, out = [], errs = [];
+    $('iGo').disabled = true;
+    for (let i = 0; i < files.length; i++) {
+      $('iStatus').innerHTML = `<span class="small">Конвертирую ${i + 1} из ${files.length}…</span>`;
+      try { out.push([files[i].name.replace(/\.[^.]+$/, '') + '.' + ext, await convertImage(files[i], type, q, max)]); }
+      catch (e) { errs.push(`<b>${esc(files[i].name)}</b>: ${esc(e.message)}`); }
+    }
+    $('iGo').disabled = false;
+    const before = files.reduce((s, f) => s + f.size, 0), after = out.reduce((s, [, b]) => s + b.size, 0);
+    if (out.length === 1) save(out[0][1], out[0][0]);
+    else if (out.length) { const z = new JSZip(); out.forEach(([n, b]) => z.file(n, b)); save(await z.generateAsync({ type: 'blob' }), 'images.zip'); }
+    $('iStatus').innerHTML = (out.length ? `<div class="result small">Готово: ${out.length} из ${files.length}. Было ${fmtSize(before)}, стало ${fmtSize(after)}.</div>` : '') +
+      (errs.length ? `<ul class="errs">${errs.map(e => `<li>${e}</li>`).join('')}</ul>` : '');
+  };
+
+  /* ===================== PDF ===================== */
+  const pOp = () => qs('input[name=po]:checked').value;
+  const pdfs = fileList($('pList'), $('pEmpty'), $('pPick'), $('pDrop'), f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf', syncPdf, () => pOp() === 'merge');
+  function syncPdf() {
+    const op = pOp(), n = pdfs ? pdfs.get().length : 0;
+    $('pRangeRow').hidden = !['extract', 'rotate', 'split'].includes(op); $('pAngleRow').hidden = op !== 'rotate';
+    $('pRange').placeholder = op === 'extract' ? 'например 1-3, 5, 8-' : 'все';
+    $('pGo').textContent = { merge: 'Склеить', extract: 'Вытащить', split: 'Разделить', rotate: 'Повернуть' }[op];
+    $('pGo').disabled = op === 'merge' ? n < 2 : n < 1;
+  }
+  $('pOps').addEventListener('change', () => { pdfs.render(); syncPdf(); });
+  function ranges(spec, total) {
+    spec = (spec || '').replace(/\s/g, '').replace(/[–—]/g, '-');
+    if (!spec) return [...Array(total).keys()];
+    const out = [];
+    for (const part of spec.split(',').filter(Boolean)) {
+      const m = part.match(/^(\d*)-(\d*)$|^(\d+)$/);
+      if (!m) throw new Error(`Не понял страницы «${part}»`);
+      const a = m[3] ? +m[3] : +(m[1] || 1), b = m[3] ? +m[3] : +(m[2] || total);
+      if (a < 1 || b < a) throw new Error(`Неверный диапазон «${part}»`);
+      if (a > total) throw new Error(`Страницы ${a} нет: в документе их ${total}`);
+      for (let i = a; i <= Math.min(b, total); i++) out.push(i - 1);
+    }
+    return out;
+  }
+  async function load(f) {
+    try { return await PDFLib.PDFDocument.load(await f.arrayBuffer()); }
+    catch (e) { throw new Error(/encrypt/i.test(e.message) ? 'PDF защищён паролем: снять его можно в полной версии' : 'Не открылся как PDF'); }
+  }
+  $('pGo').onclick = async () => {
+    const files = pdfs.get(), op = pOp(), { PDFDocument, degrees } = PDFLib, st = $('pStatus');
+    $('pGo').disabled = true; st.innerHTML = '<span class="small">Работаю…</span>';
+    try {
+      const base = files[0].name.replace(/\.pdf$/i, '');
+      if (op === 'merge') {
+        const out = await PDFDocument.create();
+        for (const f of files) { const d = await load(f); (await out.copyPages(d, d.getPageIndices())).forEach(p => out.addPage(p)); }
+        save(new Blob([await out.save()], { type: 'application/pdf' }), base + '_merged.pdf');
+        result(st, `Склеено. Файлов: ${files.length}, страниц: ${out.getPageCount()}.`);
+      } else {
+        const z = new JSZip(); let made = 0;
+        for (const f of files) {
+          const d = await load(f), stem = f.name.replace(/\.pdf$/i, ''), idx = ranges($('pRange').value, d.getPageCount());
+          if (op === 'rotate') {
+            const set = new Set(idx);
+            d.getPages().forEach((p, i) => { if (set.has(i)) p.setRotation(degrees((p.getRotation().angle + +$('pAngle').value) % 360)); });
+            z.file(stem + '_rotated.pdf', await d.save()); made++;
+          } else if (op === 'extract') {
+            const out = await PDFDocument.create();
+            (await out.copyPages(d, idx)).forEach(p => out.addPage(p));
+            z.file(stem + '_pages.pdf', await out.save()); made++;
+          } else {
+            const w = String(d.getPageCount()).length;
+            for (const i of idx) {
+              const out = await PDFDocument.create(); out.addPage((await out.copyPages(d, [i]))[0]);
+              z.file(`${stem}_p${String(i + 1).padStart(w, '0')}.pdf`, await out.save()); made++;
+            }
+          }
+        }
+        const names = Object.keys(z.files);
+        if (names.length === 1) save(new Blob([await z.file(names[0]).async('uint8array')], { type: 'application/pdf' }), names[0]);
+        else save(await z.generateAsync({ type: 'blob' }), base + '_pdf.zip');
+        result(st, `Готово, файлов: ${made}.`);
+      }
+    } catch (e) { result(st, esc(e.message), false); }
+    syncPdf();
+  };
+  syncPdf();
+
+  /* офлайн и «на главный экран» */
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>

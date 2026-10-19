@@ -1,0 +1,13 @@
+services:
+  universal:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      # пароль на вход (логин любой). Без него сервер открыт всем в сети.
+      - APP_PASSWORD=change-me
+    volumes:
+      - universal-data:/data
+    restart: unless-stopped
+volumes:
+  universal-data:

@@ -1,0 +1,6 @@
+flask>=3.0
+pillow>=10.0
+qrcode>=7.4
+yt-dlp>=2025.1.1
+pypdf>=4.0
+cryptography>=3.1
