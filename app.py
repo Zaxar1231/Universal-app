@@ -1,12 +1,24 @@
 """
-Веб-морда для poppler: пакетная конвертация PDF в JPG / PNG / TIFF / WebP / SVG / PS / EPS.
+Universal: локальный комбайн для файлов.
+
+    конвертер форматов (как vert.sh): картинки, аудио, видео, документы
+    PDF в картинки, фото в A4, фото в PDF
+    редактор видео и аудио на ffmpeg (обрезка, склейка, сжатие, GIF ...)
+    скачивание видео и музыки с YouTube, TikTok, VK и ~1800 сайтов (yt-dlp)
+    QR-коды: один или пачкой из .txt/.csv/.docx
 
 Запуск:
-    pip install flask
+    pip install -r requirements.txt
     python app.py
 Открыть: http://localhost:5000
+
+Переменные окружения:
+    HOST (127.0.0.1), PORT (5000), APP_PASSWORD (пароль на вход, логин любой),
+    WORK_DIR (где хранить задания, по умолчанию временная папка системы)
 """
+import hmac
 import io
+import mimetypes
 import os
 import re
 import shutil
@@ -17,16 +29,34 @@ import uuid
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from urllib.parse import quote
 
-from flask import Flask, jsonify, render_template, request, send_file, abort
+from flask import Flask, Response, jsonify, render_template, request, send_file, abort
 
 import converters as conv
+import downloader
+import editor
+import qrtools
+from tasks import Task, TaskManager
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024  # 2 ГБ на запрос
 
-WORK_ROOT = Path(tempfile.gettempdir()) / "popple_jobs"
-WORK_ROOT.mkdir(exist_ok=True)
+WORK_ROOT = Path(os.environ.get("WORK_DIR") or Path(tempfile.gettempdir()) / "universal_jobs")
+WORK_ROOT.mkdir(parents=True, exist_ok=True)
+TASKS = TaskManager(workers=int(os.environ.get("TASK_WORKERS", "2")))
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+
+
+@app.before_request
+def require_password():
+    """Если задан APP_PASSWORD, пускаем только с ним (HTTP Basic, логин любой)."""
+    if not APP_PASSWORD:
+        return None
+    auth = request.authorization
+    if auth and hmac.compare_digest((auth.password or "").encode(), APP_PASSWORD.encode()):
+        return None
+    return Response("Нужен пароль", 401, {"WWW-Authenticate": 'Basic realm="Universal", charset="UTF-8"'})
 
 # формат -> (расширение, аргументы pdftoppm / pdftocairo)
 # pdftoppm умеет png, jpeg, tiff. Остальное делаем через pdftocairo.
@@ -58,6 +88,9 @@ def purge_old_jobs(max_age: int = 3600) -> None:
     """Удаляем задания старше часа, чтобы temp не разрастался."""
     now = time.time()
     for d in WORK_ROOT.iterdir():
+        task = TASKS.get(d.name)
+        if task and task.status in ("queued", "running"):
+            continue   # долгая задача ещё работает
         try:
             if d.is_dir() and now - d.stat().st_mtime > max_age:
                 shutil.rmtree(d, ignore_errors=True)
@@ -590,6 +623,7 @@ def apply_name_template(template: str, name: str) -> str:
 def formats():
     """Какие категории и форматы умеет сервер (нужно интерфейсу для выпадающих списков)."""
     eng = conv.engines()
+    eng.update({"ytdlp": downloader.available(), "qrcode": qrtools.available()})
     cats = {}
     for name, table in conv.CATEGORIES.items():
         tg = conv.targets_for(name)
@@ -599,6 +633,8 @@ def formats():
             "native": tg["native"],
             "cross": tg["cross"],
         }
+    cats["edit"] = {"inputs": editor.INPUTS, "outputs": editor.VIDEO_OUT + editor.AUDIO_OUT,
+                    "native": editor.VIDEO_OUT, "cross": editor.AUDIO_OUT}
     return jsonify({"engines": eng, "categories": cats})
 
 
@@ -694,33 +730,30 @@ def download(job: str):
     out_dir = WORK_ROOT / job / "out"
     if not out_dir.is_dir():
         abort(404)
-    if request.args.get("raw") == "1":
-        items = [p for p in out_dir.iterdir() if p.is_file() and not p.name.startswith(".")]
-        if len(items) == 1:
-            import mimetypes
-            from urllib.parse import quote
-            one = items[0]
-            resp = send_file(one, mimetype=mimetypes.guess_type(one.name)[0] or "application/octet-stream",
-                             as_attachment=True, download_name="file")
-            resp.headers["Content-Disposition"] = (
-                f'attachment; filename="{ascii_fallback(one.stem)}{one.suffix}"; '
-                f"filename*=UTF-8''{quote(one.name, safe='')}"
-            )
-            return resp
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
-        for p in sorted(out_dir.iterdir()):
-            if p.is_file():
+    items = sorted(p for p in out_dir.iterdir() if p.is_file() and not p.name.startswith("."))
+    if request.args.get("raw") == "1" and len(items) == 1:
+        one = items[0]
+        resp = send_file(one, mimetype=mimetypes.guess_type(one.name)[0] or "application/octet-stream",
+                         as_attachment=True, download_name="file")
+        resp.headers["Content-Disposition"] = (
+            f'attachment; filename="{ascii_fallback(one.stem)}{one.suffix}"; '
+            f"filename*=UTF-8''{quote(one.name, safe='')}"
+        )
+        return resp
+    # ZIP собираем на диске: скачанные видео бывают по несколько гигабайт
+    bundle = WORK_ROOT / job / "bundle.zip"
+    if not bundle.exists() or bundle.stat().st_mtime < max((p.stat().st_mtime for p in items), default=0):
+        tmp = bundle.with_suffix(".tmp")
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED, allowZip64=True) as zf:
+            for p in items:
                 zf.write(p, p.name)
-    buf.seek(0)
+        tmp.replace(bundle)
     name_file = WORK_ROOT / job / "name.txt"
     try:
         base = safe_archive_name(name_file.read_text(encoding="utf-8"))
     except OSError:
         base = "converted"
-    # Flask сам кодирует не-ASCII имя (filename*=UTF-8''...), кириллица доедет корректно
-    from urllib.parse import quote
-    resp = send_file(buf, mimetype="application/zip", as_attachment=True, download_name="converted.zip")
+    resp = send_file(bundle, mimetype="application/zip", as_attachment=True, download_name="converted.zip")
     resp.headers["Content-Disposition"] = (
         f'attachment; filename="{ascii_fallback(base)}.zip"; '
         f"filename*=UTF-8''{quote(base + '.zip', safe='')}"
@@ -728,8 +761,204 @@ def download(job: str):
     return resp
 
 
+# ---------- Фоновые задачи (редактор, скачивание) ----------
+
+def new_job(archive_raw: str = "") -> tuple[str, Path, str]:
+    purge_old_jobs()
+    job_id = uuid.uuid4().hex[:12]
+    job_dir = WORK_ROOT / job_id
+    (job_dir / "in").mkdir(parents=True)
+    (job_dir / "out").mkdir(parents=True)
+    return job_id, job_dir, remember_archive_name(job_dir, archive_raw)
+
+
+def save_uploads(files, in_dir: Path) -> list[tuple[Path, str]]:
+    """Сохраняет загруженные файлы с уникальными безопасными именами."""
+    used: dict[str, int] = {}
+    out = []
+    for f in files:
+        ext = Path(f.filename).suffix.lower()
+        if not re.fullmatch(r"\.[a-z0-9]{1,6}", ext):
+            ext = ".bin"
+        stem = safe_stem(f.filename)
+        n = used.get(stem, 0)
+        used[stem] = n + 1
+        if n:
+            stem = f"{stem}_{n}"
+        src = in_dir / f"{stem}{ext}"
+        f.save(src)
+        out.append((src, stem))
+    return out
+
+
+@app.route("/api/task/<tid>")
+def task_status(tid: str):
+    task = TASKS.get(tid)
+    if not task:
+        return jsonify({"error": "Задача не найдена (сервер перезапускался?)"}), 404
+    return jsonify(task.to_dict())
+
+
+@app.route("/api/task/<tid>/cancel", methods=["POST"])
+def task_cancel(tid: str):
+    task = TASKS.get(tid)
+    if not task:
+        return jsonify({"error": "Задача не найдена"}), 404
+    task.cancel()
+    return jsonify(task.to_dict())
+
+
+# ---------- Редактор видео и аудио (ffmpeg) ----------
+
+@app.route("/api/edit", methods=["POST"])
+def edit():
+    if not shutil.which("ffmpeg"):
+        return jsonify({"error": "ffmpeg не найден в PATH. Установи его и перезапусти сервер."}), 500
+    try:
+        opts = editor.read_opts(request.form)
+    except conv.ConvertError as e:
+        return jsonify({"error": str(e)}), 400
+    files = [f for f in request.files.getlist("files") if f.filename]
+    if not files:
+        return jsonify({"error": "Файлы не выбраны"}), 400
+    bad = [f.filename for f in files if Path(f.filename).suffix.lower().lstrip(".") not in editor.INPUTS]
+    if bad:
+        return jsonify({"error": f"Это не аудио и не видео: {', '.join(bad[:3])}"}), 400
+
+    job_id, job_dir, archive = new_job(request.form.get("archive_name", "") or "edited")
+    items = save_uploads(files, job_dir / "in")
+    template = request.form.get("name_template", "%name%_edit")
+    items = [(src, apply_name_template(template, stem)) for src, stem in items]
+    merge_name = safe_stem(request.form.get("merge_name") or "") if request.form.get("merge_name") else "merged"
+    task = Task(job_id, "edit", job_dir, archive)
+    TASKS.submit(task, lambda t: editor.run_edit_task(t, items, opts, merge_name))
+    return jsonify(task.to_dict())
+
+
+@app.route("/api/probe", methods=["POST"])
+def probe_media():
+    """Длительность и размеры файла (для подсказок в редакторе)."""
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"error": "Нет файла"}), 400
+    with tempfile.TemporaryDirectory(dir=WORK_ROOT) as d:
+        p = Path(d) / ("probe" + Path(f.filename).suffix.lower()[:7])
+        f.save(p)
+        try:
+            return jsonify(editor.probe(p))
+        except conv.ConvertError as e:
+            return jsonify({"error": str(e)}), 400
+
+
+# ---------- Скачивание видео (yt-dlp) ----------
+
+def _cookiefile(job_dir: Path | None) -> Path | None:
+    f = request.files.get("cookies")
+    if not f or not f.filename:
+        return None
+    target = (job_dir or WORK_ROOT) / f".cookies_{uuid.uuid4().hex[:8]}.txt"
+    f.save(target)
+    return target
+
+
+@app.route("/api/dl/info", methods=["POST"])
+def dl_info():
+    if not downloader.available():
+        return jsonify({"error": "yt-dlp не установлен: pip install yt-dlp"}), 500
+    urls = downloader.extract_urls(request.form.get("urls", ""))[:20]
+    if not urls:
+        return jsonify({"error": "Не нашёл ссылок. Вставь адрес, начинающийся с http"}), 400
+    cookie = _cookiefile(None)
+    items = []
+    try:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            def one(u):
+                try:
+                    return downloader.probe_url(u, cookie)
+                except downloader.DownloadFail as e:
+                    return {"url": u, "error": str(e)}
+            items = list(pool.map(one, urls))
+    finally:
+        if cookie:
+            cookie.unlink(missing_ok=True)
+    return jsonify({"items": items})
+
+
+@app.route("/api/dl", methods=["POST"])
+def dl():
+    if not downloader.available():
+        return jsonify({"error": "yt-dlp не установлен: pip install yt-dlp"}), 500
+    urls = downloader.extract_urls(request.form.get("urls", ""))
+    if not urls:
+        return jsonify({"error": "Не нашёл ссылок. Вставь адрес, начинающийся с http"}), 400
+    if len(urls) > 200:
+        return jsonify({"error": "Не больше 200 ссылок за раз"}), 400
+    opts = downloader.read_opts(request.form)
+    job_id, job_dir, archive = new_job(request.form.get("archive_name", "") or "downloads")
+    cookie = _cookiefile(job_dir)
+    task = Task(job_id, "dl", job_dir, archive)
+    TASKS.submit(task, lambda t: downloader.run_download_task(t, urls, opts, cookie))
+    return jsonify(task.to_dict())
+
+
+# ---------- QR-коды ----------
+
+@app.route("/api/qr", methods=["POST"])
+def qr_one():
+    """Один QR. ?download=1 отдаёт файлом, иначе картинкой для предпросмотра."""
+    try:
+        st = qrtools.read_style(request.form)
+        data = qrtools.payload_from_form(request.form)
+        body = qrtools.render(data, st)
+    except qrtools.QRError as e:
+        return jsonify({"error": str(e)}), 400
+    resp = Response(body, mimetype=qrtools.MIME[st["format"]])
+    if request.args.get("download") == "1":
+        resp.headers["Content-Disposition"] = f'attachment; filename="qr.{st["format"]}"'
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@app.route("/api/qr/bulk", methods=["POST"])
+def qr_bulk():
+    try:
+        st = qrtools.read_style(request.form)
+        column = (request.form.get("column") or "").strip() or None
+        links = qrtools.read_lines(request.form.get("links", ""))
+        for f in request.files.getlist("files"):
+            if f.filename:
+                links += qrtools.read_links(f.filename, f.read(), column)
+    except qrtools.QRError as e:
+        return jsonify({"error": str(e)}), 400
+    if request.form.get("dedupe", "1") == "1":
+        links = list(dict.fromkeys(links))
+    if not links:
+        return jsonify({"error": "Ссылок не найдено"}), 400
+    if len(links) > 20000:
+        return jsonify({"error": "Не больше 20 000 кодов за раз"}), 400
+
+    dirs = request.form.get("archive_name", "")
+    job_id, job_dir, archive = new_job(dirs or "qr_codes")
+    ok, failed = qrtools.bulk(links, job_dir / "out", st)
+    shutil.rmtree(job_dir / "in", ignore_errors=True)
+    return jsonify({"job": job_id, "archive": archive, "total": len(links), "done": ok,
+                    "failed": failed, "files": ok + 1})
+
+
+@app.route("/api/engines")
+def engines_status():
+    eng = conv.engines()
+    eng.update({"poppler": all(poppler_ok().values()), "ytdlp": downloader.available(),
+                "ytdlp_version": downloader.version(), "qrcode": qrtools.available()})
+    return jsonify(eng)
 
 
 if __name__ == "__main__":
-    print("Poppler:", poppler_ok())
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("PORT", "5000"))
+    print("Движки:", {**conv.engines(), "poppler": all(poppler_ok().values()),
+                      "yt-dlp": downloader.version() or False, "qrcode": qrtools.available()})
+    if host not in ("127.0.0.1", "localhost") and not APP_PASSWORD:
+        print("Внимание: сервер открыт в сеть без пароля. Задай APP_PASSWORD.")
+    print(f"Открой http://{'localhost' if host in ('0.0.0.0', '127.0.0.1') else host}:{port}")
+    app.run(host=host, port=port, debug=False, threaded=True)
