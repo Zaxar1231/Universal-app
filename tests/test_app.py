@@ -623,3 +623,141 @@ def test_engine_asset_priority():
         assert engines._resolve_url(spec) == "u7z"
     finally:
         engines._assets_from_api = orig
+
+
+# ---------------------------------------------------------------- QR в документе
+
+def make_qr_docx() -> bytes:
+    """Word-файл со всеми видами ссылок: гиперссылка, поле HYPERLINK, адрес текстом."""
+    W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    body = (
+        '<w:p><w:r><w:t xml:space="preserve">Сайт: </w:t></w:r>'
+        '<w:hyperlink r:id="rId5"><w:r><w:t>наш сайт</w:t></w:r></w:hyperlink>'
+        '<w:r><w:t>.</w:t></w:r></w:p>'
+        '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>'
+        '<w:r><w:instrText xml:space="preserve"> HYPERLINK "https://field.example.com/x" </w:instrText></w:r>'
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>поле</w:t></w:r>'
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+        '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Текстом https://plain.example.com/a?b=1&amp;c=2, и дальше.</w:t></w:r></w:p>'
+        '<w:p><w:hyperlink r:id="rId6"><w:r><w:t>почта</w:t></w:r></w:hyperlink></w:p>'
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("[Content_Types].xml",
+                   '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                   '<Default Extension="xml" ContentType="application/xml"/>'
+                   '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>')
+        z.writestr("word/_rels/document.xml.rels",
+                   '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                   '<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://site.example.com/" TargetMode="External"/>'
+                   '<Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="mailto:a@b.c" TargetMode="External"/>'
+                   '</Relationships>')
+        z.writestr("word/document.xml", f'<w:document xmlns:w="{W}" xmlns:r="{R}"><w:body>{body}</w:body></w:document>')
+    return buf.getvalue()
+
+
+def test_qrdoc_docx_scan_and_replace(tmp_path):
+    import qrdoc
+    from xml.etree import ElementTree as ET
+    src = tmp_path / "doc.docx"
+    src.write_bytes(make_qr_docx())
+    links = {l["url"]: l for l in qrdoc.scan(src, tmp_path / "w")["links"]}
+    assert set(links) == {"https://site.example.com/", "https://field.example.com/x", "https://plain.example.com/a?b=1&c=2"}
+    assert links["https://site.example.com/"]["text"] == "наш сайт" and links["https://field.example.com/x"]["text"] == "поле"
+
+    out = tmp_path / "out"; out.mkdir()
+    st = qrtools.read_style({})
+    dst, n = qrdoc.apply(src, out, "doc", set(links) - {"https://field.example.com/x"}, "replace", 3, st, tmp_path / "w")
+    assert n == 2
+    z = zipfile.ZipFile(dst)
+    xml = z.read("word/document.xml").decode()
+    ET.fromstring(xml)                                           # XML не сломан
+    assert xml.count("<w:drawing>") == 2
+    assert "наш сайт" not in xml and "HYPERLINK" in xml           # гиперссылка заменена, поле оставлено
+    import re as _re
+    texts = "".join(_re.findall(r"<w:t[^>]*>([^<]*)</w:t>", xml))
+    assert "Текстом , и дальше." in texts and "plain.example.com" not in texts   # адрес ушёл, текст вокруг остался
+    assert '<w:b/>' in xml                                       # форматирование куска текста сохранилось
+    assert "mailto" in z.read("word/_rels/document.xml.rels").decode()
+    assert 'Extension="png"' in z.read("[Content_Types].xml").decode()
+    pngs = [n for n in z.namelist() if n.startswith("word/media/")]
+    assert len(pngs) == 2 and all(z.read(p)[:4] == b"\x89PNG" for p in pngs)
+    assert [l["url"] for l in qrdoc.scan(dst, tmp_path / "w2")["links"]] == ["https://field.example.com/x"]
+
+
+def test_qrdoc_docx_after_keeps_links(tmp_path):
+    import qrdoc
+    src = tmp_path / "doc.docx"
+    src.write_bytes(make_qr_docx())
+    out = tmp_path / "out"; out.mkdir()
+    dst, n = qrdoc.apply(src, out, "doc", {"https://field.example.com/x", "https://plain.example.com/a?b=1&c=2"},
+                         "after", 2, qrtools.read_style({}), tmp_path / "w")
+    xml = zipfile.ZipFile(dst).read("word/document.xml").decode()
+    assert n == 2 and xml.count("<w:drawing>") == 2
+    assert "https://plain.example.com/a?b=1&amp;c=2</w:t>" in xml and "поле" in xml
+    assert len(qrdoc.scan(dst, tmp_path / "w2")["links"]) == 3   # все ссылки на месте
+
+
+def test_qrdoc_markdown(tmp_path):
+    import qrdoc
+    md = ("# Заголовок\n\n[Сайт](https://a.example.com/x \"title\") и <https://b.example.com>.\n\n"
+          "Голая https://c.example.com/p, дальше. ![картинка](https://img.example.com/i.png)\n\n"
+          "```\nhttps://code.example.com\n```\n\nКод `https://inline.example.com` тоже.\n")
+    src = tmp_path / "note.md"
+    src.write_text(md, encoding="utf-8")
+    urls = [l["url"] for l in qrdoc.scan(src, tmp_path)["links"]]
+    assert urls == ["https://a.example.com/x", "https://b.example.com", "https://c.example.com/p"]
+    out = tmp_path / "out"; out.mkdir()
+    dst, n = qrdoc.apply(src, out, "note", set(urls), "replace", 3, qrtools.read_style({}), tmp_path / "w")
+    text = dst.read_text(encoding="utf-8")
+    assert n == 3 and text.count('<img src="note_qr_') == 3
+    assert "https://code.example.com" in text and "https://inline.example.com" in text
+    assert "![картинка](https://img.example.com/i.png)" in text and ", дальше." in text
+    assert sorted(p.name for p in out.iterdir()) == ["note_qr.md", "note_qr_001.png", "note_qr_002.png", "note_qr_003.png"]
+
+
+def test_qrdoc_html(tmp_path):
+    import qrdoc
+    src = tmp_path / "page.html"
+    src.write_text('<p>Смотри <a class="x" href="https://a.example.com/?q=1&amp;r=2">тут</a> и '
+                   '<a href="https://b.example.com">там</a>.</p>', encoding="utf-8")
+    links = qrdoc.scan(src, tmp_path)["links"]
+    assert [(l["url"], l["text"]) for l in links] == [("https://a.example.com/?q=1&r=2", "тут"), ("https://b.example.com", "там")]
+    out = tmp_path / "out"; out.mkdir()
+    dst, n = qrdoc.apply(src, out, "page", {"https://a.example.com/?q=1&r=2"}, "replace", 3, qrtools.read_style({}), tmp_path / "w")
+    html_out = dst.read_text(encoding="utf-8")
+    assert n == 1 and html_out.count("data:image/png;base64,") == 1 and ">там</a>" in html_out and ">тут<" not in html_out
+
+
+def test_qrdoc_endpoints(client):
+    import json as _json
+    data = make_qr_docx()
+    r = client.post("/api/qrdoc/scan", data={"file": (io.BytesIO(data), "Отчёт.docx")}, content_type="multipart/form-data")
+    urls = [l["url"] for l in r.get_json()["links"]]
+    assert r.status_code == 200 and len(urls) == 3
+    r = client.post("/api/qrdoc/apply", data={"file": (io.BytesIO(data), "Отчёт.docx"), "urls": _json.dumps(urls),
+                                              "mode": "replace", "size_cm": "2.5"}, content_type="multipart/form-data")
+    d = r.get_json()
+    assert r.status_code == 200 and d["done"] == 3 and d["single_file"] == "Отчёт_qr.docx"
+    got = client.get(f"/api/download/{d['job']}?raw=1")
+    assert zipfile.ZipFile(io.BytesIO(got.data)).read("word/document.xml").count(b"<w:drawing>") == 3
+    got.close()
+
+    bad = client.post("/api/qrdoc/scan", data={"file": (io.BytesIO(b"x"), "a.pdf")}, content_type="multipart/form-data")
+    assert bad.status_code == 400 and "не поддерживается" in bad.get_json()["error"]
+    none = client.post("/api/qrdoc/apply", data={"file": (io.BytesIO(data), "a.docx"), "urls": "[]"}, content_type="multipart/form-data")
+    assert none.status_code == 400
+    broken = client.post("/api/qrdoc/scan", data={"file": (io.BytesIO(b"not zip"), "a.docx")}, content_type="multipart/form-data")
+    assert broken.status_code == 400 and "повреждён" in broken.get_json()["error"]
+
+
+@pytest.mark.skipif(not shutil.which("pandoc"), reason="нет pandoc")
+def test_qrdoc_odt_via_docx(tmp_path):
+    import qrdoc
+    md = tmp_path / "s.md"
+    md.write_text("[Ссылка](https://odt.example.com)\n", encoding="utf-8")
+    subprocess.run(["pandoc", str(md), "-o", str(tmp_path / "s.odt")], check=True)
+    out = tmp_path / "out"; out.mkdir()
+    dst, n = qrdoc.apply(tmp_path / "s.odt", out, "s", {"https://odt.example.com"}, "replace", 3, qrtools.read_style({}), tmp_path / "w")
+    assert dst.suffix == ".docx" and n == 1
