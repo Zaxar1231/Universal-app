@@ -941,3 +941,16 @@ def test_cobalt_skipped_for_playlists():
     o = downloader.read_opts({"cobalt_url": "http://c:9000/", "playlist": "1"})
     assert o["cobalt_url"] and o["playlist"]
     assert downloader.read_opts({"cobalt_url": "javascript:alert(1)"})["cobalt_url"] == ""
+
+
+def test_dl_read_events_windows_newlines_and_partial_tail(tmp_path):
+    """Файл событий с \\r\\n (как пишет Windows в текстовом режиме) и недописанной последней строкой."""
+    p = tmp_path / "ev.jsonl"
+    p.write_bytes(b'{"message": "a"}\r\n{"done": "u"}\r\n\r\n{"progress": 0.5, "mess')
+    evs, pos = downloader.read_events(p, 0)
+    assert evs == [{"message": "a"}, {"done": "u"}]
+    with p.open("ab") as f:
+        f.write(b'age": "b"}\n')
+    evs, pos2 = downloader.read_events(p, pos)
+    assert evs == [{"progress": 0.5, "message": "b"}] and pos2 == p.stat().st_size
+    assert downloader.read_events(tmp_path / "none", 7) == ([], 7)

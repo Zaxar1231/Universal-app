@@ -442,11 +442,32 @@ def worker_main(args_file: str) -> None:
     events = Path(a["events"])
 
     def emit(ev):
-        with events.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(ev, ensure_ascii=True) + "\n")
+        # двоичный режим: в текстовом Windows пишет \r\n, и позиция чтения у родителя уезжает
+        with events.open("ab") as f:
+            f.write(json.dumps(ev, ensure_ascii=True).encode("ascii") + b"\n")
 
     _download_all(a["urls"], a["opts"], Path(a["out"]), Path(a["cookie"]) if a["cookie"] else None, emit)
     emit({"finished": True})
+
+
+def read_events(path: Path, pos: int) -> tuple[list[dict], int]:
+    """Новые целые строки событий начиная с байта pos; недописанный хвост дочитаем в следующий раз."""
+    if not path.exists():
+        return [], pos
+    with path.open("rb") as f:
+        f.seek(pos)
+        chunk = f.read()
+    cut = chunk.rfind(b"\n") + 1
+    events = []
+    for line in chunk[:cut].splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            events.append(json.loads(line))
+        except ValueError:
+            continue                          # битая строка не должна ронять всё скачивание
+    return events, pos + cut
 
 
 def run_download_task(task: Task, urls: list[str], o: dict, cookiefile: Path | None) -> None:
@@ -472,22 +493,15 @@ def run_download_task(task: Task, urls: list[str], o: dict, cookiefile: Path | N
             if task.cancel_event.is_set():
                 kill_tree(proc)
                 raise Cancelled()
-            if events.exists():
-                with events.open("r", encoding="utf-8") as f:
-                    f.seek(pos)
-                    chunk = f.read()
-                    # читаем только целые строки, хвост дочитаем в следующий раз
-                    cut = chunk.rfind("\n") + 1
-                    pos += cut                     # в файле только ASCII (ensure_ascii), байты = символы
-                for line in chunk[:cut].splitlines():
-                    ev = json.loads(line)
-                    if "progress" in ev or "message" in ev:
-                        task.update(ev.get("progress"), ev.get("message"))
-                    if "done" in ev:
-                        task.done += 1
-                    if "failed" in ev:
-                        task.failed.append({"name": ev["failed"], "error": ev["error"]})
-                    finished = finished or ev.get("finished", False)
+            evs, pos = read_events(events, pos)
+            for ev in evs:
+                if "progress" in ev or "message" in ev:
+                    task.update(ev.get("progress"), ev.get("message"))
+                if "done" in ev:
+                    task.done += 1
+                if "failed" in ev:
+                    task.failed.append({"name": ev["failed"], "error": ev["error"]})
+                finished = finished or ev.get("finished", False)
             if not alive:
                 break
             time.sleep(0.3)
