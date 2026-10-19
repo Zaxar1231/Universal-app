@@ -39,6 +39,7 @@ import downloader
 import editor
 import engines as engine_store
 import pdftools
+import qrdoc
 import qrtools
 from tasks import Task, TaskManager
 
@@ -960,6 +961,55 @@ def qr_one():
         resp.headers["Content-Disposition"] = f'attachment; filename="qr.{st["format"]}"'
     resp.headers["Cache-Control"] = "no-store"
     return resp
+
+
+def _qrdoc_upload() -> tuple[Path, Path]:
+    f = request.files.get("file")
+    if not f or not f.filename:
+        raise qrdoc.DocError("Выбери документ")
+    qrdoc.kind_of(Path(f.filename))               # сразу понятная ошибка про формат
+    job_id, job_dir, _ = new_job(Path(f.filename).stem)
+    src = job_dir / "in" / (safe_stem(f.filename) + Path(f.filename).suffix.lower())
+    f.save(src)
+    return src, job_dir
+
+
+@app.route("/api/qrdoc/scan", methods=["POST"])
+def qrdoc_scan():
+    """Какие ссылки есть в документе (для списка с галочками)."""
+    try:
+        src, job_dir = _qrdoc_upload()
+        result = qrdoc.scan(src, job_dir / "work")
+    except qrdoc.DocError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        if "job_dir" in locals():
+            shutil.rmtree(job_dir, ignore_errors=True)
+    return jsonify(result)
+
+
+@app.route("/api/qrdoc/apply", methods=["POST"])
+def qrdoc_apply():
+    """Тот же документ, где выбранные ссылки заменены QR-кодами (или QR стоит после них)."""
+    import json as _json
+    try:
+        selected = set(_json.loads(request.form.get("urls") or "[]"))
+        size_cm = float(request.form.get("size_cm") or 3)
+        st = qrtools.read_style(request.form)
+        src, job_dir = _qrdoc_upload()
+        dst, n = qrdoc.apply(src, job_dir / "out", src.stem, selected,
+                             request.form.get("mode", "replace"), size_cm, st, job_dir / "work")
+    except (qrdoc.DocError, qrtools.QRError) as e:
+        return jsonify({"error": str(e)}), 400
+    except (ValueError, TypeError):
+        return jsonify({"error": "Настройки заданы неверно"}), 400
+    shutil.rmtree(job_dir / "in", ignore_errors=True)
+    outs = [p for p in (job_dir / "out").iterdir() if p.is_file()]
+    resp = {"job": job_dir.name, "archive": remember_archive_name(job_dir, src.stem + "_qr"),
+            "total": n, "done": n, "failed": [], "files": len(outs)}
+    if len(outs) == 1:
+        resp["single_file"] = dst.name
+    return jsonify(resp)
 
 
 @app.route("/api/qr/bulk", methods=["POST"])

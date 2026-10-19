@@ -339,6 +339,7 @@ ul.files .up { width: 40px; height: 40px; }
               <input type="radio" name="qrk" id="qrk2" value="wifi"><label for="qrk2">Wi‑Fi</label>
               <input type="radio" name="qrk" id="qrk3" value="vcard"><label for="qrk3">Контакт</label>
               <input type="radio" name="qrk" id="qrk4" value="list"><label for="qrk4">Пачка</label>
+              <input type="radio" name="qrk" id="qrk5" value="doc"><label for="qrk5">Документ</label>
             </div>
             <div id="qrText" class="sect">
               <textarea class="ta" id="qrData" placeholder="Ссылка или любой текст"></textarea>
@@ -365,6 +366,9 @@ ul.files .up { width: 40px; height: 40px; }
             <div id="qrList" class="sect" hidden>
               <textarea class="ta code" id="qrLinks" spellcheck="false" placeholder="https://site.ru/1&#10;https://site.ru/2&#10;# строки с решёткой пропускаются"></textarea>
               <p class="hint">Или перетащи ниже файлы .txt, .csv, .docx: из Word достаются гиперссылки, кнопки-ссылки и адреса в тексте. Каждый код станет отдельным файлом, плюс index.csv с соответствием.</p>
+            </div>
+            <div id="qrDoc" class="sect" hidden>
+              <p class="hint" style="margin:0">Перетащи ниже документ: Word (.docx), Markdown, HTML, а также ODT, RTF, DOC, EPUB. Найду в нём все ссылки, отметь нужные, и получишь тот же документ, где они стали QR-кодами.</p>
             </div>
             <div class="qrprev" id="qrPrev"><span class="t-body-m muted">Здесь появится QR-код</span></div>
           </div>
@@ -398,6 +402,7 @@ ul.files .up { width: 40px; height: 40px; }
           </div>
         </div>
         </div>
+        <div class="card" id="qrDocLinks" style="margin-top:16px;padding:16px 16px 8px 24px;display:grid;gap:8px" hidden></div>
       </section>
 
       <aside class="card high settings" aria-label="Настройки">
@@ -678,7 +683,7 @@ ul.files .up { width: 40px; height: 40px; }
 
         <!-- QR -->
         <div id="qrBox" class="sect" hidden>
-          <div class="field">
+          <div class="field" id="qrFmtField">
             <span class="lbl t-label-l">Формат файла</span>
             <div class="chips">
               {% for v in ['png','svg','jpg'] %}<input type="radio" name="qrf" id="qrf-{{ v }}" value="{{ v }}" {% if v == 'png' %}checked{% endif %}><label for="qrf-{{ v }}">{{ v|upper }}</label>{% endfor %}
@@ -706,6 +711,20 @@ ul.files .up { width: 40px; height: 40px; }
             <label class="tf"><span>Цвет фона</span><input type="color" id="qrBg" value="#ffffff"></label>
           </div>
           <label class="sw" id="qrTrRow"><span class="t-body-m">Прозрачный фон</span><input type="checkbox" id="qrTr"><span class="track"></span></label>
+          <div id="qrDocOpts" class="sect" hidden>
+            <div class="field">
+              <span class="lbl t-label-l">Что сделать со ссылкой</span>
+              <div class="seg">
+                <input type="radio" name="qdm" id="qdm1" value="replace" checked><label for="qdm1">Заменить на QR</label>
+                <input type="radio" name="qdm" id="qdm2" value="after"><label for="qdm2">QR после ссылки</label>
+              </div>
+            </div>
+            <div class="slider-row">
+              <div class="top"><label class="t-label-l muted" for="qdSize">Размер QR в документе</label><span class="t-label-l" id="qdSizeVal">3 см</span></div>
+              <input type="range" id="qdSize" min="1.5" max="8" step="0.5" value="3">
+              <p class="hint">Для печати удобно 2,5–4 см: телефон уверенно читает с расстояния вытянутой руки.</p>
+            </div>
+          </div>
           <div id="qrListOpts" class="sect" hidden>
             <label class="sw"><span class="t-body-m">Убрать повторы</span><input type="checkbox" id="qrDedupe" checked><span class="track"></span></label>
             <label class="tf"><span>Колонка CSV со ссылками (если есть заголовок)</span><input type="text" id="qrCol" placeholder="например url" autocomplete="off"></label>
@@ -844,7 +863,7 @@ ul.files .up { width: 40px; height: 40px; }
     const m = mode();
     if (m === 'pdf' || m === 'pdft') return /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
     if (isPhotoish()) return IMG_RE.test(f.name) || f.type.startsWith('image/');
-    if (m === 'qr') return /\.(txt|csv|docx)$/i.test(f.name);
+    if (m === 'qr') return qrKind() === 'doc' ? /\.(docx|md|markdown|html?|odt|rtf|doc|epub)$/i.test(f.name) : /\.(txt|csv|docx)$/i.test(f.name);
     if (m === 'dl') return false;
     return !!caps && caps.categories[m].inputs.includes(extOf(f.name));
   }
@@ -856,6 +875,7 @@ ul.files .up { width: 40px; height: 40px; }
       if (have.has(key(f))) continue;
       have.add(key(f)); files.push(f);
     }
+    if (mode() === 'qr' && qrKind() === 'doc' && files.length > 1) files = files.slice(-1);   // документ один
     render();
     if (skipped) setStatus(`<ul class="errs"><li>Пропущено файлов другого типа: ${skipped}. В режиме «${MODES[mode()].title}» они не подходят.</li></ul>`);
   }
@@ -885,6 +905,7 @@ ul.files .up { width: 40px; height: 40px; }
     clearBtn.disabled = files.length === 0;
     if (isUni()) refreshUniTargets();
     if (mode() === 'edit') { $('mergeRow').hidden = files.length < 2; updatePreview(); syncEdit(); }
+    if (mode() === 'qr' && qrKind() === 'doc') scanDoc();
     updateGo();
   }
 
@@ -897,7 +918,8 @@ ul.files .up { width: 40px; height: 40px; }
     if (m === 'dl') { ok = /https?:\/\//i.test($('urls').value); label = 'Скачать'; }
     if (m === 'qr') {
       const k = qrKind();
-      if (k === 'list') {
+      if (k === 'doc') { ok = files.length > 0 && docSel.size > 0; label = docSel.size ? `Вставить QR-коды: ${docSel.size}` : 'Вставить QR-коды'; }
+      else if (k === 'list') {
         const n = $('qrLinks').value.split('\n').filter(l => l.trim() && !l.trim().startsWith('#')).length;
         ok = n > 0 || files.length > 0; label = files.length ? 'Сделать QR-коды' : (n ? `Сделать QR-коды: ${n}` : 'Сделать QR-коды');
       } else { ok = !!qrPayloadReady(); label = 'Скачать QR-код'; }
@@ -1040,7 +1062,7 @@ ul.files .up { width: 40px; height: 40px; }
     edit: 'Обрезка, склейка, кадрирование, поворот, скорость, громкость, сжатие до нужного размера и GIF. Работает ffmpeg.',
     dl: 'Видео и музыка с YouTube, TikTok, VK, Rutube и ещё ~1800 сайтов. Качается сюда, на этот компьютер.',
     pdft: 'Склеить, разделить, вытащить страницы, повернуть, сжать, поставить или снять пароль.',
-    qr: 'Один код для ссылки, Wi‑Fi или контакта, либо сотни кодов разом из списка.',
+    qr: 'Один код для ссылки, Wi‑Fi или контакта, сотни кодов разом из списка или QR вместо ссылок прямо в документе.',
   };
   function applyMode() {
     const m = mode(), k = MODES[m].kind;
@@ -1056,7 +1078,7 @@ ul.files .up { width: 40px; height: 40px; }
     $('dpiHint').textContent = m === 'topdf' ? '200 хватит для печати и почты, 300 для качественной печати (файл тяжелее).' : m === 'photo' ? 'Для печати на A4 нужно 300 DPI.' : k === 'pdf' ? '150 хватит для экрана, 300 для печати.' : '';
     files = []; statusEl.hidden = true; if (k === 'uni' && caps) renderUniChips();
     $('dlPane').hidden = m !== 'dl'; $('qrPane').hidden = m !== 'qr';
-    $('filesPane').hidden = m === 'dl' || (m === 'qr' && qrKind() !== 'list');
+    $('filesPane').hidden = m === 'dl' || (m === 'qr' && !['list', 'doc'].includes(qrKind()));
     $('previewCard').hidden = true; cancelBtn.hidden = true;
     const pb = $('engineBanner'); pb.hidden = true; pb.className = 'banner';
     if (caps) {
@@ -1117,6 +1139,7 @@ ul.files .up { width: 40px; height: 40px; }
   /* ---------- отправка ---------- */
   goBtn.onclick = () => {
     const m = mode(), k = MODES[m].kind, fd = new FormData();
+    if (k === 'qr' && qrKind() === 'doc') { qrDocApply(); return; }
     if (k === 'qr' && qrKind() !== 'list') { qrDownload(); return; }
     if (!files.length && !['dl', 'qr'].includes(k)) return;
     files.forEach(f => fd.append('files', f, f.name));
@@ -1381,8 +1404,14 @@ ul.files .up { width: 40px; height: 40px; }
   function syncQr() {
     const k = qrKind();
     $('qrText').hidden = k !== 'text'; $('qrWifi').hidden = k !== 'wifi'; $('qrCard').hidden = k !== 'vcard'; $('qrList').hidden = k !== 'list';
-    $('qrPrev').hidden = k === 'list'; $('qrListOpts').hidden = k !== 'list';
-    $('filesPane').hidden = k !== 'list';
+    const many = k === 'list' || k === 'doc';
+    $('qrPrev').hidden = many; $('qrListOpts').hidden = k !== 'list';
+    $('qrDoc').hidden = k !== 'doc'; $('qrDocOpts').hidden = k !== 'doc'; $('qrFmtField').hidden = k === 'doc';
+    $('dropTitle').textContent = k === 'doc' ? 'Перетащи документ сюда' : 'Перетащи списки ссылок сюда'; $('qrDocLinks').hidden = k !== 'doc' || !docLinks;
+    $('filesPane').hidden = !many;
+    $('qdSizeVal').textContent = String(+$('qdSize').value).replace('.', ',') + ' см'; paintSlider($('qdSize'));
+    if (k === 'doc') { const acc = '.docx,.md,.markdown,.html,.htm,.odt,.rtf,.doc,.epub'; picker.accept = acc; dirPicker.accept = acc; }
+    else if (k === 'list') { picker.accept = '.txt,.csv,.docx'; dirPicker.accept = '.txt,.csv,.docx'; }
     const jpg = qs('input[name=qrf]:checked').value === 'jpg';
     $('qrTrRow').hidden = jpg; if (jpg) $('qrTr').checked = false;
     $('qrBoxVal').textContent = $('qrBox_').value + ' px'; $('qrBorderVal').textContent = $('qrBorder').value;
@@ -1413,7 +1442,7 @@ ul.files .up { width: 40px; height: 40px; }
   let qrTimer = 0, qrSeq = 0, qrImgUrl = null;
   function qrRefresh() {
     syncQr(); clearTimeout(qrTimer);
-    if (qrKind() === 'list') return;
+    if (['list', 'doc'].includes(qrKind())) return;
     qrTimer = setTimeout(() => {
       const seq = ++qrSeq, box = $('qrPrev');
       if (!qrPayloadReady()) { box.innerHTML = '<span class="t-body-m muted">Здесь появится QR-код</span>'; return; }
@@ -1433,8 +1462,58 @@ ul.files .up { width: 40px; height: 40px; }
   let lastQrKind = 'text';
   function applyQrKind() {
     const k = qrKind(); if (k === lastQrKind) return;
-    if ((k === 'list') !== (lastQrKind === 'list')) { files = []; render(); }
+    const fileKind = x => x === 'list' || x === 'doc' ? x : 'none';
+    if (fileKind(k) !== fileKind(lastQrKind)) { files = []; docLinks = null; docSel.clear(); render(); }
     lastQrKind = k; statusEl.hidden = true; syncQr();
+  }
+  /* QR в документе: найти ссылки, отметить нужные, получить документ с QR */
+  let docLinks = null, docSel = new Set(), docFileKey = '';
+  function renderDocLinks() {
+    const box = $('qrDocLinks');
+    box.hidden = !docLinks || qrKind() !== 'doc';
+    if (!docLinks) return;
+    if (!docLinks.length) { box.innerHTML = '<span class="t-body-m">В документе не нашлось ни одной ссылки http(s).</span>'; updateGo(); return; }
+    box.innerHTML = `<div class="row" style="justify-content:space-between"><span class="t-title-m">Ссылки в документе: ${docLinks.length}</span>` +
+      `<span><button class="btn text state" id="qdAll" type="button">Все</button><button class="btn text state" id="qdNone" type="button">Ни одной</button></span></div>` +
+      '<ul class="files" style="max-height:360px">' + docLinks.map((l, i) =>
+        `<li><label class="sw" style="flex:1;min-width:0;justify-content:flex-start;gap:12px"><input type="checkbox" data-i="${i}" ${docSel.has(l.url) ? 'checked' : ''}>` +
+        `<span class="track" style="flex:none"></span><span style="min-width:0;display:grid"><span class="name" title="${esc(l.url)}" style="font-family:ui-monospace,monospace;font-size:.8125rem">${esc(l.url)}</span>` +
+        `<span class="hint">${l.text ? esc(l.text) + ' · ' : ''}${l.count > 1 ? 'встречается ' + l.count + ' раза' : 'один раз'}</span></span></label></li>`).join('') + '</ul>';
+    box.querySelectorAll('input[data-i]').forEach(cb => cb.onchange = () => {
+      const u = docLinks[+cb.dataset.i].url; cb.checked ? docSel.add(u) : docSel.delete(u); updateGo();
+    });
+    $('qdAll').onclick = () => { docLinks.forEach(l => docSel.add(l.url)); renderDocLinks(); };
+    $('qdNone').onclick = () => { docSel.clear(); renderDocLinks(); };
+    updateGo();
+  }
+  function scanDoc() {
+    const f = files[0], k = f ? key(f) : '';
+    if (k === docFileKey) return;
+    docFileKey = k; docLinks = null; docSel.clear(); statusEl.hidden = true;
+    if (!f) { renderDocLinks(); updateGo(); return; }
+    const box = $('qrDocLinks'); box.hidden = false;
+    box.innerHTML = '<span class="t-body-m">Ищу ссылки…</span><div class="progress busy"><i></i></div>';
+    const fd = new FormData(); fd.append('file', f, f.name);
+    fetch('/api/qrdoc/scan', { method: 'POST', body: fd }).then(r => r.json()).then(d => {
+      if (key(files[0] || {}) !== k) return;
+      if (d.error) { box.innerHTML = `<span class="t-body-m" style="color:var(--md-error)">${esc(d.error)}</span>`; return; }
+      docLinks = d.links; docLinks.forEach(l => docSel.add(l.url)); renderDocLinks();
+    }).catch(() => { box.innerHTML = '<span class="t-body-m">Не удалось связаться с приложением.</span>'; });
+  }
+  function qrDocApply() {
+    const f = files[0]; if (!f || !docSel.size) return;
+    const fd = new FormData(); qrStyle(fd);
+    fd.set('format', 'png');
+    fd.append('file', f, f.name); fd.append('urls', JSON.stringify([...docSel]));
+    fd.append('mode', qs('input[name=qdm]:checked').value); fd.append('size_cm', $('qdSize').value);
+    busy = true; updateGo(); setStatus('<span class="t-body-m">Вставляю QR-коды…</span><div class="progress busy"><i></i></div>');
+    fetch('/api/qrdoc/apply', { method: 'POST', body: fd }).then(r => r.json()).then(d => {
+      busy = false; updateGo();
+      if (d.error) { setStatus(`<ul class="errs"><li>${esc(d.error)}</li></ul>`); return; }
+      const one = !!d.single_file;
+      setStatus(`<div class="result"><span class="t-body-m">Готово: вставлено QR-кодов ${d.done}${one ? '' : '. Markdown идёт архивом вместе с картинками'}.</span>` +
+        `<a class="btn filled state" href="/api/download/${d.job}${one ? '?raw=1' : ''}" download>Скачать ${esc(one ? d.single_file : d.archive)}</a></div>`);
+    }).catch(() => { busy = false; updateGo(); setStatus('<ul class="errs"><li>Не удалось связаться с приложением.</li></ul>'); });
   }
   async function qrDownload() {
     const st = qs('input[name=qrf]:checked').value;

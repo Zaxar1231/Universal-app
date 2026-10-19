@@ -15,7 +15,7 @@ a = Analysis(
     datas=[(ROOT + "/templates", "templates")],
     # yt-dlp подгружает экстракторы динамически, а app импортирует модули по имени
     hiddenimports=collect_submodules("yt_dlp")
-    + ["app", "converters", "downloader", "editor", "engines", "pdftools", "qrtools", "tasks", "py7zr"],
+    + ["app", "converters", "downloader", "editor", "engines", "pdftools", "qrdoc", "qrtools", "tasks", "py7zr"],
     excludes=["tkinter", "pytest", "playwright"],
 )
 pyz = PYZ(a.pure)
