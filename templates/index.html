@@ -678,6 +678,18 @@ ul.files .up { width: 40px; height: 40px; }
             <p class="hint" id="dlCookiesHint">Нужны для приватных видео, 18+ и Instagram. Выгрузи расширением «Get cookies.txt LOCALLY». Файл используется один раз и удаляется.</p>
           </div>
           <div class="field">
+            <span class="lbl t-label-l">Сеть и VPN</span>
+            <label class="tf"><span>Прокси</span><select id="netProxy">
+              <option value="auto">Как в системе (авто)</option>
+              <option value="none">Без прокси, напрямую</option>
+              <option value="custom">Свой адрес…</option></select></label>
+            <label class="tf" id="netProxyRow" hidden><span>Адрес прокси</span><input type="text" id="netProxyUrl" placeholder="socks5://127.0.0.1:10808" spellcheck="false" autocomplete="off"></label>
+            <label class="sw"><span class="txt"><span class="t-body-m">Только IPv4</span><span class="hint">VPN часто ломает IPv6, и тогда скачивание висит. Выключай, только если без VPN сайт не открывается.</span></span>
+              <input type="checkbox" id="netIpv4" checked><span class="track"></span></label>
+            <div class="row"><button class="btn text state" id="netCheck" type="button">Проверить сеть</button></div>
+            <div id="netState" class="hint" hidden></div>
+          </div>
+          <div class="field">
             <span class="lbl t-label-l">Сервер cobalt (необязательно)</span>
             <label class="tf"><span>Адрес</span><input type="url" id="cobaltUrl" placeholder="http://localhost:9000/" spellcheck="false" autocomplete="off"></label>
             <label class="tf"><span>API-ключ, если сервер его требует</span><input type="password" id="cobaltKey" autocomplete="off"></label>
@@ -1415,7 +1427,46 @@ ul.files .up { width: 40px; height: 40px; }
     fd.append('metadata', $('dlMeta').checked ? '1' : '0');
     if ($('dlCookies').files[0]) fd.append('cookies', $('dlCookies').files[0]);
     fd.append('cobalt_url', $('cobaltUrl').value.trim()); fd.append('cobalt_key', $('cobaltKey').value.trim());
+    netForm(fd);
   }
+  // сеть: прокси и IPv4 запоминаем у себя
+  function netForm(fd) {
+    const v = $('netProxy').value;
+    fd.append('proxy', v === 'custom' ? ($('netProxyUrl').value.trim() || 'auto') : v);
+    fd.append('ipv4', $('netIpv4').checked ? '1' : '0');
+    return fd;
+  }
+  try {
+    $('netProxy').value = localStorage.getItem('netProxy') || 'auto';
+    $('netProxyUrl').value = localStorage.getItem('netProxyUrl') || '';
+    $('netIpv4').checked = localStorage.getItem('netIpv4') !== '0';
+  } catch (_) {}
+  const netSync = () => {
+    $('netProxyRow').hidden = $('netProxy').value !== 'custom';
+    try {
+      localStorage.setItem('netProxy', $('netProxy').value); localStorage.setItem('netProxyUrl', $('netProxyUrl').value.trim());
+      localStorage.setItem('netIpv4', $('netIpv4').checked ? '1' : '0');
+    } catch (_) {}
+  };
+  ['netProxy', 'netProxyUrl', 'netIpv4'].forEach(id => $(id).addEventListener('change', netSync));
+  netSync();
+  $('netCheck').onclick = () => {
+    const box = $('netState'), btn = $('netCheck');
+    box.hidden = false; btn.disabled = true; box.textContent = 'Проверяю сайты…';
+    fetch('/api/dl/netcheck', { method: 'POST', body: netForm(new FormData()) }).then(r => r.json()).then(d => {
+      btn.disabled = false;
+      if (d.error) { box.textContent = d.error; return; }
+      const how = d.proxy ? `через прокси ${esc(d.proxy)}` : 'напрямую';
+      const sys = d.system_proxy ? `В системе прописан прокси ${esc(d.system_proxy)}.` : 'Прокси в системе нет (VPN, если включён, работает как сетевой адаптер).';
+      const rows = d.sites.map(x => `<li>${x.ok ? '✅' : '❌'} ${esc(x.name)}: ${x.ok ? x.ms + ' мс' : esc(x.error)}</li>`).join('');
+      let tip = '';
+      const bad = d.sites.filter(x => !x.ok).length;
+      if (bad === d.sites.length && d.proxy) tip = 'Ничего не открылось через прокси: попробуй «Без прокси» или проверь, что VPN-клиент запущен.';
+      else if (bad === d.sites.length) tip = 'Ничего не открылось: проверь интернет и VPN. Если VPN-клиент работает в режиме прокси, впиши его адрес (обычно socks5://127.0.0.1:10808 или http://127.0.0.1:10809, смотри в настройках клиента).';
+      else if (bad) tip = 'Часть сайтов не открылась: их блокирует провайдер или, наоборот, не пускает страна сервера VPN. Для российских сайтов VPN лучше выключить или включить для них раздельное туннелирование.';
+      box.innerHTML = `${sys} Проверка ${how}${d.ipv4 ? ', только IPv4' : ''}. IPv6 ${d.ipv6 ? 'работает' : 'не работает'}.<ul style="margin:6px 0 0;padding-left:18px">${rows}</ul>${tip ? '<p style="margin:6px 0 0">' + tip + '</p>' : ''}`;
+    }).catch(() => { btn.disabled = false; box.textContent = 'Нет связи с приложением'; });
+  };
   // сервер cobalt запоминаем (только у себя в браузере/приложении)
   try { $('cobaltUrl').value = localStorage.getItem('cobaltUrl') || ''; $('cobaltKey').value = localStorage.getItem('cobaltKey') || ''; } catch (_) {}
   ['cobaltUrl', 'cobaltKey'].forEach(id => $(id).addEventListener('change', () => {
@@ -1477,14 +1528,14 @@ ul.files .up { width: 40px; height: 40px; }
     }).catch(() => { box.innerHTML = '<span class="t-body-m">Нет связи с приложением.</span>'; });
   };
   $('cobaltCheck').onclick = () => {
-    const fd = new FormData(); fd.append('cobalt_url', $('cobaltUrl').value.trim()); fd.append('cobalt_key', $('cobaltKey').value.trim());
+    const fd = netForm(new FormData()); fd.append('cobalt_url', $('cobaltUrl').value.trim()); fd.append('cobalt_key', $('cobaltKey').value.trim());
     $('cobaltState').textContent = 'Проверяю…';
     fetch('/api/dl/cobalt-check', { method: 'POST', body: fd }).then(r => r.json()).then(d => {
       $('cobaltState').textContent = d.error ? d.error : `Работает: cobalt ${d.version}, сайтов: ${d.services.length}`;
     }).catch(() => { $('cobaltState').textContent = 'Нет связи с приложением'; });
   };
   $('peekUrls').onclick = () => {
-    const fd = new FormData(); fd.append('urls', $('urls').value);
+    const fd = netForm(new FormData()); fd.append('urls', $('urls').value);
     if ($('dlCookies').files[0]) fd.append('cookies', $('dlCookies').files[0]);
     const box = $('dlInfo'); box.hidden = false;
     box.innerHTML = '<span class="t-body-m">Смотрю ссылки…</span><div class="progress busy"><i></i></div>';
