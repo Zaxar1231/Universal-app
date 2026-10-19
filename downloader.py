@@ -7,11 +7,22 @@ yt-dlp часто обновляется, потому что сайты мен�
 """
 from __future__ import annotations
 
+import json
+import os
 import re
 import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
 
-from tasks import Cancelled, Task
+if __name__ == "__main__" and "--worker" in sys.argv:
+    # отдельный процесс скачивания: подключаем свежий yt-dlp до его импорта
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import engines
+    engines.activate()
+
+from tasks import Cancelled, Task, kill_tree
 
 try:
     import yt_dlp  # type: ignore
@@ -125,6 +136,10 @@ def probe_url(url: str, cookiefile: Path | None = None) -> dict:
 
 def build_opts(o: dict, out_dir: Path, cookiefile: Path | None) -> dict:
     ydl = _base_opts(cookiefile)
+    # видео кусками (HLS/DASH: VK, Rutube, YouTube) качаем в 4 потока, а не по одному
+    ydl["concurrent_fragment_downloads"] = 4
+    # JavaScript-движок для YouTube: без него сайт режет скорость и прячет форматы
+    ydl["js_runtimes"] = {"deno": {}, "node": {}, "bun": {}}
     ydl["outtmpl"] = {"default": str(out_dir / "%(title).120B [%(id)s].%(ext)s")}
     ydl["noplaylist"] = not o["playlist"]
     ydl["overwrites"] = True
@@ -190,17 +205,12 @@ def read_opts(form) -> dict:
     return o
 
 
-def run_download_task(task: Task, urls: list[str], o: dict, cookiefile: Path | None) -> None:
-    if not yt_dlp:
-        raise DownloadFail("yt-dlp не установлен: pip install yt-dlp")
-    out = task.out_dir
+def _download_all(urls: list[str], o: dict, out: Path, cookiefile: Path | None, emit) -> None:
+    """Основной цикл; emit(dict) сообщает прогресс. Выполняется в отдельном процессе."""
     n = len(urls)
-    task.total = n
     state = {"i": 0, "title": ""}
 
     def hook(d):
-        if task.cancel_event.is_set():
-            raise DownloadCancelled("cancel")
         i = state["i"]
         info = d.get("info_dict") or {}
         title = info.get("title") or state["title"]
@@ -212,48 +222,127 @@ def run_download_task(task: Task, urls: list[str], o: dict, cookiefile: Path | N
             frac = (d.get("downloaded_bytes") or 0) / total if total else 0
             speed = d.get("speed") or 0
             sp = f" · {speed / 1048576:.1f} МБ/с" if speed else ""
-            task.update((i + frac * 0.95) / n, f"Качаю{pl}: {title}{sp}")
+            emit({"progress": (i + frac * 0.95) / n, "message": f"Качаю{pl}: {title}{sp}"})
         elif d["status"] == "finished":
-            task.update((i + 0.95) / n, f"Обрабатываю{pl}: {title}")
+            emit({"progress": (i + 0.95) / n, "message": f"Обрабатываю{pl}: {title}"})
 
     def pp_hook(d):
-        if task.cancel_event.is_set():
-            raise DownloadCancelled("cancel")
         if d.get("status") == "started":
             name = {"Merger": "Склеиваю видео и звук", "ExtractAudio": "Достаю звук",
                     "EmbedThumbnail": "Вставляю обложку", "Metadata": "Записываю теги"}.get(
                 (d.get("postprocessor") or "").replace("FFmpeg", ""), "Обрабатываю")
-            task.update(None, f"{name}: {state['title']}")
+            emit({"message": f"{name}: {state['title']}"})
 
     ydl_opts = build_opts(o, out, cookiefile)
     ydl_opts["progress_hooks"] = [hook]
     ydl_opts["postprocessor_hooks"] = [pp_hook]
     for i, url in enumerate(urls):
-        task.check_cancel()
         state["i"], state["title"] = i, url
-        task.update(i / n, f"Ссылка {i + 1} из {n}: получаю данные…")
+        emit({"progress": i / n, "message": f"Ссылка {i + 1} из {n}: получаю данные…"})
         logger = _Quiet()
         ydl_opts["logger"] = logger
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
-            task.done += 1
-        except DownloadCancelled:
-            raise Cancelled()
+            emit({"done": url})
         except DownloadError as e:
-            if task.cancel_event.is_set():
-                raise Cancelled()
-            task.failed.append({"name": url, "error": _human_error(logger.last_error or str(e))})
+            emit({"failed": url, "error": _human_error(logger.last_error or str(e))})
         except Exception as e:  # одна ссылка не должна валить всю пачку
-            task.failed.append({"name": url, "error": _human_error(str(e))})
-    # хвосты: недокачанные куски, а также обложки и субтитры, которые уже вшиты в файл
+            emit({"failed": url, "error": _human_error(str(e))})
+
+
+def _cleanup(out: Path, cookiefile: Path | None) -> None:
+    """Хвосты: недокачанные куски (.part, фрагменты), а также обложки и субтитры, уже вшитые в файл."""
     side = (".vtt", ".srt", ".ass", ".webp", ".jpg", ".png")
-    media = [q for q in out.iterdir() if q.is_file() and q.suffix.lower() not in side + (".part", ".ytdl")]
-    for p in list(out.iterdir()):
-        suf = p.suffix.lower()
-        if suf in (".part", ".ytdl") or (suf in side and any(p.name.startswith(m.stem + ".") for m in media)):
-            p.unlink(missing_ok=True)
+    junk = (".part", ".ytdl", ".temp")
+    is_junk = lambda p: p.suffix.lower() in junk or re.search(r"\.part-Frag\d+", p.name)
+    files = [q for q in out.iterdir() if q.is_file()] if out.is_dir() else []
+    media = [q for q in files if q.suffix.lower() not in side and not is_junk(q)]
+    for p in files:
+        if is_junk(p) or (p.suffix.lower() in side and any(p.name.startswith(m.stem + ".") for m in media)):
+            for _ in range(10):                  # Windows отпускает файл не сразу после kill
+                try:
+                    p.unlink(missing_ok=True)
+                    break
+                except PermissionError:
+                    time.sleep(0.2)
     if cookiefile:
         cookiefile.unlink(missing_ok=True)
+
+
+def worker_cmd(args_file: Path) -> list[str]:
+    """Как запустить отдельный процесс скачивания: из exe самим exe, иначе этим же Python."""
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--dl-worker", str(args_file)]
+    return [sys.executable, str(Path(__file__).resolve()), "--worker", str(args_file)]
+
+
+def worker_main(args_file: str) -> None:
+    a = json.loads(Path(args_file).read_text(encoding="utf-8"))
+    events = Path(a["events"])
+
+    def emit(ev):
+        with events.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(ev, ensure_ascii=True) + "\n")
+
+    _download_all(a["urls"], a["opts"], Path(a["out"]), Path(a["cookie"]) if a["cookie"] else None, emit)
+    emit({"finished": True})
+
+
+def run_download_task(task: Task, urls: list[str], o: dict, cookiefile: Path | None) -> None:
+    """Скачивание в отдельном процессе: «Отмена» убивает его сразу вместе с ffmpeg,
+    даже если yt-dlp завис на разборе страницы или склейке."""
+    if not yt_dlp:
+        raise DownloadFail("yt-dlp не установлен: pip install yt-dlp")
+    out = task.out_dir
+    task.total = len(urls)
+    events = task.job_dir / "dl_events.jsonl"
+    args = task.job_dir / "dl_args.json"
+    args.write_text(json.dumps({"urls": urls, "opts": o, "out": str(out), "events": str(events),
+                                "cookie": str(cookiefile) if cookiefile else ""}), encoding="utf-8")
+    log = (task.job_dir / "dl_worker.log").open("w", encoding="utf-8")
+    extra = {} if sys.platform == "win32" else {"start_new_session": True}   # своя группа: убить всё дерево
+    proc = subprocess.Popen(worker_cmd(args), stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                            cwd=str(task.job_dir), **extra)
+    task.proc = proc
+    pos, finished = 0, False
+    try:
+        while True:
+            alive = proc.poll() is None
+            if task.cancel_event.is_set():
+                kill_tree(proc)
+                raise Cancelled()
+            if events.exists():
+                with events.open("r", encoding="utf-8") as f:
+                    f.seek(pos)
+                    chunk = f.read()
+                    # читаем только целые строки, хвост дочитаем в следующий раз
+                    cut = chunk.rfind("\n") + 1
+                    pos += cut                     # в файле только ASCII (ensure_ascii), байты = символы
+                for line in chunk[:cut].splitlines():
+                    ev = json.loads(line)
+                    if "progress" in ev or "message" in ev:
+                        task.update(ev.get("progress"), ev.get("message"))
+                    if "done" in ev:
+                        task.done += 1
+                    if "failed" in ev:
+                        task.failed.append({"name": ev["failed"], "error": ev["error"]})
+                    finished = finished or ev.get("finished", False)
+            if not alive:
+                break
+            time.sleep(0.3)
+    finally:
+        task.proc = None
+        log.close()
+        if task.cancel_event.is_set():
+            _cleanup(out, cookiefile)
+    if not finished and not task.cancel_event.is_set():
+        tail = (task.job_dir / "dl_worker.log").read_text(encoding="utf-8", errors="replace").strip().splitlines()[-3:]
+        task.failed.append({"name": "загрузчик", "error": "Процесс скачивания упал: " + " / ".join(tail)[-300:]})
+    _cleanup(out, cookiefile)
     if not task.done and task.failed:
         raise DownloadFail(task.failed[0]["error"])
+
+
+if __name__ == "__main__" and "--worker" in sys.argv:
+    worker_main(sys.argv[sys.argv.index("--worker") + 1])

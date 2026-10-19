@@ -319,3 +319,9 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - Markdown: `[текст](url)`, `<url>`, голые URL; блоки кода, инлайн-код и картинки пропускаются; QR пишутся как `<img src="имя_qr_001.png" width height>` рядом с .md (результат — ZIP). HTML: `<a href>` → `<img src="data:image/png;base64,…">`.
 - ODT/RTF/DOC/EPUB сначала в DOCX через `converters.convert_document`.
 - Проверено: docx из pandoc и LibreOffice, ODT → docx; результат открывается в LibreOffice (PDF с 4 картинками QR), текст вокруг ссылок на месте.
+
+### 13.5 Загрузчик в отдельном процессе (v1.3.1)
+- `downloader.run_download_task` запускает `worker_cmd()`: из исходников `python downloader.py --worker args.json`, из exe/.app сам exe с `--dl-worker` (развилка в начале `desktop.main`). Воркер пишет события JSON-строками (ASCII) в `dl_events.jsonl`, родитель читает файл раз в 0,3 с; stdout не используется, потому что в exe без консоли его может не быть.
+- «Отмена»: `tasks.kill_tree()` — на Windows `taskkill /T /F`, на POSIX `killpg` своей группы (воркер стартует с `start_new_session`; если группа общая с приложением, убивается только сам процесс, иначе погибло бы приложение). После отмены `_cleanup()` удаляет `.part`/фрагменты.
+- `build_opts`: `concurrent_fragment_downloads=4`, `js_runtimes` deno/node/bun. В каталоге движков `deno` (ссылка по платформе, `chmod +x` вне Windows), `yt-dlp-ejs` в requirements, vendor.txt и PyInstaller (`collect_data_files`). Баннер в режиме «Скачать видео», если deno нет.
+- `desktop.py --smoke` проверяет и воркер (`dl_worker`).

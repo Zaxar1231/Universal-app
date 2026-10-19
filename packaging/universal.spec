@@ -4,7 +4,7 @@
 import os
 import sys
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 ROOT = SPECPATH + "/.."
 VERSION = os.environ.get("UNIVERSAL_VERSION", "0.0.0")
@@ -12,9 +12,10 @@ VERSION = os.environ.get("UNIVERSAL_VERSION", "0.0.0")
 a = Analysis(
     [ROOT + "/desktop.py"],
     pathex=[ROOT],
-    datas=[(ROOT + "/templates", "templates")],
+    # yt_dlp_ejs: JS-скрипты, которыми deno решает задачки YouTube
+    datas=[(ROOT + "/templates", "templates")] + collect_data_files("yt_dlp_ejs"),
     # yt-dlp подгружает экстракторы динамически, а app импортирует модули по имени
-    hiddenimports=collect_submodules("yt_dlp")
+    hiddenimports=collect_submodules("yt_dlp") + collect_submodules("yt_dlp_ejs")
     + ["app", "converters", "downloader", "editor", "engines", "pdftools", "qrdoc", "qrtools", "tasks", "py7zr"],
     excludes=["tkinter", "pytest", "playwright"],
 )
