@@ -19,3 +19,26 @@ jobs:
         run: pip install -r requirements.txt pytest
       - name: Тесты
         run: python -m pytest -q
+
+  windows:
+    # тесты на Windows с движками, которые ставит само приложение (проверяет и ссылки на них)
+    runs-on: windows-latest
+    env:
+      UNIVERSAL_HOME: ${{ github.workspace }}\..\universal-home
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Зависимости
+        run: pip install -r packaging/requirements-desktop.txt pytest
+      - name: Движки через engines.py
+        shell: bash
+        run: |
+          python engines.py install ffmpeg pandoc poppler imagemagick ytdlp
+          python -c "import json,engines;[print(v) for k,v in json.load(open(engines.engines_dir()/'paths.json')).items() if k!='ytdlp']" >> "$GITHUB_PATH"
+      - name: Тесты
+        run: python -m pytest -q
+      - name: Самопроверка desktop.py
+        run: python desktop.py --smoke

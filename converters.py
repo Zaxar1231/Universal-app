@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 # ----------------------------------------------------------------------------
@@ -123,10 +124,17 @@ def _which(*names: str) -> str | None:
     return None
 
 
+def _magick() -> str | None:
+    """ImageMagick. На Windows только magick.exe: convert.exe там системная утилита для дисков."""
+    if sys.platform == "win32":
+        return _which("magick")
+    return _which("magick", "convert")
+
+
 def engines() -> dict:
     return {
         "ffmpeg": bool(_which("ffmpeg")),
-        "imagemagick": bool(_which("magick", "convert")),
+        "imagemagick": bool(_magick()),
         "pandoc": bool(_which("pandoc")),
         "libreoffice": bool(_which("soffice", "libreoffice")),
     }
@@ -361,7 +369,7 @@ def convert_media(src: Path, dst_dir: Path, stem: str, to: str, *,
 def convert_image(src: Path, dst_dir: Path, stem: str, to: str, *,
                   quality: int = 90, keep_metadata: bool = True,
                   density: int = 150, resize: int = 0) -> Path:
-    exe = _which("magick") or _which("convert")
+    exe = _magick()
     if not exe:
         raise ConvertError("ImageMagick не найден в PATH")
     to = to.lower()
@@ -415,7 +423,7 @@ def _libreoffice_convert(src: Path, dst_dir: Path, target: str) -> Path | None:
     if not soffice:
         return None
     profile = dst_dir / ".lo_profile"
-    res = _run([soffice, f"-env:UserInstallation=file://{profile}", "--headless",
+    res = _run([soffice, f"-env:UserInstallation={profile.resolve().as_uri()}", "--headless",
                 "--convert-to", target, "--outdir", str(dst_dir), str(src)], 300)
     shutil.rmtree(profile, ignore_errors=True)
     out = dst_dir / f"{src.stem}.{target}"

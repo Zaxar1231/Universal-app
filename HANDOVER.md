@@ -301,3 +301,9 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - **`/api/universal` теперь тоже задача** (прогресс по числу готовых файлов, отмена снимает ещё не начатые). Ответ: `{task, ...}`, результат через `/api/task/<id>`.
 - Картинки: поле `resize` (px по длинной стороне, только уменьшение, `-resize NxN>`).
 - run.bat/run.sh при каждом запуске делают `pip install -r requirements.txt`, чтобы у старых установок появились новые зависимости.
+
+### 13.2 Windows-приложение (v1.1.0)
+- `desktop.py`: werkzeug-сервер на случайном порту 127.0.0.1 в потоке + окно pywebview (WebView2), `ALLOW_DOWNLOADS`, `private_mode=False` (localStorage с цветом живёт), логи в `%LOCALAPPDATA%\Universal\universal.log`, если нет консоли. На Windows подменён `subprocess.Popen` с `CREATE_NO_WINDOW`, иначе ffmpeg мигает консолью. `--smoke` проверяет собранный exe (код выхода).
+- `engines.py`: каталог движков (BtbN ffmpeg gpl, pandoc, poppler-windows, ImageMagick portable, zipapp yt-dlp), установка в фоне через `POST /api/engines/install/<name>`, `paths.json` с папками для PATH, `activate()` до импорта app. Свежий yt-dlp подключается через `sys.path` при следующем запуске. Автоустановка только на Windows (`UNIVERSAL_ENGINES_ANYOS=1` для тестов).
+- Интерфейс: если `engines.can_install`, вместо «установи и перезапусти» показывает кнопку «Скачать <движок>» с прогрессом и перезагружает страницу.
+- Сборка: `packaging/universal.spec` (onedir, без консоли, иконка), `packaging/installer.iss` (per-user, докачка WebView2 при отсутствии), job `windows` в release.yml; job `windows` в tests.yml ставит движки через engines.py и гоняет pytest на Windows.

@@ -453,3 +453,92 @@ def test_password(monkeypatch, client):
     import base64
     ok = {"Authorization": "Basic " + base64.b64encode(b"me:secret").decode()}
     assert client.get("/api/engines", headers=ok).status_code == 200
+
+
+# ---------------------------------------------------------------- движки (настольная версия)
+
+@pytest.fixture()
+def engine_env(tmp_path, monkeypatch):
+    import engines
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("UNIVERSAL_ENGINES_ANYOS", "1")
+    srv_dir = tmp_path / "srv"
+    srv_dir.mkdir()
+    import functools
+    import http.server
+    import threading
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(srv_dir))
+    handler.log_message = lambda *a: None
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield engines, srv_dir, f"http://127.0.0.1:{srv.server_port}"
+    srv.shutdown()
+
+
+def test_engine_install_and_activate(engine_env, monkeypatch, client):
+    engines, srv_dir, base = engine_env
+    with zipfile.ZipFile(srv_dir / "ff.zip", "w") as z:
+        z.writestr("ffmpeg-build/bin/ffmpeg.exe", "x")
+        z.writestr("ffmpeg-build/bin/ffprobe.exe", "x")
+        z.writestr("ffmpeg-build/bin/avcodec.dll", "x")
+    monkeypatch.setitem(engines.CATALOG, "ffmpeg", {**engines.CATALOG["ffmpeg"], "url": base + "/ff.zip"})
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    r = client.post("/api/engines/install/ffmpeg")
+    d = wait_task(client, r.get_json()["task"])
+    assert d["status"] == "done", d
+    bindir = engines.root() / "engines" / "ffmpeg" / "ffmpeg-build" / "bin"
+    assert (bindir / "avcodec.dll").exists()                      # dll рядом с exe
+    assert os.environ["PATH"].split(os.pathsep)[0] == str(bindir)
+    assert engines.status()["ffmpeg"]["installed"]
+
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    engines.activate()                                            # повторный запуск приложения
+    assert str(bindir) in os.environ["PATH"]
+
+
+def test_engine_install_errors(engine_env, monkeypatch, client):
+    engines, srv_dir, base = engine_env
+    with zipfile.ZipFile(srv_dir / "bad.zip", "w") as z:
+        z.writestr("readme.txt", "no exe here")
+    with zipfile.ZipFile(srv_dir / "evil.zip", "w") as z:
+        z.writestr("../../evil/pandoc.exe", "x")
+    monkeypatch.setitem(engines.CATALOG, "pandoc", {**engines.CATALOG["pandoc"], "url": base + "/bad.zip"})
+    d = wait_task(client, client.post("/api/engines/install/pandoc").get_json()["task"])
+    assert d["status"] == "error" and "нет pandoc.exe" in d["error"]
+
+    monkeypatch.setitem(engines.CATALOG, "pandoc", {**engines.CATALOG["pandoc"], "url": base + "/evil.zip"})
+    d = wait_task(client, client.post("/api/engines/install/pandoc").get_json()["task"])
+    assert d["status"] == "error" and "повреждён" in d["error"]
+    assert not (engines.root().parent / "evil").exists()
+
+    monkeypatch.setitem(engines.CATALOG, "pandoc", {**engines.CATALOG["pandoc"], "url": base + "/missing.zip"})
+    d = wait_task(client, client.post("/api/engines/install/pandoc").get_json()["task"])
+    assert d["status"] == "error" and "прервалась" in d["error"]
+    assert client.post("/api/engines/install/nope").status_code == 404
+
+
+def test_engine_ytdlp_zipapp(engine_env, monkeypatch):
+    engines, srv_dir, base = engine_env
+    with zipfile.ZipFile(srv_dir / "yt-dlp", "w") as z:
+        z.writestr("fake_ytdlp_probe/__init__.py", "VERSION = 'fresh'")
+    monkeypatch.setitem(engines.CATALOG, "ytdlp", {**engines.CATALOG["ytdlp"], "url": base + "/yt-dlp"})
+    path = engines.install("ytdlp")
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    engines.activate()
+    assert sys.path[0] == path
+    import importlib
+    assert importlib.import_module("fake_ytdlp_probe").VERSION == "fresh"
+
+
+def test_engine_install_only_on_windows(monkeypatch, client):
+    monkeypatch.delenv("UNIVERSAL_ENGINES_ANYOS", raising=False)
+    if sys.platform != "win32":
+        assert client.post("/api/engines/install/ffmpeg").status_code == 400
+
+
+def test_windows_ignores_system_convert(monkeypatch):
+    import converters
+    monkeypatch.setattr(converters.sys, "platform", "win32")
+    monkeypatch.setattr(converters.shutil, "which", lambda n: "C:/Windows/System32/convert.exe" if n == "convert" else None)
+    assert converters._magick() is None

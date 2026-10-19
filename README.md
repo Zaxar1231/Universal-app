@@ -37,7 +37,12 @@
 <img src="site/img/mobile_editor.webp" width="24%" alt="Редактор на телефоне">
 </p>
 
-## Установка
+## Windows: просто установи
+Скачай **`Universal-Setup-X.Y.Z.exe`** из [последнего релиза](https://github.com/Zaxar1231/Universal-app/releases/latest) и запусти. Появится обычное приложение со значком в «Пуске», без командной строки и браузера. Когда режиму понадобится ffmpeg, pandoc, poppler или ImageMagick, приложение предложит скачать его одной кнопкой. Нужен Windows 10/11 x64 (WebView2 установщик поставит сам, если его нет).
+
+Не хочешь устанавливать: возьми `Universal-X.Y.Z-windows-portable.zip`, распакуй и запусти `Universal.exe`.
+
+## Установка из исходников (Windows, Linux, macOS)
 1. Python 3.10 или новее (на Windows отметь Add Python to PATH).
 2. Программы (ставь те, что нужны твоим режимам):
    - Windows: `choco install ffmpeg imagemagick pandoc poppler libreoffice-fresh`
@@ -85,8 +90,11 @@ NET=1 python -m pytest -q    # плюс настоящее скачивание 
 ## Сайт
 Папка `site/` публикуется на GitHub Pages workflow-ом `.github/workflows/pages.yml` при каждом пуше в `main`. Это статическая страница: QR (qrcode-generator), картинки (canvas) и PDF (pdf-lib) работают в браузере, её можно установить на телефон как приложение и пользоваться офлайн.
 
+## Сборка Windows-приложения
+`desktop.py` запускает тот же сервер внутри окна pywebview, `engines.py` качает движки в `%LOCALAPPDATA%\Universal\engines`. Exe собирает PyInstaller (`packaging/universal.spec`), установщик Inno Setup (`packaging/installer.iss`); всё это делает workflow «Релиз» на Windows-раннере и перед публикацией запускает `Universal.exe --smoke`. Локально: `pip install -r packaging/requirements-desktop.txt && python desktop.py`.
+
 ## Релизы
-Описание версий в `CHANGELOG.md`. Новый релиз: добавь раздел `## vX.Y.Z` в CHANGELOG и запусти workflow «Релиз» (Actions → Релиз → Run workflow) или запушь тег `vX.Y.Z`. Архив и описание соберутся сами. В архив релиза попадают только файлы для работы: модули `*.py`, `templates/`, `requirements.txt`, `run.bat`, `run.sh`, README и LICENSE. Тесты, Docker и сайт берутся из репозитория (`git clone`).
+Описание версий в `CHANGELOG.md`. Новый релиз: добавь раздел `## vX.Y.Z` в CHANGELOG и запусти workflow «Релиз» (Actions → Релиз → Run workflow) или запушь тег `vX.Y.Z`. Архив и описание соберутся сами. К релизу прикладываются установщик и портативная версия для Windows, а также архив исходников только с файлами для работы: модули `*.py`, `templates/`, `requirements.txt`, `run.bat`, `run.sh`, README и LICENSE. Тесты, Docker и сайт берутся из репозитория (`git clone`).
 
 ## Лицензии
 Проект под AGPL-3.0 (см. `LICENSE`): набор форматов и логика параметров звука/видео в конвертере взяты из проекта VERT (AGPL-3.0). yt-dlp — Unlicense. Скачивай только то, на что у тебя есть права.
