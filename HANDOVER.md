@@ -330,3 +330,10 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - `downloader._cobalt_download`: `POST /` на сервер cobalt (JSON, `Authorization: Api-Key …`), ответы `tunnel`/`redirect` (один файл) и `picker` (несколько; одинаковые имена получают « (2)»), `local-processing` не запрашиваем. Коды ошибок приходят как `error.api.<код>` (в доке без префикса), переводятся через `COBALT_ERRORS`. При любой ошибке ссылка уходит в yt-dlp, в итоговой ошибке видны обе причины. Плейлисты сразу через yt-dlp.
 - Настройки: поля в интерфейсе (localStorage) или `COBALT_URL`/`COBALT_API_KEY`. `POST /api/dl/cobalt-check` — `GET /` сервера (версия, сервисы).
 - Проверено на настоящем cobalt 11.7.1 (собран из исходников): проверка сервера, ошибка `link.invalid` → yt-dlp скачал. Тесты на поддельный сервер: tunnel, picker, ключ, ошибки, опции.
+
+### 13.7 Свой cobalt в Docker (v1.5.0)
+- `cobaltlocal.py`: по инструкции cobalt «how to run an instance» пишет `docker-compose.yml` в `engines.root()/cobalt` (рядом с движками), `docker compose -p universal-cobalt pull`, затем `up -d`, и ждёт `GET /` через `downloader.cobalt_info`. Порт `127.0.0.1:9000…9010` (первый свободный, при перезапуске остаётся прежний, хранится в `port.txt`), `API_URL=http://localhost:<порт>/`. watchtower из примера не ставим (не работает с Docker 29+), вместо этого кнопка повторно делает pull. Если pull не удался, но образ уже есть, сервер всё равно поднимается.
+- Docker ищется в PATH и в стандартных местах Docker Desktop; если демон не отвечает, на Windows/macOS запускается Docker Desktop и до 3 минут ждём. На Linux — подсказка `systemctl start docker`.
+- API: `GET /api/cobalt/local` (статус), `POST` (задача создания, адрес в `result` задачи — новое поле `Task.result`), `DELETE` (`docker compose down`).
+- Тест — поддельный `docker`-скрипт. В песочнице настоящий образ с ghcr.io не скачивается (прокси), проверены сообщение об этой ошибке и `docker compose config` для сгенерированного файла.
+

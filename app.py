@@ -34,6 +34,7 @@ from urllib.parse import quote
 
 from flask import Flask, Response, jsonify, render_template, request, send_file, abort
 
+import cobaltlocal
 import converters as conv
 import downloader
 import editor
@@ -939,6 +940,29 @@ def dl_cobalt_check():
         return jsonify(downloader.cobalt_info(base, (request.form.get("cobalt_key") or "").strip()))
     except downloader.CobaltFail as e:
         return jsonify({"error": f"cobalt: {e}"}), 400
+
+
+@app.route("/api/cobalt/local")
+def cobalt_local_status():
+    """Свой cobalt в Docker на этом компьютере: есть ли Docker, запущен ли контейнер."""
+    return jsonify(cobaltlocal.status())
+
+
+@app.route("/api/cobalt/local", methods=["POST"])
+def cobalt_local_create():
+    job_id, job_dir, archive = new_job("cobalt")
+    task = Task(job_id, "cobalt", job_dir, archive)
+    TASKS.submit(task, cobaltlocal.create)
+    return jsonify(task.to_dict())
+
+
+@app.route("/api/cobalt/local", methods=["DELETE"])
+def cobalt_local_remove():
+    try:
+        cobaltlocal.remove()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify(cobaltlocal.status())
 
 
 @app.route("/api/dl", methods=["POST"])
