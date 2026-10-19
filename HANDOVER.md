@@ -344,3 +344,9 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - `POST /api/dl/netcheck` → `net_check()`: системный прокси, итоговый прокси, IPv6 (TCP до youtube.com:443 за 4 с), 4 сайта через `YoutubeDL.urlopen` с теми же настройками; причины коротко через `_short_net_error`.
 - Настоящий VPN в песочнице не проверить; тест — мёртвый системный прокси (`http://127.0.0.1:9`) с откатом напрямую, плюс подделанный `YoutubeDL` для netcheck.
 
+### 13.9 cobalt через VPN (v1.5.2)
+- `cobaltlocal.container_proxy(net)`: `downloader.effective_proxy` → socks заменяется на http (undici в cobalt умеет только HTTP-прокси, у VPN-клиентов порт обычно смешанный), loopback → `host.docker.internal`. В compose: `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY=localhost,127.0.0.1,::1`, `extra_hosts: host.docker.internal:host-gateway`, `RATELIMIT_MAX`/`TUNNEL_RATELIMIT_MAX`/`SESSION_RATELIMIT_MAX=10000`. Прокси пишется в `proxy.txt`, его показывает статус.
+- `POST /api/cobalt/local` принимает поля сети (`proxy`, `ipv4`) как `/api/dl`.
+- Проверено на cobalt 11.7.1 из исходников: с `HTTP_PROXY` запросы к www.youtube.com и api.vimeo.com идут через прокси (CONNECT в журнале тестового прокси), с `RATELIMIT_MAX=10000` 25 запросов подряд без `rate_exceeded`; наш JSON-запрос принят во всех 64 сочетаниях настроек (нет `invalid_body`). Сгенерированный compose проходит `docker compose config`.
+- `COBALT_ERRORS` дополнен кодами из исходников cobalt 11.7.1; неизвестный код показывается как есть. Для своего сервера (`_is_loopback`) к `fetch.*`/`youtube.login` добавляется подсказка про VPN.
+

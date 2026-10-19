@@ -1486,7 +1486,8 @@ ul.files .up { width: 40px; height: 40px; }
     let h = '';
     if (!st.docker) h = 'Docker не найден. Установи <a href="https://www.docker.com/products/docker-desktop/" target="_blank" rel="noopener">Docker Desktop</a> (на Linux пакет docker и docker-compose-plugin), потом нажми кнопку.';
     else if (!st.daemon) h = st.can_start_desktop ? 'Docker установлен, но не запущен: кнопка сама его запустит.' : 'Docker установлен, но служба не запущена: <code>sudo systemctl start docker</code>.';
-    else if (has) h = `Свой сервер: ${st.state === 'running' ? 'работает' : 'остановлен (' + esc(st.state) + ')'}, ${esc(st.url)}. Файлы: ${esc(st.folder)}. Положи туда cookies.json и перезапусти, если нужен вход на сайты.`;
+    else if (has) h = `Свой сервер: ${st.state === 'running' ? 'работает' : 'остановлен (' + esc(st.state) + ')'}, ${esc(st.url)}, в интернет ходит ${st.proxy ? 'через прокси ' + esc(st.proxy) : 'напрямую, мимо прокси'}. ` +
+      `Включил или сменил VPN — нажми «Перезапустить», прокси подхватится из блока «Сеть и VPN». Файлы: ${esc(st.folder)}. Положи туда cookies.json и перезапусти, если нужен вход на сайты.`;
     if (h) $('cobaltLocalHint').innerHTML = h;
   }
   function cobaltLocalRefresh() {
@@ -1498,7 +1499,7 @@ ul.files .up { width: 40px; height: 40px; }
     box.hidden = false; btn.disabled = true;
     box.innerHTML = '<span class="t-body-m">Начинаю…</span><div class="progress busy"><i></i></div>';
     const fail = msg => { btn.disabled = false; box.innerHTML = `<span class="t-body-m">Не получилось: ${esc(msg)}</span>`; cobaltLocalRefresh(); };
-    fetch('/api/cobalt/local', { method: 'POST' }).then(r => r.json()).then(t => {
+    fetch('/api/cobalt/local', { method: 'POST', body: netForm(new FormData()) }).then(r => r.json()).then(t => {
       if (t.error) return fail(t.error);
       const tick = () => fetch('/api/task/' + t.task).then(r => r.json()).then(d => {
         if (['queued', 'running'].includes(d.status)) {
