@@ -17,7 +17,7 @@ install -m 644 "$HERE/universal.desktop" "$ROOT/usr/share/applications/universal
 cp "$SRC/LICENSE" "$SRC/README.md" "$ROOT/usr/share/doc/universal/"
 for s in 64 128 256 512; do
   d="$ROOT/usr/share/icons/hicolor/${s}x${s}/apps"; mkdir -p "$d"
-  "$PY" -c "from PIL import Image; Image.open('$SRC/site/img/icon-512.png').resize(($s,$s), Image.LANCZOS).save('$d/universal.png')"
+  "$PY" -c "from PIL import Image; Image.open('$SRC/packaging/icon.png').resize(($s,$s), Image.LANCZOS).save('$d/universal.png')"
 done
 
 # чистые зависимости внутрь пакета; бинарные модули (ускорители markupsafe) выкидываем,
