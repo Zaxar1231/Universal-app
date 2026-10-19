@@ -846,3 +846,111 @@ def test_engine_deno_install_sets_exec_bit(engine_env, monkeypatch):
     assert Path(path, exe).exists() and engines.can_install("deno")
     if sys.platform != "win32":
         assert os.access(Path(path, exe), os.X_OK)
+
+
+# ---------------------------------------------------------------- cobalt
+
+@pytest.fixture()
+def fake_cobalt(media):
+    """Поддельный сервер cobalt: /video → tunnel, /carousel → picker, /bad → error, требует ключ."""
+    import http.server
+    import threading
+    seen = {}
+
+    class Cobalt(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def _json(self, code, obj):
+            body = json.dumps(obj).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            if self.path == "/":
+                return self._json(200, {"cobalt": {"version": "11.7.1", "services": ["vk", "youtube"]}})
+            if self.path.startswith("/file/"):
+                data = (media / "a.mp4").read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Content-Disposition", 'attachment; filename="pic.mp4"')
+                self.end_headers()
+                self.wfile.write(data)
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            seen.update(body=body, auth=self.headers.get("Authorization"))
+            if self.headers.get("Authorization") != "Api-Key secret":
+                return self._json(401, {"status": "error", "error": {"code": "error.api.auth.key.missing"}})
+            base = f"http://127.0.0.1:{self.server.server_port}"
+            if body["url"].endswith("/video"):
+                return self._json(200, {"status": "tunnel", "url": base + "/file/1", "filename": "Клип (720p).mp4"})
+            if body["url"].endswith("/carousel"):
+                return self._json(200, {"status": "picker", "picker": [{"type": "video", "url": base + "/file/2"},
+                                                                       {"type": "video", "url": base + "/file/3"}]})
+            return self._json(400, {"status": "error", "error": {"code": "error.api.content.video.private"}})
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Cobalt)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_port}/", seen
+    srv.shutdown()
+
+
+def test_cobalt_tunnel_and_options(client, fake_cobalt):
+    base, seen = fake_cobalt
+    d = wait_task(client, client.post("/api/dl", data={
+        "urls": "https://vk.com/video", "cobalt_url": base, "cobalt_key": "secret",
+        "quality": "720", "container": "mkv", "compat": "0"}).get_json()["task"])
+    assert d["status"] == "done" and d["single_file"] == "Клип (720p).mp4", d
+    assert seen["auth"] == "Api-Key secret"
+    b = seen["body"]
+    assert b["videoQuality"] == "720" and b["youtubeVideoContainer"] == "mkv" and b["youtubeVideoCodec"] == "vp9"
+
+
+def test_cobalt_picker_and_audio_options(client, fake_cobalt):
+    base, seen = fake_cobalt
+    d = wait_task(client, client.post("/api/dl", data={
+        "urls": "https://instagram.com/carousel", "cobalt_url": base, "cobalt_key": "secret",
+        "mode": "audio", "audio_format": "m4a", "abitrate": "192"}).get_json()["task"])
+    assert d["status"] == "done" and d["files"] == 2, d
+    b = seen["body"]
+    assert b["downloadMode"] == "audio" and b["audioFormat"] == "best" and b["audioBitrate"] == "320"
+
+
+def test_cobalt_error_falls_back_to_ytdlp(client, fake_cobalt, http_media):
+    base, _ = fake_cobalt
+    d = wait_task(client, client.post("/api/dl", data={
+        "urls": f"{http_media}/a.mp4", "cobalt_url": base, "cobalt_key": "secret"}).get_json()["task"])
+    assert d["status"] == "done" and d["single_file"].endswith(".mp4")      # yt-dlp подхватил
+    d = wait_task(client, client.post("/api/dl", data={
+        "urls": "https://example.invalid/x", "cobalt_url": base}).get_json()["task"])
+    assert d["status"] == "error", d
+    assert d["failed"][0]["error"].startswith("cobalt: серверу cobalt нужен API-ключ; yt-dlp:"), d["failed"]
+
+
+def test_cobalt_check_endpoint(client, fake_cobalt):
+    base, _ = fake_cobalt
+    assert client.post("/api/dl/cobalt-check", data={"cobalt_url": base}).get_json() == {"version": "11.7.1", "services": ["vk", "youtube"]}
+    assert client.post("/api/dl/cobalt-check", data={"cobalt_url": "ftp://x"}).status_code == 400
+
+
+def test_cobalt_skipped_for_playlists():
+    o = downloader.read_opts({"cobalt_url": "http://c:9000/", "playlist": "1"})
+    assert o["cobalt_url"] and o["playlist"]
+    assert downloader.read_opts({"cobalt_url": "javascript:alert(1)"})["cobalt_url"] == ""
+
+
+def test_dl_read_events_windows_newlines_and_partial_tail(tmp_path):
+    """Файл событий с \\r\\n (как пишет Windows в текстовом режиме) и недописанной последней строкой."""
+    p = tmp_path / "ev.jsonl"
+    p.write_bytes(b'{"message": "a"}\r\n{"done": "u"}\r\n\r\n{"progress": 0.5, "mess')
+    evs, pos = downloader.read_events(p, 0)
+    assert evs == [{"message": "a"}, {"done": "u"}]
+    with p.open("ab") as f:
+        f.write(b'age": "b"}\n')
+    evs, pos2 = downloader.read_events(p, pos)
+    assert evs == [{"progress": 0.5, "message": "b"}] and pos2 == p.stat().st_size
+    assert downloader.read_events(tmp_path / "none", 7) == ([], 7)

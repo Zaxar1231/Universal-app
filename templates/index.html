@@ -674,6 +674,13 @@ ul.files .up { width: 40px; height: 40px; }
             </div>
             <p class="hint" id="dlCookiesHint">Нужны для приватных видео, 18+ и Instagram. Выгрузи расширением «Get cookies.txt LOCALLY». Файл используется один раз и удаляется.</p>
           </div>
+          <div class="field">
+            <span class="lbl t-label-l">Сервер cobalt (необязательно)</span>
+            <label class="tf"><span>Адрес</span><input type="url" id="cobaltUrl" placeholder="http://localhost:9000/" spellcheck="false" autocomplete="off"></label>
+            <label class="tf"><span>API-ключ, если сервер его требует</span><input type="password" id="cobaltKey" autocomplete="off"></label>
+            <div class="row"><button class="btn text state" id="cobaltCheck" type="button">Проверить сервер</button><span class="hint" id="cobaltState"></span></div>
+            <p class="hint">Если указан, ссылки сначала идут через <a href="https://github.com/imputnet/cobalt" target="_blank" rel="noopener">cobalt</a>, а если он не справился, качает yt-dlp. Нужен свой сервер (один Docker-контейнер) или ключ от владельца: публичный api.cobalt.tools сторонним программам закрыт.</p>
+          </div>
           <p class="hint" id="ytdlpVer"></p>
           <div id="ytdlpUpd" class="field" hidden>
             <button class="btn tonal state" id="ytdlpUpdBtn" type="button">Обновить yt-dlp</button>
@@ -1400,7 +1407,21 @@ ul.files .up { width: 40px; height: 40px; }
     fd.append('playlist', $('dlPl').checked ? '1' : '0'); fd.append('thumbnail', $('dlThumb').checked ? '1' : '0');
     fd.append('metadata', $('dlMeta').checked ? '1' : '0');
     if ($('dlCookies').files[0]) fd.append('cookies', $('dlCookies').files[0]);
+    fd.append('cobalt_url', $('cobaltUrl').value.trim()); fd.append('cobalt_key', $('cobaltKey').value.trim());
   }
+  // сервер cobalt запоминаем (только у себя в браузере/приложении)
+  try { $('cobaltUrl').value = localStorage.getItem('cobaltUrl') || ''; $('cobaltKey').value = localStorage.getItem('cobaltKey') || ''; } catch (_) {}
+  ['cobaltUrl', 'cobaltKey'].forEach(id => $(id).addEventListener('change', () => {
+    try { localStorage.setItem(id, $(id).value.trim()); } catch (_) {}
+    $('cobaltState').textContent = '';
+  }));
+  $('cobaltCheck').onclick = () => {
+    const fd = new FormData(); fd.append('cobalt_url', $('cobaltUrl').value.trim()); fd.append('cobalt_key', $('cobaltKey').value.trim());
+    $('cobaltState').textContent = 'Проверяю…';
+    fetch('/api/dl/cobalt-check', { method: 'POST', body: fd }).then(r => r.json()).then(d => {
+      $('cobaltState').textContent = d.error ? d.error : `Работает: cobalt ${d.version}, сайтов: ${d.services.length}`;
+    }).catch(() => { $('cobaltState').textContent = 'Нет связи с приложением'; });
+  };
   $('peekUrls').onclick = () => {
     const fd = new FormData(); fd.append('urls', $('urls').value);
     if ($('dlCookies').files[0]) fd.append('cookies', $('dlCookies').files[0]);

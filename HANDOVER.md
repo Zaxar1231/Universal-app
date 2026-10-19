@@ -325,3 +325,8 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - «Отмена»: `tasks.kill_tree()` — на Windows `taskkill /T /F`, на POSIX `killpg` своей группы (воркер стартует с `start_new_session`; если группа общая с приложением, убивается только сам процесс, иначе погибло бы приложение). После отмены `_cleanup()` удаляет `.part`/фрагменты.
 - `build_opts`: `concurrent_fragment_downloads=4`, `js_runtimes` deno/node/bun. В каталоге движков `deno` (ссылка по платформе, `chmod +x` вне Windows), `yt-dlp-ejs` в requirements, vendor.txt и PyInstaller (`collect_data_files`). Баннер в режиме «Скачать видео», если deno нет.
 - `desktop.py --smoke` проверяет и воркер (`dl_worker`).
+
+### 13.6 cobalt (v1.4.0)
+- `downloader._cobalt_download`: `POST /` на сервер cobalt (JSON, `Authorization: Api-Key …`), ответы `tunnel`/`redirect` (один файл) и `picker` (несколько; одинаковые имена получают « (2)»), `local-processing` не запрашиваем. Коды ошибок приходят как `error.api.<код>` (в доке без префикса), переводятся через `COBALT_ERRORS`. При любой ошибке ссылка уходит в yt-dlp, в итоговой ошибке видны обе причины. Плейлисты сразу через yt-dlp.
+- Настройки: поля в интерфейсе (localStorage) или `COBALT_URL`/`COBALT_API_KEY`. `POST /api/dl/cobalt-check` — `GET /` сервера (версия, сервисы).
+- Проверено на настоящем cobalt 11.7.1 (собран из исходников): проверка сервера, ошибка `link.invalid` → yt-dlp скачал. Тесты на поддельный сервер: tunnel, picker, ключ, ошибки, опции.

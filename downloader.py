@@ -191,7 +191,12 @@ def read_opts(form) -> dict:
         "thumbnail": form.get("thumbnail", "1") == "1",
         "metadata": form.get("metadata", "1") == "1",
         "compat": form.get("compat", "1") == "1",
+        # необязательный сервер cobalt (github.com/imputnet/cobalt): из формы или из окружения
+        "cobalt_url": (form.get("cobalt_url") or os.environ.get("COBALT_URL") or "").strip(),
+        "cobalt_key": (form.get("cobalt_key") or os.environ.get("COBALT_API_KEY") or "").strip(),
     }
+    if o["cobalt_url"] and not re.match(r"^https?://", o["cobalt_url"], re.I):
+        o["cobalt_url"] = ""
     if o["mode"] not in ("video", "audio"):
         o["mode"] = "video"
     if o["quality"] not in QUALITIES:
@@ -203,6 +208,148 @@ def read_opts(form) -> dict:
     if o["abitrate"] not in ("best", "320", "256", "192", "128", "96"):
         o["abitrate"] = "best"
     return o
+
+
+# ----------------------------------------------------------------------------
+# cobalt: если указан свой сервер, сначала пробуем его, при ошибке берёт yt-dlp
+# ----------------------------------------------------------------------------
+
+COBALT_ERRORS = {
+    "content.too_long": "видео длиннее, чем разрешает этот сервер cobalt",
+    "content.video.unavailable": "видео недоступно",
+    "content.video.private": "видео закрыто",
+    "content.video.age": "видео 18+, нужен вход",
+    "content.video.region": "видео заблокировано в регионе сервера",
+    "content.post.unavailable": "пост недоступен",
+    "content.post.private": "пост закрыт",
+    "link.unsupported": "сайт не поддерживается cobalt",
+    "link.invalid": "cobalt не понял ссылку",
+    "service.unsupported": "сайт не поддерживается cobalt",
+    "fetch.rate": "сервер cobalt ограничил частоту запросов",
+    "fetch.fail": "сервер cobalt не смог открыть сайт",
+    "fetch.critical": "сервер cobalt не смог открыть сайт",
+    "fetch.empty": "сайт ничего не отдал",
+    "youtube.login": "YouTube требует вход на сервере cobalt",
+    "youtube.decipher": "cobalt не справился с защитой YouTube",
+    "content.video.live": "прямые эфиры cobalt не качает",
+    "auth.key.missing": "серверу cobalt нужен API-ключ",
+    "auth.key.invalid": "API-ключ cobalt не подошёл",
+    "auth.jwt.missing": "сервер cobalt требует проверку в браузере (Turnstile), из приложения его использовать нельзя",
+}
+
+
+class CobaltFail(Exception):
+    pass
+
+
+def _cobalt_headers(key: str) -> dict:
+    h = {"Accept": "application/json", "Content-Type": "application/json", "User-Agent": "Universal-app"}
+    if key:
+        h["Authorization"] = key if " " in key else f"Api-Key {key}"
+    return h
+
+
+def cobalt_info(base: str, key: str = "") -> dict:
+    """GET / сервера cobalt: версия и список сайтов (для кнопки «Проверить»)."""
+    import urllib.request
+    req = urllib.request.Request(base.rstrip("/") + "/", headers=_cobalt_headers(key))
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = json.load(r)
+    except Exception as e:
+        raise CobaltFail(f"сервер не ответил ({e.__class__.__name__})")
+    info = data.get("cobalt") or {}
+    if not info:
+        raise CobaltFail("это не сервер cobalt")
+    return {"version": info.get("version", ""), "services": info.get("services", [])}
+
+
+def _cobalt_payload(url: str, o: dict) -> dict:
+    p = {"url": url, "filenameStyle": "pretty", "disableMetadata": not o["metadata"],
+         "videoQuality": "max" if o["quality"] == "best" else o["quality"]}
+    if o["mode"] == "audio":
+        p["downloadMode"] = "audio"
+        p["audioFormat"] = o["audio_format"] if o["audio_format"] in ("mp3", "opus", "wav") else "best"
+        p["audioBitrate"] = o["abitrate"] if o["abitrate"] in ("320", "256", "128", "96") else "320"
+    else:
+        p["youtubeVideoCodec"] = "h264" if o["compat"] else "vp9"
+        p["youtubeVideoContainer"] = o["container"]
+        if o["subs"]:
+            p["subtitleLang"] = "ru"
+    return p
+
+
+def _fetch_file(url: str, dest_dir: Path, name: str, emit, base: float, span: float, title: str) -> Path:
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": "Universal-app"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        if not name:
+            cd = r.headers.get("Content-Disposition") or ""
+            m = re.search(r"filename\*?=(?:UTF-8'')?\"?([^\";]+)", cd)
+            name = m.group(1) if m else url.rsplit("/", 1)[-1].split("?")[0] or "file"
+        name = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", name).strip(" .")[:150] or "file"
+        dest = dest_dir / name
+        n = 2
+        while dest.exists():                      # в карусели у файлов бывает одно имя
+            dest = dest_dir / f"{Path(name).stem} ({n}){Path(name).suffix}"
+            n += 1
+        total = int(r.headers.get("Content-Length") or 0)
+        got, t0, last = 0, time.time(), 0.0
+        with open(dest.with_suffix(dest.suffix + ".part"), "wb") as f:
+            while chunk := r.read(1 << 16):
+                f.write(chunk)
+                got += len(chunk)
+                now = time.time()
+                if now - last > 0.5:
+                    last = now
+                    speed = got / max(now - t0, 0.001) / 1048576
+                    frac = got / total if total else 0
+                    emit({"progress": base + span * frac * 0.95,
+                          "message": f"Качаю через cobalt: {title} · {speed:.1f} МБ/с"})
+    dest.with_suffix(dest.suffix + ".part").replace(dest)
+    return dest
+
+
+def _cobalt_download(url: str, o: dict, out: Path, emit, base: float, span: float) -> int:
+    """Скачать одну ссылку через cobalt. Возвращает число файлов или бросает CobaltFail."""
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(o["cobalt_url"].rstrip("/") + "/", method="POST",
+                                 data=json.dumps(_cobalt_payload(url, o)).encode(),
+                                 headers=_cobalt_headers(o["cobalt_key"]))
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = json.load(r)
+    except urllib.error.HTTPError as e:
+        try:
+            data = json.load(e)
+        except Exception:
+            raise CobaltFail(f"сервер ответил {e.code}")
+    except Exception as e:
+        raise CobaltFail(f"сервер не ответил ({e.__class__.__name__})")
+    status = data.get("status")
+    if status == "error":
+        code = (data.get("error") or {}).get("code", "")
+        short = re.sub(r"^error\.api\.", "", code)          # сервер шлёт error.api.link.invalid
+        raise CobaltFail(COBALT_ERRORS.get(short, short or "неизвестная ошибка"))
+    try:
+        if status in ("tunnel", "redirect"):
+            title = data.get("filename") or url
+            _fetch_file(data["url"], out, data.get("filename", ""), emit, base, span, title)
+            return 1
+        if status == "picker":
+            items = [x["url"] for x in data.get("picker", []) if x.get("url")]
+            if data.get("audio"):
+                items.append(data["audio"])
+            for k, item in enumerate(items):
+                _fetch_file(item, out, "", emit, base + span * k / len(items), span / len(items),
+                            f"{k + 1} из {len(items)}")
+            return len(items)
+    except CobaltFail:
+        raise
+    except Exception as e:
+        raise CobaltFail(f"файл не скачался ({e.__class__.__name__})")
+    raise CobaltFail(f"неожиданный ответ сервера: {status}")
 
 
 def _download_all(urls: list[str], o: dict, out: Path, cookiefile: Path | None, emit) -> None:
@@ -239,6 +386,15 @@ def _download_all(urls: list[str], o: dict, out: Path, cookiefile: Path | None, 
     for i, url in enumerate(urls):
         state["i"], state["title"] = i, url
         emit({"progress": i / n, "message": f"Ссылка {i + 1} из {n}: получаю данные…"})
+        cobalt_error = ""
+        if o.get("cobalt_url") and not o["playlist"]:      # плейлисты cobalt не умеет
+            try:
+                _cobalt_download(url, o, out, emit, i / n, 1 / n)
+                emit({"done": url})
+                continue
+            except CobaltFail as e:
+                cobalt_error = f"cobalt: {e}"
+                emit({"message": f"{cobalt_error}. Пробую yt-dlp…"})
         logger = _Quiet()
         ydl_opts["logger"] = logger
         try:
@@ -246,9 +402,13 @@ def _download_all(urls: list[str], o: dict, out: Path, cookiefile: Path | None, 
                 ydl.download([url])
             emit({"done": url})
         except DownloadError as e:
-            emit({"failed": url, "error": _human_error(logger.last_error or str(e))})
+            emit({"failed": url, "error": _with(cobalt_error, _human_error(logger.last_error or str(e)))})
         except Exception as e:  # одна ссылка не должна валить всю пачку
-            emit({"failed": url, "error": _human_error(str(e))})
+            emit({"failed": url, "error": _with(cobalt_error, _human_error(str(e)))})
+
+
+def _with(cobalt_error: str, error: str) -> str:
+    return f"{cobalt_error}; yt-dlp: {error}" if cobalt_error else error
 
 
 def _cleanup(out: Path, cookiefile: Path | None) -> None:
@@ -282,11 +442,32 @@ def worker_main(args_file: str) -> None:
     events = Path(a["events"])
 
     def emit(ev):
-        with events.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(ev, ensure_ascii=True) + "\n")
+        # двоичный режим: в текстовом Windows пишет \r\n, и позиция чтения у родителя уезжает
+        with events.open("ab") as f:
+            f.write(json.dumps(ev, ensure_ascii=True).encode("ascii") + b"\n")
 
     _download_all(a["urls"], a["opts"], Path(a["out"]), Path(a["cookie"]) if a["cookie"] else None, emit)
     emit({"finished": True})
+
+
+def read_events(path: Path, pos: int) -> tuple[list[dict], int]:
+    """Новые целые строки событий начиная с байта pos; недописанный хвост дочитаем в следующий раз."""
+    if not path.exists():
+        return [], pos
+    with path.open("rb") as f:
+        f.seek(pos)
+        chunk = f.read()
+    cut = chunk.rfind(b"\n") + 1
+    events = []
+    for line in chunk[:cut].splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            events.append(json.loads(line))
+        except ValueError:
+            continue                          # битая строка не должна ронять всё скачивание
+    return events, pos + cut
 
 
 def run_download_task(task: Task, urls: list[str], o: dict, cookiefile: Path | None) -> None:
@@ -312,22 +493,15 @@ def run_download_task(task: Task, urls: list[str], o: dict, cookiefile: Path | N
             if task.cancel_event.is_set():
                 kill_tree(proc)
                 raise Cancelled()
-            if events.exists():
-                with events.open("r", encoding="utf-8") as f:
-                    f.seek(pos)
-                    chunk = f.read()
-                    # читаем только целые строки, хвост дочитаем в следующий раз
-                    cut = chunk.rfind("\n") + 1
-                    pos += cut                     # в файле только ASCII (ensure_ascii), байты = символы
-                for line in chunk[:cut].splitlines():
-                    ev = json.loads(line)
-                    if "progress" in ev or "message" in ev:
-                        task.update(ev.get("progress"), ev.get("message"))
-                    if "done" in ev:
-                        task.done += 1
-                    if "failed" in ev:
-                        task.failed.append({"name": ev["failed"], "error": ev["error"]})
-                    finished = finished or ev.get("finished", False)
+            evs, pos = read_events(events, pos)
+            for ev in evs:
+                if "progress" in ev or "message" in ev:
+                    task.update(ev.get("progress"), ev.get("message"))
+                if "done" in ev:
+                    task.done += 1
+                if "failed" in ev:
+                    task.failed.append({"name": ev["failed"], "error": ev["error"]})
+                finished = finished or ev.get("finished", False)
             if not alive:
                 break
             time.sleep(0.3)

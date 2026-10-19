@@ -929,6 +929,18 @@ def dl_info():
     return jsonify({"items": items})
 
 
+@app.route("/api/dl/cobalt-check", methods=["POST"])
+def dl_cobalt_check():
+    """Проверка сервера cobalt: отвечает ли и какие сайты умеет."""
+    base = (request.form.get("cobalt_url") or "").strip()
+    if not re.match(r"^https?://", base, re.I):
+        return jsonify({"error": "Адрес сервера должен начинаться с http:// или https://"}), 400
+    try:
+        return jsonify(downloader.cobalt_info(base, (request.form.get("cobalt_key") or "").strip()))
+    except downloader.CobaltFail as e:
+        return jsonify({"error": f"cobalt: {e}"}), 400
+
+
 @app.route("/api/dl", methods=["POST"])
 def dl():
     if not downloader.available():
