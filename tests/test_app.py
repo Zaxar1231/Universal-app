@@ -1151,3 +1151,78 @@ def test_cobalt_errors_explained(monkeypatch, tmp_path):
         monkeypatch.setattr(downloader, "_urlopen", lambda req, timeout, net=None, r=reply: io.BytesIO(r))
         with pytest.raises(downloader.CobaltFail, match=part):
             downloader._cobalt_download("https://x.test/v", o, tmp_path, lambda e: None, 0, 1)
+
+
+@pytest.fixture()
+def broken_cobalt():
+    """cobalt, у которого сломался сам туннель: «200 OK» и пустое, мусорное или обрезанное тело
+    (так настоящий cobalt 11 отвечает, когда googlevideo/сайт не отдал ему поток)."""
+    import http.server
+    import threading
+    state = {"body": b"", "length": None}
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            base = f"http://127.0.0.1:{self.server.server_port}"
+            body = json.dumps({"status": "tunnel", "url": base + "/tunnel?id=1", "filename": "клип.mp4"}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            self.send_response(200)
+            # ровно как content-disposition-header в cobalt 11
+            self.send_header("Content-Disposition",
+                             "attachment; filename=\"????.mp4\"; filename*=UTF-8''%D0%BA%D0%BB%D0%B8%D0%BF.mp4")
+            if state["length"] is not None:
+                self.send_header("Content-Length", str(state["length"]))
+            else:
+                self.send_header("Estimated-Content-Length", "5000000")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(state["body"])
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_port}/", state
+    srv.shutdown()
+
+
+@needs_ffmpeg
+@pytest.mark.parametrize("kind", ["empty", "garbage", "truncated"])
+def test_cobalt_empty_tunnel_falls_back_to_ytdlp(client, broken_cobalt, http_media, media, kind):
+    """Баг из жизни: cobalt «скачивал» видео размером 0 КБ. Пустой или битый файл не принимаем, качает yt-dlp."""
+    base, state = broken_cobalt
+    whole = (media / "a.mp4").read_bytes()
+    state["body"], state["length"] = {"empty": (b"", None), "garbage": (os.urandom(4096), None),
+                                      "truncated": (whole[:1000], len(whole))}[kind]
+    r = client.post("/api/dl", data={"urls": f"{http_media}/a.mp4", "cobalt_url": base})
+    d = wait_task(client, r.get_json()["task"])
+    assert d["status"] == "done" and d["done"] == 1, d
+    out = webapp.WORK_ROOT / d["job"] / "out"
+    files = [p for p in out.iterdir() if p.is_file()]
+    assert files and all(p.stat().st_size > 0 for p in files), [(p.name, p.stat().st_size) for p in files]
+    assert not any("клип" in p.name for p in files)          # битый файл от cobalt не остался
+
+
+def test_cobalt_empty_tunnel_error_text(broken_cobalt, tmp_path):
+    base, state = broken_cobalt
+    o = downloader.read_opts({"cobalt_url": base})
+    with pytest.raises(downloader.CobaltFail, match="пустой файл"):
+        downloader._cobalt_download("https://x.test/v", o, tmp_path, lambda e: None, 0, 1)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_content_disposition_names():
+    f = downloader._cd_filename
+    assert f("attachment; filename=\"???? (720p).mp4\"; filename*=UTF-8''%D0%BA%D0%BB%D0%B8%D0%BF%20%28720p%29.mp4") == "клип (720p).mp4"
+    assert f('attachment; filename="clip.mp4"') == "clip.mp4"
+    assert f('attachment; filename="a b\\"c.mp4"') == 'a b"c.mp4'
+    assert f("attachment; filename=plain.mp4") == "plain.mp4"
+    assert f("") == ""

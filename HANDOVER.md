@@ -350,3 +350,9 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - Проверено на cobalt 11.7.1 из исходников: с `HTTP_PROXY` запросы к www.youtube.com и api.vimeo.com идут через прокси (CONNECT в журнале тестового прокси), с `RATELIMIT_MAX=10000` 25 запросов подряд без `rate_exceeded`; наш JSON-запрос принят во всех 64 сочетаниях настроек (нет `invalid_body`). Сгенерированный compose проходит `docker compose config`.
 - `COBALT_ERRORS` дополнен кодами из исходников cobalt 11.7.1; неизвестный код показывается как есть. Для своего сервера (`_is_loopback`) к `fetch.*`/`youtube.login` добавляется подсказка про VPN.
 
+### 13.10 Пустые файлы от cobalt (v1.5.3)
+- Источник бага (cobalt 11.7.1): `stream/internal.js` `handleChunkedStream` при не-200 или ошибке HEAD к googlevideo делает `res.end()` — туннель отвечает 200 и пустым телом; склейка `ffmpeg.js` при пустых входах тоже закрывает ответ пустым. Кроме того, `stream/proxy.js` качает прямые файлы через `new Agent()`, то есть **мимо** `HTTP_PROXY` (заблокированные в РФ сайты через свой cobalt в режиме прокси VPN не скачаются, в режиме TUN — да).
+- `_fetch_file`: `got == 0` → `CobaltFail(EMPTY_TUNNEL)`; `Content-Length` и меньше байт → «оборвался»; `_media_ok()` — `ffprobe -read_intervals %+#5 -count_packets`, годен, если хоть в одном потоке есть пакеты (проверено на mp4, фрагментированном mp4, webm из пайпа, mp3, jpg; пустой, только заголовок, обрезанный, мусор — отбраковываются). Нет ffprobe — проверка только по размеру. `.part` удаляется, CobaltFail → `_download_all` качает ту же ссылку yt-dlp.
+- `_cobalt_download` удаляет уже скачанные файлы карусели при ошибке. `_cd_filename` берёт `filename*=UTF-8''…` (cobalt шлёт `filename="????"` для старых клиентов).
+- Тесты: `broken_cobalt` (пустое, мусор, обрезанное тело) — на старом коде задача «готово» с `клип.mp4` 0 байт, на новом файл скачан yt-dlp.
+

@@ -472,35 +472,83 @@ def _cobalt_payload(url: str, o: dict) -> dict:
     return p
 
 
+EMPTY_TUNNEL = ("сервер cobalt отдал пустой файл: сам он не смог скачать видео с сайта "
+                "(сайт не пустил сервер или сервер ходит мимо VPN)")
+
+
+def _media_ok(path: Path) -> bool:
+    """Есть ли в файле хоть один пакет видео/звука/картинки. Туннель cobalt при ошибке на его
+    стороне отвечает «200 OK» и пустым или обрезанным телом — такой файл не считаем скачанным."""
+    if path.stat().st_size == 0:
+        return False
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return True                               # проверить нечем, размер уже не нулевой
+    try:
+        r = subprocess.run([ffprobe, "-v", "error", "-read_intervals", "%+#5", "-count_packets",
+                            "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", str(path)],
+                           capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return True
+    return r.returncode == 0 and any(int(x) for x in r.stdout.split() if x.strip().isdigit())
+
+
+def _cd_filename(cd: str) -> str:
+    """Имя из Content-Disposition. cobalt шлёт filename="????.mp4" для старых клиентов
+    и настоящее имя в filename*=UTF-8''%D0%BA…, его и берём."""
+    from urllib.parse import unquote
+    m = re.search(r"filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)", cd)
+    if m:
+        return unquote(m.group(1).strip().strip('"'))
+    m = re.search(r'filename\s*=\s*"((?:[^"\\]|\\.)*)"|filename\s*=\s*([^;]+)', cd)
+    if m:
+        return (m.group(1) if m.group(1) is not None else m.group(2)).replace('\\"', '"').strip()
+    return ""
+
+
 def _fetch_file(url: str, dest_dir: Path, name: str, emit, base: float, span: float, title: str,
                 net: dict | None = None) -> Path:
     import urllib.request
     req = urllib.request.Request(url, headers={"User-Agent": "Universal-app"})
-    with _urlopen(req, 60, net) as r:
-        if not name:
-            cd = r.headers.get("Content-Disposition") or ""
-            m = re.search(r"filename\*?=(?:UTF-8'')?\"?([^\";]+)", cd)
-            name = m.group(1) if m else url.rsplit("/", 1)[-1].split("?")[0] or "file"
-        name = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", name).strip(" .")[:150] or "file"
-        dest = dest_dir / name
-        n = 2
-        while dest.exists():                      # в карусели у файлов бывает одно имя
-            dest = dest_dir / f"{Path(name).stem} ({n}){Path(name).suffix}"
-            n += 1
-        total = int(r.headers.get("Content-Length") or 0)
-        got, t0, last = 0, time.time(), 0.0
-        with open(dest.with_suffix(dest.suffix + ".part"), "wb") as f:
-            while chunk := r.read(1 << 16):
-                f.write(chunk)
-                got += len(chunk)
-                now = time.time()
-                if now - last > 0.5:
-                    last = now
-                    speed = got / max(now - t0, 0.001) / 1048576
-                    frac = got / total if total else 0
-                    emit({"progress": base + span * frac * 0.95,
-                          "message": f"Качаю через cobalt: {title} · {speed:.1f} МБ/с"})
-    dest.with_suffix(dest.suffix + ".part").replace(dest)
+    part = None
+    try:
+        with _urlopen(req, 60, net) as r:
+            if not name:
+                name = _cd_filename(r.headers.get("Content-Disposition") or "") \
+                    or url.rsplit("/", 1)[-1].split("?")[0] or "file"
+            name = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", name).strip(" .")[:150] or "file"
+            dest = dest_dir / name
+            n = 2
+            while dest.exists():                      # в карусели у файлов бывает одно имя
+                dest = dest_dir / f"{Path(name).stem} ({n}){Path(name).suffix}"
+                n += 1
+            total = int(r.headers.get("Content-Length") or 0)
+            # склейку на лету cobalt отдаёт без длины, только с оценкой
+            estimate = total or int(r.headers.get("Estimated-Content-Length") or 0)
+            got, t0, last = 0, time.time(), 0.0
+            part = dest.with_suffix(dest.suffix + ".part")
+            with open(part, "wb") as f:
+                while chunk := r.read(1 << 16):
+                    f.write(chunk)
+                    got += len(chunk)
+                    now = time.time()
+                    if now - last > 0.5:
+                        last = now
+                        speed = got / max(now - t0, 0.001) / 1048576
+                        frac = min(got / estimate, 1) if estimate else 0
+                        emit({"progress": base + span * frac * 0.95,
+                              "message": f"Качаю через cobalt: {title} · {speed:.1f} МБ/с"})
+        if got == 0:
+            raise CobaltFail(EMPTY_TUNNEL)
+        if total and got < total:
+            raise CobaltFail(f"файл от cobalt оборвался ({got} из {total} байт)")
+        if not _media_ok(part):
+            raise CobaltFail(EMPTY_TUNNEL.replace("пустой файл", "битый файл"))
+    except BaseException:
+        if part:
+            part.unlink(missing_ok=True)
+        raise
+    part.replace(dest)
     return dest
 
 
@@ -530,22 +578,25 @@ def _cobalt_download(url: str, o: dict, out: Path, emit, base: float, span: floa
             text += (" (свой сервер в Docker ходит в интернет сам: если сайт открывается только через VPN, "
                      "нажми «Перезапустить и обновить сервер» при включённом VPN — прокси передастся в контейнер)")
         raise CobaltFail(text)
+    made: list[Path] = []
     try:
         if status in ("tunnel", "redirect"):
             title = data.get("filename") or url
-            _fetch_file(data["url"], out, data.get("filename", ""), emit, base, span, title, o)
+            made.append(_fetch_file(data["url"], out, data.get("filename", ""), emit, base, span, title, o))
             return 1
         if status == "picker":
             items = [x["url"] for x in data.get("picker", []) if x.get("url")]
             if data.get("audio"):
                 items.append(data["audio"])
             for k, item in enumerate(items):
-                _fetch_file(item, out, "", emit, base + span * k / len(items), span / len(items),
-                            f"{k + 1} из {len(items)}", o)
+                made.append(_fetch_file(item, out, "", emit, base + span * k / len(items), span / len(items),
+                                        f"{k + 1} из {len(items)}", o))
             return len(items)
-    except CobaltFail:
-        raise
     except Exception as e:
+        for p in made:                            # карусель не до конца: yt-dlp скачает всё заново
+            p.unlink(missing_ok=True)
+        if isinstance(e, CobaltFail):
+            raise
         raise CobaltFail(f"файл не скачался ({e.__class__.__name__})")
     raise CobaltFail(f"неожиданный ответ сервера: {status}")
 
