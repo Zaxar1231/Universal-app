@@ -2,6 +2,7 @@
 
 [![Тесты](https://github.com/Zaxar1231/Universal-app/actions/workflows/tests.yml/badge.svg)](https://github.com/Zaxar1231/Universal-app/actions/workflows/tests.yml)
 [![Сайт](https://img.shields.io/badge/сайт-открыть-00696b)](https://zaxar1231.github.io/Universal-app/)
+[![Релиз](https://img.shields.io/github/v/release/Zaxar1231/Universal-app?label=релиз)](https://github.com/Zaxar1231/Universal-app/releases/latest)
 [![Лицензия: AGPL-3.0](https://img.shields.io/badge/лицензия-AGPL--3.0-blue)](LICENSE)
 
 **[Открыть сайт →](https://zaxar1231.github.io/Universal-app/)**: QR-коды, конвертер картинок и правка PDF работают прямо в браузере, в том числе на телефоне. Видео, аудио и скачивание требуют полной версии (ниже).
@@ -42,8 +43,9 @@
    - Windows: `choco install ffmpeg imagemagick pandoc poppler libreoffice-fresh`
    - Debian/Ubuntu: `sudo apt install ffmpeg imagemagick pandoc poppler-utils libreoffice`
    - macOS: `brew install ffmpeg imagemagick pandoc poppler`
-3. Запуск: Windows `run.bat`, Linux/macOS `./run.sh`. Скрипты сами создадут окружение, доставят новые зависимости после обновления и каждый раз обновят yt-dlp.
-4. Открой http://localhost:5000
+3. [Скачай последний релиз](https://github.com/Zaxar1231/Universal-app/releases/latest) (`universal-X.Y.Z.zip`) и распакуй.
+4. Запуск: Windows `run.bat`, Linux/macOS `./run.sh`. Скрипты сами создадут окружение, доставят новые зависимости после обновления и каждый раз обновят yt-dlp.
+5. Открой http://localhost:5000
 
 Если нужной программы нет, интерфейс покажет красный баннер в соответствующем режиме.
 
@@ -82,6 +84,9 @@ NET=1 python -m pytest -q    # плюс настоящее скачивание 
 
 ## Сайт
 Папка `site/` публикуется на GitHub Pages workflow-ом `.github/workflows/pages.yml` при каждом пуше в `main`. Это статическая страница: QR (qrcode-generator), картинки (canvas) и PDF (pdf-lib) работают в браузере, её можно установить на телефон как приложение и пользоваться офлайн.
+
+## Релизы
+Описание версий в `CHANGELOG.md`. Новый релиз: добавь раздел `## vX.Y.Z` в CHANGELOG и запусти workflow «Релиз» (Actions → Релиз → Run workflow) или запушь тег `vX.Y.Z`. Архив и описание соберутся сами.
 
 ## Лицензии
 Проект под AGPL-3.0 (см. `LICENSE`): набор форматов и логика параметров звука/видео в конвертере взяты из проекта VERT (AGPL-3.0). yt-dlp — Unlicense. Скачивай только то, на что у тебя есть права.
