@@ -581,3 +581,45 @@ def test_engine_resolve_falls_back_to_release_page(monkeypatch):
             engines._resolve_url({"repo": "no/such", "asset": "x"})
     finally:
         srv.shutdown()
+
+
+def test_engine_7z_falls_back_to_7zip(engine_env, monkeypatch, tmp_path):
+    """py7zr не осилил архив (BCJ2) -> распаковка внешним 7-Zip."""
+    engines, srv_dir, base = engine_env
+    py7zr = pytest.importorskip("py7zr")      # есть в настольных зависимостях, в обычных нет
+    with py7zr.SevenZipFile(srv_dir / "im.7z", "w") as z:
+        z.writestr("x", "ImageMagick-7/magick.exe")
+    calls = []
+
+    class Broken:
+        def __init__(self, *a, **k):
+            raise RuntimeError("BCJ2 filter is not supported by py7zr")
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        out = Path([c for c in cmd if c.startswith("-o")][0][2:])
+        (out / "ImageMagick-7").mkdir(parents=True)
+        (out / "ImageMagick-7" / "magick.exe").write_text("x")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(py7zr, "SevenZipFile", Broken)
+    monkeypatch.setattr(engines, "_seven_zip_exe", lambda: "7zr")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setitem(engines.CATALOG, "imagemagick", {**engines.CATALOG["imagemagick"], "url": base + "/im.7z"})
+    path = engines.install("imagemagick")
+    assert calls and calls[0][:2] == ["7zr", "x"]
+    assert Path(path, "magick.exe").exists()
+
+
+def test_engine_asset_priority():
+    import engines
+    spec = engines.CATALOG["imagemagick"]
+    assets = [("ImageMagick-7.1.2-portable-Q16-HDRI-x64.7z", "u7z"), ("ImageMagick-7.1.2-portable-Q16-HDRI-x64.zip", "uzip")]
+    orig = engines._assets_from_api
+    try:
+        engines._assets_from_api = lambda repo: assets
+        assert engines._resolve_url(spec) == "uzip"
+        engines._assets_from_api = lambda repo: assets[:1]
+        assert engines._resolve_url(spec) == "u7z"
+    finally:
+        engines._assets_from_api = orig
