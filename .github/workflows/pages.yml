@@ -1,9 +1,9 @@
 name: Сайт на GitHub Pages
 
 on:
+  # на каждый пуш в main: иначе, если чужой деплой перезапишет Pages, сайт не восстановится сам
   push:
     branches: [main]
-    paths: ["site/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:
