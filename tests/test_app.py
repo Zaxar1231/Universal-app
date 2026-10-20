@@ -1145,7 +1145,6 @@ FAKE_RELEASE = {"version": "99.1.0", "notes": "- **Новое**: что-то\n- 
     ("universal_99.1.0_all.deb", "https://example.test/u.deb", 1),
     ("universal-99.1.0-1.noarch.rpm", "https://example.test/u.rpm", 1),
     ("universal-99.1.0-1-any.pkg.tar.zst", "https://example.test/u.pkg.tar.zst", 1),
-    ("universal-99.1.0.zip", "https://example.test/u.zip", 1),
     ("Universal-99.1.0-android.apk", "https://example.test/u.apk", 1)]}
 
 
@@ -1171,11 +1170,13 @@ def test_update_check_and_cache(fake_release, monkeypatch):
 
 def test_update_assets_per_platform(fake_release, monkeypatch):
     want = {"deb": "universal_99.1.0_all.deb", "rpm": "universal-99.1.0-1.noarch.rpm",
-            "arch": "universal-99.1.0-1-any.pkg.tar.zst", "source": "universal-99.1.0.zip"}
+            "arch": "universal-99.1.0-1-any.pkg.tar.zst"}
     for k, name in want.items():
         monkeypatch.setattr(updater, "kind", lambda k=k: k)
         d = updater.check()
-        assert d["asset"]["name"] == name and d["can_install"] == (k != "source")
+        assert d["asset"]["name"] == name and d["can_install"]
+    monkeypatch.setattr(updater, "kind", lambda: "source")     # из исходников: только ссылка, обновление через git pull
+    assert updater.check()["asset"] is None and not updater.check()["can_install"]
     monkeypatch.setattr(updater, "kind", lambda: "dmg")
     monkeypatch.setattr(updater.platform, "machine", lambda: "x86_64")
     assert updater.check()["asset"]["name"] == "Universal-99.1.0-macos-x86_64.dmg"

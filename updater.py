@@ -11,7 +11,7 @@
 - macOS: качается .dmg под свой процессор и открывается в Finder;
 - Linux (пакет): качается .deb/.rpm/.pkg.tar.zst под дистрибутив и открывается
   «Установкой приложений»; рядом команда для терминала;
-- из исходников и в Docker: только ссылка на релиз.
+- из исходников и в Docker: только ссылка на релиз (обновляются через git pull).
 """
 from __future__ import annotations
 
@@ -111,7 +111,6 @@ ASSET_RE = {
     "deb": r"^universal_[\d.]+_all\.deb$",
     "rpm": r"^universal-[\d.]+-\d+\.noarch\.rpm$",
     "arch": r"^universal-[\d.]+-\d+-any\.pkg\.tar\.zst$",
-    "source": r"^universal-[\d.]+\.zip$",
 }
 
 
