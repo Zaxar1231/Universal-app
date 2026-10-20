@@ -4,7 +4,7 @@ Architecture: all
 Maintainer: Universal <noreply@github.com>
 Installed-Size: @SIZE@
 Depends: python3 (>= 3.10), python3-gi, gir1.2-webkit2-4.1 | gir1.2-webkit2-4.0, python3-pil, python3-cryptography, ffmpeg, imagemagick, pandoc, poppler-utils
-Recommends: libreoffice-writer, ocrmypdf, tesseract-ocr-rus
+Recommends: libreoffice-writer, ocrmypdf, tesseract-ocr-rus, python3-py7zr
 Section: utils
 Priority: optional
 Homepage: https://github.com/Zaxar1231/Universal-app

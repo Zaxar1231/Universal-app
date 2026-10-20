@@ -1261,3 +1261,107 @@ def test_about_nerd(client):
     pk = dict(next(s for s in d["sections"] if s["title"] == "Python-пакеты")["rows"])
     assert pk["flask"] != "нет"
     assert client.get("/api/about/nerd", environ_base={"REMOTE_ADDR": "192.168.1.9"}).status_code == 403
+
+
+# ---------------------------------------------------------------- архивы и файлы
+
+def _files_post(client, files, **form):
+    data = {"files": [(io.BytesIO(b), n) for n, b in files], "relpath": [r for r, _ in files], **form}
+    r = client.post("/api/files", data=data, content_type="multipart/form-data")
+    assert r.status_code == 200, r.get_json()
+    return wait_task(client, r.get_json()["task"])
+
+
+def test_files_zip_keeps_folders_and_downloads_nested(client):
+    d = _files_post(client, [("папка/a.txt", b"one"), ("папка/вложенная/b.txt", b"two")], op="zip", name="мой архив")
+    assert d["status"] == "done" and d["names"] == ["мой архив.zip"]
+    z = zipfile.ZipFile(webapp.WORK_ROOT / d["job"] / "out" / "мой архив.zip")
+    assert sorted(z.namelist()) == ["папка/a.txt", "папка/вложенная/b.txt"] and z.read("папка/вложенная/b.txt") == b"two"
+    # распаковка того же архива: папки сохраняются, отдельный файл качается по вложенному пути
+    zbytes = (webapp.WORK_ROOT / d["job"] / "out" / "мой архив.zip").read_bytes()
+    d = _files_post(client, [("мой архив.zip", zbytes)], op="extract")
+    assert d["status"] == "done" and sorted(d["names"]) == ["мой архив/папка/a.txt", "мой архив/папка/вложенная/b.txt"]
+    assert client.get(f"/api/file/{d['job']}/мой архив/папка/вложенная/b.txt").data == b"two"
+    assert client.get(f"/api/file/{d['job']}/../../etc/passwd").status_code == 404
+    bundle = zipfile.ZipFile(io.BytesIO(client.get(f"/api/download/{d['job']}").data))
+    assert "мой архив/папка/вложенная/b.txt" in bundle.namelist()
+
+
+def test_files_extract_windows_names_and_zip_slip(client, monkeypatch):
+    buf = io.BytesIO()
+    # «Проводник» Windows пишет имена в cp866 без флага UTF-8; zipfile Python так сам не умеет — подменяем кодирование
+    monkeypatch.setattr(zipfile.ZipInfo, "_encodeFilenameFlags",
+                        lambda self: (self.filename.encode("cp866", "replace"), self.flag_bits & ~0x800))
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("Документ.txt", b"x")
+        z.writestr("../../evil.txt", b"bad")
+    monkeypatch.undo()
+    d = _files_post(client, [("win.zip", buf.getvalue())], op="extract")
+    assert d["status"] == "done"
+    assert "win/Документ.txt" in d["names"] and all("evil" not in n or n.startswith("win/") for n in d["names"])
+    assert not (webapp.WORK_ROOT / d["job"] / "evil.txt").exists()
+
+
+@pytest.mark.skipif(not __import__("filetools").has_7z(), reason="нет py7zr")
+def test_files_7z_with_password(client):
+    d = _files_post(client, [("секрет.txt", "тайна".encode())], op="7z", name="s", password="пароль")
+    assert d["status"] == "done" and d["names"] == ["s.7z"]
+    data = (webapp.WORK_ROOT / d["job"] / "out" / "s.7z").read_bytes()
+    bad = _files_post(client, [("s.7z", data)], op="extract", password="не тот")
+    assert bad["status"] == "error"
+    ok = _files_post(client, [("s.7z", data)], op="extract", password="пароль")
+    assert ok["status"] == "done" and ok["names"] == ["s/секрет.txt"]
+
+
+def test_files_hash_and_rename(client):
+    import hashlib
+    d = _files_post(client, [("a.bin", b"abc"), ("b.bin", b"")], op="hash", algos="md5,sha256")
+    rows = {r["name"]: r for r in d["result"]["hashes"]}
+    assert rows["a.bin"]["sha256"] == hashlib.sha256(b"abc").hexdigest() and rows["b.bin"]["md5"] == hashlib.md5(b"").hexdigest()
+    assert sorted(d["names"]) == ["MD5SUMS.txt", "SHA256SUMS.txt"]
+    sums = (webapp.WORK_ROOT / d["job"] / "out" / "SHA256SUMS.txt").read_text(encoding="utf-8")
+    assert f"{hashlib.sha256(b'abc').hexdigest()}  a.bin" in sums
+    d = _files_post(client, [("IMG_1.JPG", b"1"), ("IMG_2.JPG", b"2")], op="rename", template="отпуск_{n}", start="5",
+                    digits="3", case="lower")
+    assert sorted(d["names"]) == ["отпуск_005.jpg", "отпуск_006.jpg"]
+    r = client.post("/api/files", data={"files": [(io.BytesIO(b"x"), "a")], "op": "rename", "template": "same"},
+                    content_type="multipart/form-data")
+    assert r.status_code == 400                               # без {name}/{n} все получили бы одно имя
+
+
+# ---------------------------------------------------------------- редактор документов и фоторедактор
+
+def test_doc_open_save_text_and_html(client):
+    r = client.post("/api/doc/open", data={"file": (io.BytesIO("строка 1\nстрока <2>".encode()), "заметка.txt")},
+                    content_type="multipart/form-data").get_json()
+    assert r["name"] == "заметка" and "строка &lt;2&gt;" in r["html"]
+    r = client.post("/api/doc/open", data={"file": (io.BytesIO(b"<html><body><p onclick='x()'>hi</p><script>bad()</script></body></html>"), "p.html")},
+                    content_type="multipart/form-data").get_json()
+    assert "hi" in r["html"] and "script" not in r["html"] and "onclick" not in r["html"]
+    s = client.post("/api/doc/save", data={"html": "<h1>Тест</h1><p>текст</p>", "format": "html", "name": "отчёт"}).get_json()
+    body = client.get(s["url"]).data.decode()
+    assert s["name"] == "отчёт.html" and "<h1>Тест</h1>" in body
+
+
+@pytest.mark.skipif(not shutil.which("pandoc"), reason="нет pandoc")
+def test_doc_roundtrip_docx(client):
+    s = client.post("/api/doc/save", data={"html": "<h1>Заголовок</h1><p><b>жирный</b> текст</p><table><tr><td>A1</td></tr></table>",
+                                           "format": "docx", "name": "doc"}).get_json()
+    data = client.get(s["url"]).data
+    assert data[:2] == b"PK"
+    r = client.post("/api/doc/open", data={"file": (io.BytesIO(data), "doc.docx")}, content_type="multipart/form-data").get_json()
+    assert "Заголовок" in r["html"] and "жирный" in r["html"] and "<table" in r["html"].lower()
+
+
+def test_photo_load_converts_for_browser(client):
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (30, 20), (10, 200, 30)).save(buf, "TIFF")
+    r = client.post("/api/photo/load", data={"file": (io.BytesIO(buf.getvalue()), "scan.tif")}, content_type="multipart/form-data")
+    assert r.status_code == 200 and r.data[:8] == b"\x89PNG\r\n\x1a\n"
+    assert Image.open(io.BytesIO(r.data)).size == (30, 20)
+
+
+def test_static_editors_served(client):
+    for path in ("/static/docedit.js", "/static/photoedit.js", "/static/vendor/jodit/jodit.min.js"):
+        assert client.get(path).status_code == 200

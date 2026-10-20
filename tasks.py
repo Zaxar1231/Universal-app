@@ -46,6 +46,14 @@ def kill_tree(proc: subprocess.Popen) -> None:
             pass
 
 
+def result_files(out_dir: Path) -> list[Path]:
+    """Все файлы в папке результата, включая вложенные; скрытое (профили LibreOffice и т.п.) не считается."""
+    if not out_dir.is_dir():
+        return []
+    return sorted(p for p in out_dir.rglob("*") if p.is_file()
+                  and not any(part.startswith(".") for part in p.relative_to(out_dir).parts))
+
+
 class Cancelled(Exception):
     """Пользователь нажал «Отмена»."""
 
@@ -91,10 +99,8 @@ class Task:
             kill_tree(proc)
 
     def outputs(self) -> list[str]:
-        if not self.out_dir.is_dir():
-            return []
-        return sorted(p.name for p in self.out_dir.iterdir()
-                      if p.is_file() and not p.name.startswith("."))
+        """Файлы результата (относительные пути: распаковка архивов сохраняет папки)."""
+        return [p.relative_to(self.out_dir).as_posix() for p in result_files(self.out_dir)]
 
     def to_dict(self) -> dict:
         with self._lock:

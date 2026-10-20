@@ -37,7 +37,9 @@ from flask import Flask, Response, jsonify, render_template, request, send_file,
 import about
 import converters as conv
 import downloader
+import docedit
 import editor
+import filetools
 import engines as engine_store
 import ocr
 import pdftools
@@ -45,7 +47,7 @@ import phoneserver
 import qrdoc
 import qrtools
 import updater
-from tasks import Task, TaskManager
+from tasks import Task, TaskManager, result_files
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024  # 2 ГБ на запрос
@@ -773,7 +775,7 @@ def download(job: str):
     out_dir = WORK_ROOT / job / "out"
     if not out_dir.is_dir():
         abort(404)
-    items = sorted(p for p in out_dir.iterdir() if p.is_file() and not p.name.startswith("."))
+    items = result_files(out_dir)
     if request.args.get("raw") == "1" and len(items) == 1:
         one = items[0]
         resp = send_file(one, mimetype=mimetypes.guess_type(one.name)[0] or "application/octet-stream",
@@ -789,7 +791,7 @@ def download(job: str):
         tmp = bundle.with_suffix(".tmp")
         with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED, allowZip64=True) as zf:
             for p in items:
-                zf.write(p, p.name)
+                zf.write(p, p.relative_to(out_dir).as_posix())
         tmp.replace(bundle)
     name_file = WORK_ROOT / job / "name.txt"
     try:
@@ -840,8 +842,11 @@ def download_one(job: str, name: str):
     if not re.fullmatch(r"[0-9a-f]{12}", job):
         abort(404)
     out_dir = WORK_ROOT / job / "out"
-    one = out_dir / name
-    if "/" in name or "\\" in name or name.startswith(".") or not one.is_file():
+    one = (out_dir / name).resolve()
+    parts = name.split("/")
+    # вложенные пути бывают после распаковки архива; выше папки результата не пускаем
+    if "\\" in name or any(not p or p.startswith(".") for p in parts) or not one.is_file() \
+            or out_dir.resolve() not in one.parents:
         abort(404)
     resp = send_file(one, mimetype=mimetypes.guess_type(one.name)[0] or "application/octet-stream",
                      as_attachment=True, download_name="file")
@@ -1078,6 +1083,98 @@ def engine_install(name: str):
     task = Task(job_id, "engine", job_dir, archive)
     TASKS.submit(task, lambda t: engine_store.install(name, t))
     return jsonify(task.to_dict())
+
+
+# ---------- Архивы и файлы ----------
+
+@app.route("/api/files", methods=["POST"])
+def files_tools():
+    try:
+        opts = filetools.read_opts(request.form)
+    except filetools.FileToolError as e:
+        return jsonify({"error": str(e)}), 400
+    files = [f for f in request.files.getlist("files") if f.filename]
+    if not files:
+        return jsonify({"error": "Файлы не выбраны"}), 400
+    rels = request.form.getlist("relpath")
+    job_id, job_dir, archive = new_job(request.form.get("archive_name", "") or "files")
+    items, used = [], set()
+    # имена (и папки, если выбрали папку) сохраняются как у пользователя: они уйдут в архив
+    for i, f in enumerate(files):
+        rel = filetools.clean_rel(rels[i] if i < len(rels) and rels[i] else f.filename)
+        base, n = rel, 2
+        while rel.lower() in used:
+            p = Path(base)
+            rel = (p.parent / f"{p.stem} ({n}){p.suffix}").as_posix().lstrip("./")
+            n += 1
+        used.add(rel.lower())
+        dst = job_dir / "in" / f"{i:05d}{Path(rel).suffix[:16]}"
+        f.save(dst)
+        items.append((dst, rel))
+    task = Task(job_id, "files", job_dir, archive)
+    TASKS.submit(task, lambda t: filetools.run_files_task(t, items, opts, archive))
+    return jsonify(task.to_dict())
+
+
+# ---------- Редактор документов ----------
+
+@app.route("/api/doc/caps")
+def doc_caps():
+    return jsonify(docedit.caps())
+
+
+@app.route("/api/doc/open", methods=["POST"])
+def doc_open():
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"error": "Файл не выбран"}), 400
+    ext = Path(f.filename).suffix.lower()
+    with tempfile.TemporaryDirectory(dir=WORK_ROOT) as tmp:
+        src = Path(tmp) / f"doc{ext}"
+        f.save(src)
+        try:
+            d = docedit.open_doc(src)
+        except (docedit.DocError, conv.ConvertError) as e:
+            return jsonify({"error": f"Не открылся: {e}"}), 400
+    d["name"] = Path(f.filename).stem
+    return jsonify(d)
+
+
+@app.route("/api/doc/save", methods=["POST"])
+def doc_save():
+    fmt = request.form.get("format", "docx")
+    name = safe_stem((request.form.get("name") or "документ") + ".x")
+    job_id, job_dir, _ = new_job(name)
+    try:
+        out = docedit.save_doc(request.form.get("html", ""), fmt, job_dir / "out", name)
+    except (docedit.DocError, conv.ConvertError) as e:
+        return jsonify({"error": f"Не сохранилось: {e}"}), 400
+    return jsonify({"job": job_id, "name": out.name, "url": f"/api/download/{job_id}?raw=1"})
+
+
+# ---------- Фоторедактор: открыть то, что браузер сам не умеет (HEIC, TIFF, PSD, RAW…) ----------
+
+@app.route("/api/photo/load", methods=["POST"])
+def photo_load():
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"error": "Файл не выбран"}), 400
+    with tempfile.TemporaryDirectory(dir=WORK_ROOT) as tmp:
+        src = Path(tmp) / ("in" + (Path(f.filename).suffix.lower()[:8] or ".bin"))
+        f.save(src)
+        out = Path(tmp) / "out.png"
+        try:
+            with Image.open(src) as im:
+                im = ImageOps.exif_transpose(im)
+                im.convert("RGBA" if im.mode in ("RGBA", "LA", "P") else "RGB").save(out, "PNG")
+        except Exception:
+            magick = conv._magick()
+            if not magick:
+                return jsonify({"error": "Этот формат открывается через ImageMagick, а он не установлен"}), 400
+            res = subprocess.run([magick, f"{src}[0]", "-auto-orient", str(out)], capture_output=True, timeout=120)
+            if res.returncode != 0 or not out.exists():
+                return jsonify({"error": "Не получилось открыть картинку"}), 400
+        return send_file(io.BytesIO(out.read_bytes()), mimetype="image/png")
 
 
 # ---------- Распознавание текста (OCRmyPDF) ----------
