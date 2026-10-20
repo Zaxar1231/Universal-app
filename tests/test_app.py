@@ -1250,3 +1250,14 @@ def test_about_info(client, phone):
     remote = json.loads(body)
     assert st == 200 and "home" not in remote and "jobs" not in remote and all(not t["path"] for t in remote["tools"])
     assert client.post("/api/about/open", environ_base={"REMOTE_ADDR": "10.0.0.2"}).status_code == 403
+
+
+def test_about_nerd(client):
+    d = client.get("/api/about/nerd").get_json()
+    titles = [s["title"] for s in d["sections"]]
+    assert titles[:2] == ["Приложение", "Система"] and "Python-пакеты" in titles and "Движки" in titles
+    app_rows = dict(d["sections"][0]["rows"])
+    assert app_rows["Версия"] == updater.VERSION and app_rows["PID"] == str(os.getpid())
+    pk = dict(next(s for s in d["sections"] if s["title"] == "Python-пакеты")["rows"])
+    assert pk["flask"] != "нет"
+    assert client.get("/api/about/nerd", environ_base={"REMOTE_ADDR": "192.168.1.9"}).status_code == 403

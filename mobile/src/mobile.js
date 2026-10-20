@@ -394,6 +394,65 @@
     a.onclick = e => { e.preventDefault(); if (native) Browser.open({ url: a.href }); else window.open(a.href, '_blank'); };
   });
 
+  /* ---------- «Для зануд» ---------- */
+  let nerdData = null;
+  async function collectNerd() {
+    const mm = q => matchMedia(q).matches, secs = [];
+    const fmtT = t => (t ? new Date(+t).toLocaleString() : '—');
+    secs.push({ title: 'Приложение', rows: [
+      ['Версия', typeof APP_VERSION === 'string' ? APP_VERSION : '—'], ['Платформа', platform],
+      ['Нативное приложение', native ? 'да' : 'нет, браузер'],
+      ['Плагины', native && window.Capacitor.PluginHeaders ? window.Capacitor.PluginHeaders.map(p => p.name).join(', ') : '—'] ] });
+    let est = null;
+    try { est = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate() : null; } catch (_) { /* нет API */ }
+    secs.push({ title: 'Телефон', rows: [
+      ['Движок', navigator.userAgent], ['Экран', `${screen.width}×${screen.height}, окно ${innerWidth}×${innerHeight}, масштаб ${devicePixelRatio}`],
+      ['Язык', (navigator.languages || [navigator.language]).join(', ')], ['Часовой пояс', Intl.DateTimeFormat().resolvedOptions().timeZone],
+      ['Тема', mm('(prefers-color-scheme: dark)') ? 'тёмная' : 'светлая'], ['Сеть', navigator.onLine ? 'есть' : 'нет'],
+      ['Память WebView', est ? `${fmtSize(est.usage || 0)} из ${fmtSize(est.quota || 0)}` : '—'] ] });
+    let files = '—';
+    if (native) {
+      try {
+        const list = ((await Filesystem.readdir({ path: FOLDER, directory: DIR })).files || []).filter(f => f.type !== 'directory');
+        files = `${list.length} шт., ${fmtSize(list.reduce((a, f) => a + (f.size || 0), 0))}`;
+      } catch (_) { files = 'папки ещё нет'; }
+    }
+    let upd = {};
+    try { upd = JSON.parse(store.get('updInfo') || '{}'); } catch (_) { /* битый кэш */ }
+    secs.push({ title: 'Данные', rows: [['Папка', WHERE], ['Файлы', files], ['Последний релиз', upd.version || '—'],
+      ['Проверено', fmtT(store.get('updChecked'))], ['Отложена версия', store.get('updSkip') || '—']] });
+    const srv = baseUrl(store.get('serverUrl')), rows = [['Адрес', srv || 'не задан'], ['Пароль', store.get('serverPass') ? 'задан' : 'нет']];
+    if (srv) {
+      try {
+        const t0 = Date.now(), r = await http('GET', srv + 'api/about', { headers: serverAuth() });
+        rows.push(['Ответ', `${r.status} за ${Date.now() - t0} мс`]);
+        if (r.status === 200 && r.data && r.data.version) {
+          rows.push(['Universal', r.data.version], ['ОС', r.data.os], ['Python', r.data.python], ['Установка', r.data.install]);
+          (r.data.tools || []).forEach(t => rows.push([t.name, t.installed ? (t.version || 'есть') : 'нет']));
+        }
+      } catch (e) { rows.push(['Ответ', String(e.message || e)]); }
+    }
+    secs.push({ title: 'Компьютер', rows });
+    return secs;
+  }
+  async function loadNerd() {
+    $('nerdState').textContent = 'Собираю…';
+    nerdData = await collectNerd();
+    $('nerdBody').innerHTML = nerdData.map(sec => `<h4>${esc(sec.title)}</h4><table>` +
+      sec.rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('') + '</table>').join('');
+    $('nerdState').textContent = '';
+  }
+  $('nerd').addEventListener('toggle', () => { if ($('nerd').open) loadNerd(); });
+  $('nerdCopy').onclick = async () => {
+    if (!nerdData) await loadNerd();
+    const text = '### Universal (телефон) — информация для отчёта\n' + nerdData.map(sec => `\n**${sec.title}**\n` +
+      sec.rows.map(([k, v]) => `- ${k}: ${v}`).join('\n')).join('\n');
+    try {
+      if (native) await Clipboard.write({ string: text }); else await navigator.clipboard.writeText(text);
+      $('nerdState').textContent = 'Скопировано';
+    } catch (e) { $('nerdState').textContent = 'Не скопировалось: ' + (e.message || e); }
+  };
+
   /* ---------- вкладка «Инфо»: что за компьютер подключён ---------- */
   async function loadInfo() {
     $('infoDevice').textContent = `Версия ${typeof APP_VERSION === 'string' ? APP_VERSION : ''} · ${platform === 'ios' ? 'iPhone' : platform === 'android' ? 'Android' : 'браузер'}`;

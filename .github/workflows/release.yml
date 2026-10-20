@@ -23,7 +23,8 @@ jobs:
           V="${{ github.event.inputs.version }}"
           [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
-          printf 'VERSION = "%s"\n' "$V" > version.py     # приложение сверяет её с последним релизом
+          # приложение сверяет версию с последним релизом, а коммит и дату показывает в «Инфо → Для зануд»
+          printf 'VERSION = "%s"\nCOMMIT = "%s"\nBUILT = "%s"\n' "$V" "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%MZ)" > version.py
       - name: Описание из CHANGELOG.md
         run: |
           awk -v v="v${{ steps.v.outputs.version }}" '
@@ -60,7 +61,8 @@ jobs:
           V="${{ github.event.inputs.version }}"
           [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
-          printf 'VERSION = "%s"\n' "$V" > version.py     # приложение сверяет её с последним релизом
+          # приложение сверяет версию с последним релизом, а коммит и дату показывает в «Инфо → Для зануд»
+          printf 'VERSION = "%s"\nCOMMIT = "%s"\nBUILT = "%s"\n' "$V" "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%MZ)" > version.py
       - name: Зависимости
         run: pip install -r packaging/requirements-desktop.txt
       - name: Сборка exe
@@ -101,7 +103,8 @@ jobs:
           V="${{ github.event.inputs.version }}"
           [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
-          printf 'VERSION = "%s"\n' "$V" > version.py     # приложение сверяет её с последним релизом
+          # приложение сверяет версию с последним релизом, а коммит и дату показывает в «Инфо → Для зануд»
+          printf 'VERSION = "%s"\nCOMMIT = "%s"\nBUILT = "%s"\n' "$V" "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%MZ)" > version.py
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -179,7 +182,8 @@ jobs:
           V="${{ github.event.inputs.version }}"
           [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
-          printf 'VERSION = "%s"\n' "$V" > version.py     # приложение сверяет её с последним релизом
+          # приложение сверяет версию с последним релизом, а коммит и дату показывает в «Инфо → Для зануд»
+          printf 'VERSION = "%s"\nCOMMIT = "%s"\nBUILT = "%s"\n' "$V" "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%MZ)" > version.py
       - name: Готовые сборки под Intel
         # у pikepdf с 10.14 и cryptography с 49 нет сборок для macOS x86_64, а собранные из исходников
         # ломаются в .app (cryptography цепляет libssl из Homebrew, а в .app попадает libssl от Python).

@@ -1103,11 +1103,18 @@ def ocr_run():
 @app.route("/api/about")
 def about_info():
     d = about.info(refresh=request.args.get("refresh") == "1")
+    d["jobs"] = str(WORK_ROOT)
     if request.environ.get(phoneserver.MARK) or request.remote_addr not in ("127.0.0.1", "::1"):
         for k in ("home", "jobs"):                 # пути на компьютере телефону ни к чему
             d.pop(k, None)
         d["tools"] = [{**t, "path": ""} for t in d["tools"]]
     return jsonify(d)
+
+
+@app.route("/api/about/nerd")
+def about_nerd():
+    _local_only()
+    return jsonify(about.nerd(TASKS, request.host, WORK_ROOT))
 
 
 @app.route("/api/about/open", methods=["POST"])
