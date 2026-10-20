@@ -18,6 +18,8 @@ Requires:       ImageMagick
 Requires:       pandoc
 Requires:       poppler-utils
 Recommends:     libreoffice-writer
+Recommends:     ocrmypdf
+Recommends:     tesseract-langpack-rus
 %global __requires_exclude_from ^/usr/lib/universal/.*$
 %global __provides_exclude_from ^/usr/lib/universal/.*$
 %global debug_package %{nil}

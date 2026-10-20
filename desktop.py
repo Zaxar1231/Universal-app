@@ -74,6 +74,12 @@ def smoke(url: str) -> int:
                 json.dump({"urls": [], "opts": downloader.read_opts({}), "out": d, "events": ev, "cookie": ""}, f)
             subprocess.run(downloader.worker_cmd(args), timeout=120, capture_output=True)
             checks["dl_worker"] = os.path.exists(ev) and '"finished"' in open(ev, encoding="utf-8").read()
+        # OCRmyPDF попал в сборку и запускается тем же exe (Tesseract может быть ещё не поставлен).
+        # В пакетах Linux он необязательная системная зависимость: проверяем, только если стоит
+        import ocr
+        if getattr(sys, "frozen", False) or ocr.version():
+            r = subprocess.run(ocr.command(["--version"]), timeout=180, capture_output=True, text=True)
+            checks["ocrmypdf"] = r.returncode == 0 and bool(ocr.version()) and r.stdout.strip() == ocr.version()
         if sys.platform.startswith("linux"):
             import webview.platforms.gtk  # noqa: F401  (GTK и WebKit2 из зависимостей пакета)
             checks["gui"] = True
@@ -85,6 +91,11 @@ def smoke(url: str) -> int:
 
 
 def main() -> None:
+    if "--ocrmypdf" in sys.argv:
+        # тот же exe в роли OCRmyPDF (см. ocr.command): распознавание идёт отдельным процессом
+        engines.activate()
+        from ocrmypdf.__main__ import run
+        sys.exit(run(sys.argv[sys.argv.index("--ocrmypdf") + 1:]))
     if "--dl-worker" in sys.argv:
         # тот же exe в роли отдельного процесса скачивания (см. downloader.worker_cmd)
         engines.activate()
@@ -117,6 +128,9 @@ def main() -> None:
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{port}/"
     _wait(url + "api/engines")
+    if "--smoke" not in sys.argv:
+        import phoneserver
+        phoneserver.autostart(webapp.app)     # «Сервер для телефона» был включён — включаем снова
     if "--smoke" in sys.argv:
         code = smoke(url)
         server.shutdown()
