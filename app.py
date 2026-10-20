@@ -34,7 +34,6 @@ from urllib.parse import quote
 
 from flask import Flask, Response, jsonify, render_template, request, send_file, abort
 
-import cobaltlocal
 import converters as conv
 import downloader
 import editor
@@ -938,43 +937,6 @@ def dl_netcheck():
         return jsonify(downloader.net_check(downloader.read_net(request.form)))
     except downloader.DownloadFail as e:
         return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/dl/cobalt-check", methods=["POST"])
-def dl_cobalt_check():
-    """Проверка сервера cobalt: отвечает ли и какие сайты умеет."""
-    base = (request.form.get("cobalt_url") or "").strip()
-    if not re.match(r"^https?://", base, re.I):
-        return jsonify({"error": "Адрес сервера должен начинаться с http:// или https://"}), 400
-    try:
-        return jsonify(downloader.cobalt_info(base, (request.form.get("cobalt_key") or "").strip(),
-                                              downloader.read_net(request.form)))
-    except downloader.CobaltFail as e:
-        return jsonify({"error": f"cobalt: {e}"}), 400
-
-
-@app.route("/api/cobalt/local")
-def cobalt_local_status():
-    """Свой cobalt в Docker на этом компьютере: есть ли Docker, запущен ли контейнер."""
-    return jsonify(cobaltlocal.status())
-
-
-@app.route("/api/cobalt/local", methods=["POST"])
-def cobalt_local_create():
-    job_id, job_dir, archive = new_job("cobalt")
-    task = Task(job_id, "cobalt", job_dir, archive)
-    net = downloader.read_net(request.form)
-    TASKS.submit(task, lambda t: cobaltlocal.create(t, net))
-    return jsonify(task.to_dict())
-
-
-@app.route("/api/cobalt/local", methods=["DELETE"])
-def cobalt_local_remove():
-    try:
-        cobaltlocal.remove()
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    return jsonify(cobaltlocal.status())
 
 
 @app.route("/api/dl", methods=["POST"])

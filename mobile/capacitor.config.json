@@ -1,0 +1,11 @@
+{
+  "appId": "io.github.zaxar1231.universal",
+  "appName": "Universal",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": true
+  },
+  "plugins": {
+    "CapacitorHttp": { "enabled": false }
+  }
+}

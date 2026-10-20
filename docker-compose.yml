@@ -6,22 +6,8 @@ services:
     environment:
       # пароль на вход (логин любой). Без него сервер открыт всем в сети.
       - APP_PASSWORD=change-me
-      # свой сервер cobalt (см. ниже): ссылки сначала идут через него, при ошибке через yt-dlp.
-      # Если cobalt не запущен, приложение просто сразу качает через yt-dlp.
-      - COBALT_URL=http://cobalt:9000/
     volumes:
       - universal-data:/data
-    restart: unless-stopped
-
-  # необязательный cobalt (github.com/imputnet/cobalt): docker compose --profile cobalt up -d
-  cobalt:
-    image: ghcr.io/imputnet/cobalt:11
-    profiles: ["cobalt"]
-    init: true
-    read_only: true
-    environment:
-      # адрес, по которому приложение забирает готовые файлы (внутренняя сеть compose)
-      API_URL: "http://cobalt:9000/"
     restart: unless-stopped
 
 volumes:

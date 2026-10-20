@@ -206,3 +206,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "v${{ steps.v.outputs.version }}" Universal-*.dmg --clobber
+
+  mobile:
+    # APK для Android и IPA для iPhone (.github/workflows/mobile.yml)
+    needs: release
+    uses: ./.github/workflows/mobile.yml
+    with:
+      version: ${{ github.event.inputs.version || github.ref_name }}
+    secrets: inherit

@@ -164,7 +164,7 @@ footer { padding: 32px 0 calc(32px + env(safe-area-inset-bottom)); border-top: 1
       <p class="muted">Конвертер форматов в духе vert.sh, редактор видео и аудио на ffmpeg, скачивание видео с YouTube, TikTok, VK и ещё ~1800 сайтов, правка PDF и QR-коды. Ставится на компьютер или домашний сервер, файлы никуда не уходят.</p>
       <div class="actions">
         <a class="btn filled" href="#try">Попробовать в браузере</a>
-        <a class="btn tonal" href="https://github.com/Zaxar1231/Universal-app/releases/latest">Скачать: Windows, macOS, Linux</a>
+        <a class="btn tonal" href="https://github.com/Zaxar1231/Universal-app/releases/latest">Скачать: Windows, macOS, Linux, Android, iPhone</a>
         <a class="btn text" href="#run">Как запустить</a>
       </div>
     </div>
@@ -320,6 +320,14 @@ footer { padding: 32px 0 calc(32px + env(safe-area-inset-bottom)); border-top: 1
         <p class="small muted">Все файлы в <a href="https://github.com/Zaxar1231/Universal-app/releases/latest">последнем релизе</a>.</p>
       </div>
       <div class="card">
+        <h3>Android и iPhone</h3>
+        <ol class="steps small">
+          <li>Android: скачай <b>Universal-X.Y.Z-android.apk</b> из <a href="https://github.com/Zaxar1231/Universal-app/releases/latest">последнего релиза</a> на телефон и открой.</li>
+          <li>iPhone: <b>Universal-X.Y.Z-ios-unsigned.ipa</b> ставится через <a href="https://altstore.io">AltStore</a> или <a href="https://sideloadly.io">Sideloadly</a>.</li>
+          <li>Внутри: QR, картинки и PDF без интернета, скачивание видео через свой сервер Universal (yt-dlp), «Поделиться → Universal» на Android.</li>
+        </ol>
+      </div>
+      <div class="card">
         <h3>Из исходников (любая ОС)</h3>
         <ol class="steps small">
           <li>Поставь <a href="https://www.python.org/downloads/">Python 3.10+</a> (на Windows отметь «Add Python to PATH»).</li>
@@ -372,6 +380,7 @@ docker compose up -d --build</code></pre>
   const extOf = n => (n.split('.').pop() || '').toLowerCase();
   const fmtSize = b => b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' КБ' : (b / 1048576).toFixed(1) + ' МБ';
   function save(blob, name) {
+    if (window.universalSave) return window.universalSave(blob, name);   // приложение для телефона сохраняет само
     const a = document.createElement('a'), u = URL.createObjectURL(blob);
     a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(u), 10000);
@@ -582,7 +591,7 @@ docker compose up -d --build</code></pre>
   syncPdf();
 
   /* офлайн и «на главный экран» */
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.Capacitor) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
 </script>
 </body>
