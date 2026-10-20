@@ -122,6 +122,9 @@ Linux-пакеты собирает `packaging/linux/build.sh` (дерево `/u
 
 Windows: `desktop.py` запускает тот же сервер внутри окна pywebview, `engines.py` качает движки в `%LOCALAPPDATA%\Universal\engines`. Exe собирает PyInstaller (`packaging/universal.spec`), установщик Inno Setup (`packaging/installer.iss`); всё это делает workflow «Релиз» на Windows-раннере и перед публикацией запускает `Universal.exe --smoke`. Локально: `pip install -r packaging/requirements-desktop.txt && python desktop.py`.
 
+## Автомерж
+PR из веток `claude/…` сливаются в `main` сами (workflow «Автомерж»), когда на последнем коммите все проверки зелёные. Черновики, PR с красными проверками и с конфликтами не сливаются. После слияния он же обновляет сайт на GitHub Pages.
+
 ## Релизы
 Описание версий в `CHANGELOG.md`. Новый релиз: добавь раздел `## vX.Y.Z` в CHANGELOG и запусти workflow «Релиз» (Actions → Релиз → Run workflow) или запушь тег `vX.Y.Z`. Архив и описание соберутся сами. К релизу прикладываются установщик и портативная версия для Windows, пакеты для Linux и macOS, APK для Android и IPA для iPhone, а также архив исходников только с файлами для работы: модули `*.py`, `templates/`, `requirements.txt`, `run.bat`, `run.sh`, README и LICENSE. Тесты, Docker и сайт берутся из репозитория (`git clone`).
 

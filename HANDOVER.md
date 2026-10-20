@@ -430,3 +430,13 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
   - Android: APK качается в `Directory.Cache`, затем `ApkInstallPlugin.install` вызывает FileProvider и `ACTION_VIEW`; без разрешения открывает `ACTION_MANAGE_UNKNOWN_APP_SOURCES`. В манифесте `REQUEST_INSTALL_PACKAGES`;
   - iOS: ссылка на релиз.
 
+### 13.15 Автомерж
+- `.github/workflows/automerge.yml` срабатывает на `workflow_run` (завершение «Тестов» или «Телефонов», событие pull_request, ветка `claude/…`, тот же репозиторий).
+- Порядок работы:
+  1. ищет открытый не-черновик PR на этом `head_sha`;
+  2. до 20 мин ждёт, пока доедут остальные check-runs коммита;
+  3. если что-то красное или есть конфликт, ничего не делает;
+  4. иначе выполняет `gh pr merge --merge`.
+- Слияние от `GITHUB_TOKEN` не запускает workflow на push в main, поэтому после него вызывается `gh workflow run pages.yml`.
+- Работает только после того, как сам файл попал в main: `workflow_run` берётся из ветки по умолчанию.
+
