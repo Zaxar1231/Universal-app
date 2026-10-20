@@ -1376,3 +1376,20 @@ def test_pdf_editor_assets(client):
     assert client.get("/static/vendor/pdfjs/cmaps/78-H.bcmap").status_code == 200
     page = client.get("/").get_data(as_text=True)
     assert 'id="pdfView"' in page and "pdfedit.js" in page and "'Редактор PDF'" in page
+
+
+def test_changelog_since():
+    import changelog
+    text = "# История\n\n## v2.1.0 — 2026-11-01\n- новое\n\n## v2.0.0 — 2026-10-20\n### Раздел\n- ещё\n\n## v1.9.0 — 2026-10-01\n- старое\n"
+    assert [s["version"] for s in changelog.since("1.9.0", "2.1.0", text=text)] == ["2.1.0", "2.0.0"]
+    assert [s["version"] for s in changelog.since("", "2.0.0", text=text)] == ["2.0.0"]
+    assert changelog.since("2.0.0", "2.0.0", text=text) == []
+    assert changelog.sections(text)[1]["md"].startswith("### Раздел")
+
+
+def test_whatsnew_route(client):
+    import updater
+    d = client.get("/api/whatsnew").get_json()
+    assert d["version"] == updater.VERSION
+    assert d["sections"] and d["sections"][0]["version"] == updater.VERSION   # CHANGELOG.md не отстаёт от version.py
+    assert client.get("/api/whatsnew?since=" + updater.VERSION).get_json()["sections"] == []

@@ -23,11 +23,21 @@ tools = tools.replace(/^\s*<h2>[\s\S]*?<\/h2>\s*<p[^>]*>[\s\S]*?<\/p>/, '');   /
 const toolsJs = pick(site, /<script>\s*([\s\S]*?)<\/script>\s*<\/body>/, 'скрипт инструментов');
 
 const version = process.env.UNIVERSAL_VERSION || JSON.parse(readFileSync(join(here, 'package.json'), 'utf8')).version;
+// «Что нового»: разделы CHANGELOG.md не новее этой версии (последние пять)
+const vkey = v => (v.match(/\d+/g) || []).slice(0, 3).map(Number).reduce((a, x) => a * 1000 + x, 0);
+const changes = [];
+{
+  const text = read('CHANGELOG.md'), heads = [...text.matchAll(/^## v(\d+(?:\.\d+)*)\s*(?:—|-)?\s*(.*)$/gm)];
+  heads.forEach((m, i) => {
+    const end = i + 1 < heads.length ? heads[i + 1].index : text.length;
+    if (vkey(m[1]) <= vkey(version)) changes.push({ version: m[1], date: m[2].trim(), md: text.slice(m.index + m[0].length, end).trim() });
+  });
+}
 const page = readFileSync(join(here, 'src/index.html'), 'utf8')
   .replace('/*SITE_CSS*/', () => css)
   .replace('<!--SITE_TOOLS-->', () => tools)
   .replace('/*SITE_TOOLS_JS*/', () => toolsJs)
-  .replace('/*APP_VERSION*/', () => `const APP_VERSION = ${JSON.stringify(version)};`);
+  .replace('/*APP_VERSION*/', () => `const APP_VERSION = ${JSON.stringify(version)};\nconst APP_CHANGES = ${JSON.stringify(changes.slice(0, 5)).replace(/</g, '\\u003c')};`);
 for (const mark of ['/*SITE_CSS*/', '<!--SITE_TOOLS-->', '/*SITE_TOOLS_JS*/', '/*APP_VERSION*/'])
   if (page.includes(mark)) throw new Error('не подставилось ' + mark);
 

@@ -12,7 +12,7 @@ rm -rf "$ROOT"; mkdir -p "$LIB" "$ROOT/usr/bin" "$ROOT/usr/share/applications" "
 # приложение
 cp "$SRC"/*.py "$LIB/"
 printf 'VERSION = "%s"\nCOMMIT = "%s"\nBUILT = "%s"\n' "$V" "$(git -C "$SRC" rev-parse --short=7 HEAD 2>/dev/null)" "$(date -u +%Y-%m-%dT%H:%MZ)" > "$LIB/version.py"
-cp -r "$SRC/templates" "$SRC/static" "$LIB/"
+cp -r "$SRC/templates" "$SRC/static" "$SRC/CHANGELOG.md" "$LIB/"
 install -m 755 "$HERE/universal.sh" "$ROOT/usr/bin/universal"
 install -m 644 "$HERE/universal.desktop" "$ROOT/usr/share/applications/universal.desktop"
 cp "$SRC/LICENSE" "$SRC/README.md" "$ROOT/usr/share/doc/universal/"
