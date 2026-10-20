@@ -185,11 +185,16 @@ jobs:
           V="${{ github.event.inputs.version }}"
           [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
-      - name: OCRmyPDF под Intel
-        # у pikepdf с 10.14 нет сборок для macOS x86_64 (самосборный не работает в .app),
-        # поэтому здесь последний pikepdf с ними и OCRmyPDF 17.12, который с ним совместим
+      - name: Готовые сборки под Intel
+        # у pikepdf с 10.14 и cryptography с 49 нет сборок для macOS x86_64, а собранные из исходников
+        # ломаются в .app (cryptography цепляет libssl из Homebrew, а в .app попадает libssl от Python).
+        # Берём последние версии с готовыми сборками (OCRmyPDF 17.12 совместим с pikepdf 10.13)
+        # и запрещаем pip собирать их самому, чтобы ошибка была сразу, а не в готовом .app
         if: matrix.arch == 'x86_64'
-        run: printf 'pikepdf<10.14\nocrmypdf<17.13\n' > "$RUNNER_TEMP/intel.txt" && echo "PIP_CONSTRAINT=$RUNNER_TEMP/intel.txt" >> "$GITHUB_ENV"
+        run: |
+          printf 'pikepdf<10.14\nocrmypdf<17.13\ncryptography<49\n' > "$RUNNER_TEMP/intel.txt"
+          echo "PIP_CONSTRAINT=$RUNNER_TEMP/intel.txt" >> "$GITHUB_ENV"
+          echo "PIP_ONLY_BINARY=pikepdf,cryptography" >> "$GITHUB_ENV"
       - name: Зависимости
         run: pip install -r packaging/requirements-desktop.txt
       - name: Сборка .app
