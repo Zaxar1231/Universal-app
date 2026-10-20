@@ -24,6 +24,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- universal://connect?... из QR-кода на компьютере: адрес и пароль сервера -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="universal" android:host="connect" />
+            </intent-filter>
+
             <!-- «Поделиться → Universal»: ссылка на видео из любого приложения -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -47,6 +55,9 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- сканер QR-кода подключения к серверу -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <!-- папка «Документы» на Android 10 и старше; с Android 11 разрешение не нужно -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />

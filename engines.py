@@ -60,6 +60,13 @@ CATALOG = {
         "url": "https://github.com/denoland/deno/releases/latest/download/{asset}",
         "for": "быстрое скачивание с YouTube",
     },
+    "tesseract": {
+        # официальный установщик для Windows (NSIS) распаковывается 7-Zip, ставить и права администратора не нужно
+        "title": "Tesseract OCR", "size": "≈ 110 МБ", "exe": ["tesseract.exe"],
+        "repo": "tesseract-ocr/tesseract", "asset": r"^tesseract-ocr-w64-setup-.*\.exe$", "any_release": True,
+        "index": "https://digi.bib.uni-mannheim.de/tesseract/", "nsis": True, "langs": ["rus", "eng", "osd"],
+        "for": "распознавание текста в сканах (OCR)",
+    },
     "ytdlp": {
         "title": "свежий yt-dlp", "size": "≈ 3 МБ", "exe": ["yt-dlp.zip"],
         "url": "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp",
@@ -151,6 +158,23 @@ def _assets_from_api(repo: str) -> list[tuple[str, str]]:
     return [(a["name"], a["browser_download_url"]) for a in data.get("assets", [])]
 
 
+def _assets_from_releases(repo: str) -> list[tuple[str, str]]:
+    """Файлы нескольких последних релизов подряд: у Tesseract установщик есть не в каждом релизе."""
+    with _get(GITHUB_API.format(repo=repo).replace("/latest", "?per_page=15")) as r:
+        data = json.load(r)
+    return [(a["name"], a["browser_download_url"]) for rel in data if not rel.get("prerelease")
+            for a in rel.get("assets", [])]
+
+
+def _assets_from_index(url: str) -> list[tuple[str, str]]:
+    """Страница-список файлов (UB Mannheim для Tesseract): новые версии в конце."""
+    with _get(url) as r:
+        page = r.read().decode("utf-8", "replace")
+    names = list(dict.fromkeys(re.findall(r'href="([^"/?]+\.exe)"', page)))
+    names.sort(key=lambda n: [int(x) for x in re.findall(r"\d+", n)], reverse=True)
+    return [(n, url.rstrip("/") + "/" + n) for n in names]
+
+
 def _assets_from_html(repo: str) -> list[tuple[str, str]]:
     """Запасной путь без API (у API лимит 60 запросов в час на IP): страница релиза."""
     with _get(f"{GITHUB_WEB}/{repo}/releases/latest") as r:
@@ -165,7 +189,12 @@ def _resolve_url(spec: dict) -> str:
     if "url" in spec:
         return spec["url"].replace("{asset}", _deno_asset())
     errors, listed = [], False
-    for source in (_assets_from_api, _assets_from_html):
+    sources = [_assets_from_api, _assets_from_html]
+    if spec.get("any_release"):
+        sources.insert(1, _assets_from_releases)
+    if spec.get("index"):
+        sources.append(lambda _repo: _assets_from_index(spec["index"]))
+    for source in sources:
         try:
             assets = source(spec["repo"])
         except Exception as e:
@@ -241,6 +270,62 @@ def _extract_7z(archive: Path, target: Path) -> None:
         raise EngineError("Не удалось распаковать архив движка: " + (res.stderr or res.stdout).strip()[-200:])
 
 
+SEVEN_ZIP_FULL = {"repo": "ip7z/7zip", "asset": [r"^7z\d+-x64\.exe$", r"^7z\d+-x64\.msi$"]}
+
+
+def _seven_zip_full() -> str:
+    """Полный 7-Zip (7z.exe + 7z.dll): только он открывает установщики NSIS. Свой или установленный."""
+    for c in (shutil.which("7z"), os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "7-Zip", "7z.exe")):
+        if c and os.path.isfile(c):
+            return c
+    if sys.platform != "win32":
+        raise EngineError("Для распаковки установщика нужен 7-Zip (пакет p7zip-full)")
+    home = engines_dir() / "tools" / "7zip"
+    found = next(home.rglob("7z.exe"), None) if home.is_dir() else None
+    if found:
+        return str(found)
+    import subprocess
+    url = _resolve_url(SEVEN_ZIP_FULL)
+    with tempfile.TemporaryDirectory(dir=engines_dir(), ignore_cleanup_errors=True) as tmp:
+        inst = Path(tmp) / url.rsplit("/", 1)[-1]
+        _download(url, inst, None, 0, 0)
+        shutil.rmtree(home, ignore_errors=True)
+        if inst.suffix.lower() == ".msi":
+            # административная установка: просто распаковка MSI в папку, без прав администратора
+            subprocess.run(["msiexec", "/a", str(inst), "/qn", f"TARGETDIR={home}"], capture_output=True, timeout=300)
+        else:
+            # установщик 7-Zip — самораспаковывающийся архив 7z, его открывает даже 7zr.exe
+            subprocess.run([_seven_zip_exe(), "x", str(inst), f"-o{home}", "-y"], capture_output=True, timeout=300)
+    found = next(home.rglob("7z.exe"), None) if home.is_dir() else None
+    if not found:
+        raise EngineError("Не удалось подготовить 7-Zip для распаковки установщика")
+    return str(found)
+
+
+def _extract_nsis(installer: Path, target: Path) -> None:
+    import subprocess
+    res = subprocess.run([_seven_zip_full(), "x", str(installer), f"-o{target}", "-y"],
+                         capture_output=True, text=True, timeout=600)
+    if res.returncode != 0:
+        raise EngineError("Не удалось распаковать установщик: " + (res.stderr or res.stdout).strip()[-200:])
+
+
+TESSDATA_URL = "https://github.com/tesseract-ocr/tessdata/raw/main/{lang}.traineddata"
+
+
+def _tessdata(exe_dir: Path, langs: list[str], task: Task | None) -> None:
+    """Языки для Tesseract: установщик кладёт только английский, русский докачиваем."""
+    data = exe_dir / "tessdata"
+    data.mkdir(exist_ok=True)
+    for i, lang in enumerate(langs):
+        f = data / f"{lang}.traineddata"
+        if f.exists() and f.stat().st_size > 1000:
+            continue
+        if task:
+            task.update(0.93 + 0.06 * i / len(langs), f"Скачиваю язык {lang}…")
+        _download(TESSDATA_URL.format(lang=lang), f, task, 0.93, 0)
+
+
 def _extract(archive: Path, target: Path) -> None:
     if archive.suffix.lower() == ".7z":
         _extract_7z(archive, target)
@@ -281,7 +366,10 @@ def install(name: str, task: Task | None = None) -> str:
             result = str(final)
         else:
             unpacked = tmp / "x"
-            _extract(archive, unpacked)
+            if spec.get("nsis"):
+                _extract_nsis(archive, unpacked)
+            else:
+                _extract(archive, unpacked)
             first = _exe_names(name)[0]
             found = next((p for p in unpacked.rglob(first) if p.is_file()), None)
             if not found:
@@ -294,6 +382,8 @@ def install(name: str, task: Task | None = None) -> str:
             for exe in _exe_names(name)[1:]:
                 if not (Path(result) / exe).exists():
                     raise EngineError(f"В архиве нет {exe}")
+            if spec.get("langs"):
+                _tessdata(Path(result), spec["langs"], task)
             if sys.platform != "win32":              # zip не хранит права на запуск
                 for exe in _exe_names(name):
                     p = Path(result) / exe

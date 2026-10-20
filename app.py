@@ -38,7 +38,9 @@ import converters as conv
 import downloader
 import editor
 import engines as engine_store
+import ocr
 import pdftools
+import phoneserver
 import qrdoc
 import qrtools
 from tasks import Task, TaskManager
@@ -54,13 +56,23 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 
 @app.before_request
 def require_password():
-    """Если задан APP_PASSWORD, пускаем только с ним (HTTP Basic, логин любой)."""
-    if not APP_PASSWORD:
+    """Если задан APP_PASSWORD, пускаем только с ним (HTTP Basic, логин любой).
+    Через сервер для телефона (phoneserver) пароль нужен всегда — его собственный."""
+    need = phoneserver.password() if request.environ.get(phoneserver.MARK) else APP_PASSWORD
+    if request.environ.get(phoneserver.MARK) and not need:
+        abort(403)
+    if not need:
         return None
     auth = request.authorization
-    if auth and hmac.compare_digest((auth.password or "").encode(), APP_PASSWORD.encode()):
+    if auth and hmac.compare_digest((auth.password or "").encode(), need.encode()):
         return None
     return Response("Нужен пароль", 401, {"WWW-Authenticate": 'Basic realm="Universal", charset="UTF-8"'})
+
+
+def _local_only() -> None:
+    """Включать и выключать сервер для телефона можно только с самого компьютера, не с телефона."""
+    if request.environ.get(phoneserver.MARK) or request.remote_addr not in ("127.0.0.1", "::1"):
+        abort(403)
 
 # формат -> (расширение, аргументы pdftoppm / pdftocairo)
 # pdftoppm умеет png, jpeg, tiff. Остальное делаем через pdftocairo.
@@ -632,6 +644,8 @@ def formats():
                 "poppler": all(poppler_ok().values()), "can_install": engine_store.can_install(),
                 "platform": sys.platform,
                 "deno": bool(shutil.which("deno")),
+                "ocr": ocr.available(), "ocrmypdf": bool(ocr.version()), "tesseract": bool(ocr.tesseract()),
+                "ocr_info": ocr.status(),
                 "desktop": bool(os.environ.get("UNIVERSAL_DESKTOP"))})
     cats = {}
     for name, table in conv.CATEGORIES.items():
@@ -1064,11 +1078,68 @@ def engine_install(name: str):
     return jsonify(task.to_dict())
 
 
+# ---------- Распознавание текста (OCRmyPDF) ----------
+
+@app.route("/api/ocr", methods=["POST"])
+def ocr_run():
+    try:
+        opts = ocr.read_opts(request.form)
+    except ocr.OcrError as e:
+        return jsonify({"error": str(e)}), 400
+    files = [f for f in request.files.getlist("files") if f.filename]
+    if not files:
+        return jsonify({"error": "Файлы не выбраны"}), 400
+    job_id, job_dir, archive = new_job(request.form.get("archive_name", "") or "ocr")
+    items = save_uploads(files, job_dir / "in")
+    task = Task(job_id, "ocr", job_dir, archive)
+    TASKS.submit(task, lambda t: ocr.run_ocr_task(t, items, opts))
+    return jsonify(task.to_dict())
+
+
+# ---------- Сервер для телефона ----------
+
+@app.route("/api/phone")
+def phone_info():
+    _local_only()
+    return jsonify(phoneserver.info())
+
+
+@app.route("/api/phone", methods=["POST"])
+def phone_set():
+    _local_only()
+    action = request.form.get("action", "")
+    try:
+        if action == "on":
+            phoneserver.start(app)
+        elif action == "off":
+            phoneserver.stop()
+        elif action == "password":
+            phoneserver.regenerate()
+        else:
+            return jsonify({"error": "Неизвестное действие"}), 400
+    except RuntimeError as e:
+        return jsonify({**phoneserver.info(), "error": f"Не получилось открыть сервер: {e}"}), 500
+    return jsonify(phoneserver.info())
+
+
+@app.route("/api/phone/qr.svg")
+def phone_qr():
+    _local_only()
+    d = phoneserver.info()
+    if not d["link"]:
+        abort(404)
+    svg = qrtools.render(d["link"], {"format": "svg", "box": 6, "border": 2, "ec": "M", "fg": "#000000",
+                                     "bg": "#ffffff", "transparent": False})
+    return Response(svg, mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+
 @app.route("/api/engines")
 def engines_status():
     eng = conv.engines()
     eng.update({"poppler": all(poppler_ok().values()), "ytdlp": downloader.available(),
                 "ytdlp_version": downloader.version(), "qrcode": qrtools.available(),
+                "ocr": ocr.available(), "ocrmypdf": bool(ocr.version()), "tesseract": bool(ocr.tesseract()),
+                "ocr_info": ocr.status(),
                 "can_install": engine_store.can_install(), "catalog": engine_store.status()})
     return jsonify(eng)
 
@@ -1081,4 +1152,5 @@ if __name__ == "__main__":
     if host not in ("127.0.0.1", "localhost") and not APP_PASSWORD:
         print("Внимание: сервер открыт в сеть без пароля. Задай APP_PASSWORD.")
     print(f"Открой http://{'localhost' if host in ('0.0.0.0', '127.0.0.1') else host}:{port}")
+    phoneserver.autostart(app)
     app.run(host=host, port=port, debug=False, threaded=True)

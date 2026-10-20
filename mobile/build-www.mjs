@@ -40,4 +40,5 @@ for (const f of ['qrcode.js', 'pdf-lib.min.js', 'jszip.min.js'])
   copyFileSync(join(root, 'site/vendor', f), join(out, 'vendor', f));
 copyFileSync(join(root, 'site/img/icon-192.png'), join(out, 'img/icon-192.png'));
 copyFileSync(join(here, 'node_modules/@capacitor/core/dist/capacitor.js'), join(out, 'vendor/capacitor.js'));
+copyFileSync(join(here, 'node_modules/jsqr/dist/jsQR.js'), join(out, 'vendor/jsQR.js'));   // QR-код подключения к серверу
 console.log(`www/ готов: версия ${version}`);

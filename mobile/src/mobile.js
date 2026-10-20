@@ -306,7 +306,8 @@
       const r = await http('GET', srv + 'api/formats', { headers: serverAuth() });
       if (r.status === 401) throw new Error('неверный пароль');
       if (r.status !== 200 || !r.data || !r.data.categories) throw new Error(`ответ ${r.status}, это не Universal`);
-      const eng = r.data.engines || {}, have = Object.keys(eng).filter(k => eng[k] === true);
+      const NAMES = { ytdlp: 'yt-dlp', ffmpeg: 'ffmpeg', ocr: 'распознавание текста', imagemagick: 'ImageMagick', pandoc: 'pandoc', poppler: 'poppler', libreoffice: 'LibreOffice' };
+      const eng = r.data.engines || {}, have = Object.keys(NAMES).filter(k => eng[k] === true).map(k => NAMES[k]);
       st.className = 'small grow ok';
       st.textContent = 'Работает' + (have.length ? `: ${have.join(', ')}` : '');
     } catch (e) { st.className = 'small grow bad'; st.textContent = String(e.message || e); }
@@ -316,6 +317,76 @@
     if (!srv) { snack('Сначала укажи адрес сервера'); return; }
     if (native) await Browser.open({ url: srv }); else window.open(srv, '_blank');
   };
+
+  /* ---------- подключение по ссылке universal://connect?url=…&password=… ---------- */
+  const CONNECT_RE = /universal:\/\/connect\?[^\s"'<>]+/i;
+  function applyConnect(text) {
+    const m = String(text || '').match(CONNECT_RE);
+    if (!m) return false;
+    let url = '', pass = '';
+    try { const q = new URL(m[0]).searchParams; url = q.get('url') || ''; pass = q.get('password') || ''; } catch (_) { return false; }
+    if (!/^https?:\/\//i.test(url)) return false;
+    $('sUrl').value = url; $('sPass').value = pass;
+    store.set('serverUrl', url); store.set('serverPass', pass);
+    syncDl(); go('pageServer');
+    snack('Сервер подключён: ' + host(url));
+    $('sCheck').click();
+    return true;
+  }
+  $('sPaste').onclick = async () => {
+    let text = '';
+    try { text = native ? (await Clipboard.read()).value : await navigator.clipboard.readText(); } catch (_) { /* пусто */ }
+    if (!applyConnect(text)) snack('В буфере нет ссылки universal://connect: скопируй её в окне «Сервер для телефона» на компьютере');
+  };
+
+  // сканер: BarcodeDetector (Android WebView) или jsQR (iPhone и старые WebView)
+  let scanStream = null, scanTimer = 0;
+  function stopScan() {
+    clearTimeout(scanTimer);
+    if (scanStream) scanStream.getTracks().forEach(t => t.stop());
+    scanStream = null; $('scan').hidden = true;
+  }
+  $('scanClose').onclick = stopScan;
+  $('sScan').onclick = async () => {
+    try {
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    } catch (e) {
+      snack('Нет доступа к камере: разреши его в настройках телефона или вставь ссылку');
+      return;
+    }
+    const v = $('scanVideo');
+    v.srcObject = scanStream; $('scan').hidden = false;
+    await v.play().catch(() => {});
+    const detector = 'BarcodeDetector' in window ? new window.BarcodeDetector({ formats: ['qr_code'] }) : null;
+    const canvas = document.createElement('canvas'), g = canvas.getContext('2d', { willReadFrequently: true });
+    const tick = async () => {
+      if (!scanStream) return;
+      let text = '';
+      try {
+        if (detector) {
+          const codes = await detector.detect(v);
+          text = codes.map(c => c.rawValue).join('\n');
+        } else if (v.videoWidth && window.jsQR) {
+          const k = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight));
+          canvas.width = Math.round(v.videoWidth * k); canvas.height = Math.round(v.videoHeight * k);
+          g.drawImage(v, 0, 0, canvas.width, canvas.height);
+          const r = window.jsQR(g.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
+          text = r ? r.data : '';
+        }
+      } catch (_) { /* кадр ещё не готов */ }
+      if (text && CONNECT_RE.test(text)) { stopScan(); applyConnect(text); return; }
+      scanTimer = setTimeout(tick, 200);
+    };
+    tick();
+  };
+
+  // ссылка из камеры телефона или из другого приложения открывает Universal
+  if (native) {
+    const App = C.registerPlugin('App');
+    App.addListener('appUrlOpen', ({ url }) => applyConnect(url)).catch(() => {});
+    App.getLaunchUrl().then(r => { if (r && r.url) applyConnect(r.url); }).catch(() => {});
+  }
+
   $('ver').textContent = typeof APP_VERSION === 'string' ? APP_VERSION : '';
   $('gh').onclick = e => { if (native) { e.preventDefault(); Browser.open({ url: e.currentTarget.href }); } };
 
@@ -349,6 +420,7 @@
   if (platform === 'android') {
     const ShareIn = C.registerPlugin('ShareIn');
     ShareIn.addListener('shared', ({ text }) => {
+      if (applyConnect(text)) return;
       go('pageDl');
       if (addUrls(text)) snack('Ссылка добавлена', 'Скачать', start);
     }).catch(() => {});

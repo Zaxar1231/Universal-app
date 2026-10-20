@@ -4,7 +4,7 @@
 import os
 import sys
 
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 ROOT = SPECPATH + "/.."
 VERSION = os.environ.get("UNIVERSAL_VERSION", "0.0.0")
@@ -13,10 +13,12 @@ a = Analysis(
     [ROOT + "/desktop.py"],
     pathex=[ROOT],
     # yt_dlp_ejs: JS-скрипты, которыми deno решает задачки YouTube
-    datas=[(ROOT + "/templates", "templates")] + collect_data_files("yt_dlp_ejs"),
+    # ocrmypdf: шрифты и данные для текстового слоя, а версию он читает из метаданных пакета
+    datas=[(ROOT + "/templates", "templates")] + collect_data_files("yt_dlp_ejs")
+    + collect_data_files("ocrmypdf") + copy_metadata("ocrmypdf"),
     # yt-dlp подгружает экстракторы динамически, а app импортирует модули по имени
-    hiddenimports=collect_submodules("yt_dlp") + collect_submodules("yt_dlp_ejs")
-    + ["app", "converters", "downloader", "editor", "engines", "pdftools", "qrdoc", "qrtools", "tasks", "py7zr"],
+    hiddenimports=collect_submodules("yt_dlp") + collect_submodules("yt_dlp_ejs") + collect_submodules("ocrmypdf")
+    + ["app", "converters", "downloader", "editor", "engines", "ocr", "pdftools", "phoneserver", "qrdoc", "qrtools", "tasks", "py7zr"],
     excludes=["tkinter", "pytest", "playwright"],
 )
 pyz = PYZ(a.pure)

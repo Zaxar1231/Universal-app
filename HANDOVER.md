@@ -386,3 +386,29 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
   - в `downloader.py`: `COBALT_*`, `CobaltFail`, `_cobalt_*`, `_fetch_file`, `_media_ok`, `_cd_filename`, `EMPTY_TUNNEL`, `_urlopen`, `_is_loopback`, а также `cobalt_url` и `cobalt_key` в `read_opts`;
   - блок в шаблоне, сервис в `docker-compose.yml`, cobalt-тесты, вариант cobalt в телефоне.
 - Блок «Сеть и VPN» (прокси, IPv4, «Проверить сеть») остался: он для yt-dlp.
+
+### 13.13 OCR и сервер для телефона (v1.7.0)
+- `ocr.py`: OCRmyPDF запускается **отдельным процессом**, поэтому «Отмена» его убивает (`task.proc`). Как запускается:
+  - из исходников: `python -m ocrmypdf`;
+  - из exe: тем же exe с ключом `--ocrmypdf` (`desktop.main` → `ocrmypdf.__main__.run`);
+  - всегда с `--use-threads`, без multiprocessing внутри exe.
+- Ghostscript не нужен. С 17.13 PDF/A собирается через `--pdfa-backend internal`, если gs нет; при коде 10 файл пересобирается обычным PDF.
+- Старый системный OCRmyPDF (Linux) не знает `--pdfa-backend`, поэтому ключ ставится только для версий ≥ 17.13.
+- Режим «если уже есть текст»: skip → `--skip-text`, redo → `--redo-ocr` (без deskew и rotate, они несовместимы), force → `--force-ocr`. Коды выхода переведены в `EXIT_TEXT`.
+- Список языков берётся из `tesseract --list-langs` (`/api/formats` → `engines.ocr_info`).
+- `engines.py`, Tesseract для Windows:
+  - установщик NSIS ищется в нескольких релизах `tesseract-ocr/tesseract` (не в каждом он есть), запасной источник — индекс UB Mannheim;
+  - распаковывает полный 7-Zip (`_seven_zip_full`: установщик 7-Zip из `ip7z/7zip` открывается через 7zr.exe, запасной путь — MSI через `msiexec /a`);
+  - языки rus, eng, osd докачиваются из `tesseract-ocr/tessdata`;
+  - проверяется в CI на Windows-раннере (`tests.yml`).
+- PyInstaller: `collect_submodules`, `collect_data_files` и `copy_metadata("ocrmypdf")`. Самопроверка exe запускает `--ocrmypdf --version`.
+- `phoneserver.py`: второй werkzeug-сервер на 0.0.0.0, порт 5000–5020 (прежний по возможности), с тем же `app` и общими `TASKS`.
+  - WSGI-обёртка ставит `environ["universal.phone"]`; `require_password` для таких запросов требует пароль телефона.
+  - `/api/phone*` доступны только с 127.0.0.1 и не через сервер для телефона.
+  - Настройки лежат в `<UNIVERSAL_HOME>/phone.json`; `autostart` вызывается из `desktop.main` и из `app.py __main__`. В Docker сервер не нужен (`UNIVERSAL_DOCKER=1`).
+  - QR содержит `universal://connect?url=…&password=…`.
+- Телефон:
+  - `@capacitor/app` (`appUrlOpen`, `getLaunchUrl`), intent-filter VIEW `universal://connect`, `CFBundleURLTypes` на iOS;
+  - сканер — getUserMedia плюс BarcodeDetector (Android) или jsQR (iPhone), с разрешениями CAMERA и NSCameraUsageDescription;
+  - «Вставить ссылку» читает буфер обмена.
+- Баг масштаба на телефоне: grid-элементы с длинным именем имели `min-width: auto`. Теперь `minmax(0, 1fr)` и `min-width: 0` (то же на сайте).

@@ -223,6 +223,16 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z'/%3E%3C/svg%3E") center/contain no-repeat; }
 .swatches input:focus-visible + label { outline: 3px solid var(--md-primary); outline-offset: 2px; }
 .row-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.top-actions { display: flex; gap: 4px; align-items: center; }
+#phoneBtn { position: relative; }
+#phoneBtn .dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--md-primary); }
+.dialog.phone { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; }
+.phone-info { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px 20px; align-items: start; }
+.phone-info img { width: 220px; height: 220px; border-radius: var(--sh-m); background: #fff; image-rendering: pixelated; }
+.phone-data { display: grid; gap: 4px; min-width: 0; }
+.phone-data .row { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; overflow-wrap: anywhere; user-select: all; }
+@media (max-width: 560px) { .phone-info { grid-template-columns: minmax(0, 1fr); } .phone-info img { justify-self: center; } }
 
 /* --- новые режимы: редактор, загрузчик, QR --- */
 .pane { display: grid; gap: 16px; margin-bottom: 16px; }
@@ -282,6 +292,7 @@ ul.files .up { width: 40px; height: 40px; }
       'photo': 'M480-260q75 0 127.500-52.500T660-440q0-75-52.500-127.500T480-620q-75 0-127.500 52.500T300-440q0 75 52.500 127.500T480-260Zm0-80q-42 0-71-29t-29-71q0-42 29-71t71-29q42 0 71 29t29 71q0 42-29 71t-71 29ZM160-120q-33 0-56.500-23.500T80-200v-480q0-33 23.500-56.500T160-760h126l74-80h240l74 80h126q33 0 56.500 23.500T880-680v480q0 33-23.500 56.500T800-120H160Z',
       'topdf': 'M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.500-23.500T160-160v-640q0-33 23.500-56.500T240-880h320l240 240v480q0 33-23.500 56.500T720-80H240Zm280-520h200L520-800v200Z',
       'pdft': 'M120-120v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80ZM240-280q-33 0-56.500-23.500T160-360v-400q0-33 23.500-56.500T240-840h480q33 0 56.500 23.500T800-760v400q0 33-23.500 56.500T720-280H240Zm0-80h480v-400H240v400Zm80-80h320v-80H320v80Zm0-160h320v-80H320v80Z',
+      'ocr': 'M80-680v-200h200v80H160v120H80Zm0 600v-200h80v120h120v80H80Zm600 0v-80h120v-120h80v200H680Zm120-600v-120H680v-80h200v200h-80ZM240-320h480v-80H240v80Zm0-120h480v-80H240v80Zm0-120h320v-80H240v80Z',
       'edit': 'M760-120 480-400l-94 94q8 15 11 32t3 34q0 66-47 113T240-80q-66 0-113-47T80-240q0-66 47-113t113-47q18 0 34.500 3t31.500 11l94-94-94-94q-15 8-31.500 11t-34.500 3q-66 0-113-47T80-720q0-66 47-113t113-47q66 0 113 47t47 113q0 18-3 34t-11 32l494 494v40H760ZM600-520l-80-80 240-240h120v40L600-520ZM240-640q33 0 56.500-23.500T320-720q0-33-23.500-56.500T240-800q-33 0-56.500 23.500T160-720q0 33 23.500 56.500T240-640Zm240 180q8 0 14-6t6-14q0-8-6-14t-14-6q-8 0-14 6t-6 14q0 8 6 14t14 6ZM240-160q33 0 56.500-23.500T320-240q0-33-23.500-56.500T240-320q-33 0-56.500 23.500T160-240q0 33 23.500 56.500T240-160Z',
       'dl': 'M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.500-23.500T160-240v-120h80v120h480v-120h80v120q0 33-23.500 56.500T720-160H240Z',
       'qr': 'M120-520v-320h320v320H120Zm80-80h160v-160H200v160Zm-80 480v-320h320v320H120Zm80-80h160v-160H200v160Zm320-320v-320h320v320H520Zm80-80h160v-160H600v160Zm160 480v-80h80v80h-80ZM520-360v-80h80v80h-80Zm80 80v-80h80v80h-80Zm-80 80v-80h80v80h-80Zm80 80v-80h80v80h-80Zm80-80v-80h80v80h-80Zm0-160v-80h80v80h-80Zm80 80v-80h80v80h-80Z'
@@ -292,7 +303,7 @@ ul.files .up { width: 40px; height: 40px; }
       <span class="t-label-m">{{ label }}</span></label>
     {% endfor %}
     <span class="sep" role="separator"></span>
-    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF'),('pdft','Правка PDF')] %}
+    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF'),('pdft','Правка PDF'),('ocr','Распознать текст')] %}
     <label class="nav"><input type="radio" name="mode" value="{{ key }}">
       <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
       <span class="t-label-m">{{ label }}</span></label>
@@ -311,9 +322,15 @@ ul.files .up { width: 40px; height: 40px; }
         <h1 class="t-headline" id="title">Картинки</h1>
         <p class="t-body-m muted" id="subtitle">Файлы обрабатываются на твоём компьютере и никуда не отправляются.</p>
       </div>
+      <div class="top-actions">
+      <button class="icon-btn state" id="phoneBtn" aria-label="Сервер для телефона" title="Сервер для телефона">
+        <svg viewBox="0 -960 960 960"><path d="M280-40q-33 0-56.500-23.500T200-120v-720q0-33 23.500-56.500T280-920h400q33 0 56.500 23.500T760-840v720q0 33-23.500 56.500T680-40H280Zm0-120v40h400v-40H280Zm0-80h400v-480H280v480Zm0-560h400v-40H280v40Zm0 0v-40 40Zm0 640v40-40Z"/></svg>
+        <span class="dot" id="phoneDot" hidden></span>
+      </button>
       <button class="icon-btn state" id="themeBtn" aria-label="Выбрать цвет оформления" title="Цвет оформления">
         <svg viewBox="0 -960 960 960"><path d="M480-80q-82 0-155-31.500t-127.500-86Q143-252 111.500-325T80-480q0-83 32.500-156t88-127Q256-817 330-848.500T488-880q80 0 151 27.500t124.500 76q53.500 48.500 85 115T880-518q0 115-70 176.500T640-280h-74q-9 0-12.500 5t-3.500 11q0 12 15 34.500t15 51.500q0 50-27.500 74T480-80Zm0-400Zm-220 40q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm120-160q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm200 0q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm120 160q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Z"/></svg>
       </button>
+      </div>
     </header>
 
     <div class="banner" id="engineBanner" hidden></div>
@@ -539,6 +556,34 @@ ul.files .up { width: 40px; height: 40px; }
           <label class="tf" id="pPassRow"><span>Текущий пароль PDF</span><input type="password" id="pPass" autocomplete="off"></label>
         </div>
 
+        <!-- распознавание текста (OCRmyPDF) -->
+        <div id="ocrBox" class="sect" hidden>
+          <div class="field">
+            <span class="lbl t-label-l">Языки текста</span>
+            <div class="chips" id="ocrLangs"></div>
+            <p class="hint" id="ocrLangHint">Отметь все языки, которые есть в документе: лишние замедляют распознавание.</p>
+          </div>
+          <div class="field">
+            <span class="lbl t-label-l">Если в PDF уже есть текст</span>
+            <div class="chips">
+              <input type="radio" name="ocrm" id="ocrm1" value="skip" checked><label for="ocrm1">Пропустить</label>
+              <input type="radio" name="ocrm" id="ocrm2" value="redo"><label for="ocrm2">Переделать</label>
+              <input type="radio" name="ocrm" id="ocrm3" value="force"><label for="ocrm3">Распознать заново</label>
+            </div>
+            <p class="hint" id="ocrModeHint"></p>
+          </div>
+          <label class="sw"><span class="txt"><span class="t-body-m">Выровнять перекошенные страницы</span><span class="hint">Скан, положенный криво, станет ровным.</span></span>
+            <input type="checkbox" id="ocrDeskew" checked><span class="track"></span></label>
+          <label class="sw"><span class="txt"><span class="t-body-m">Повернуть перевёрнутые страницы</span><span class="hint">Страницы вверх ногами или боком повернутся как надо.</span></span>
+            <input type="checkbox" id="ocrRotate" checked><span class="track"></span></label>
+          <label class="sw"><span class="txt"><span class="t-body-m">Архивный PDF/A</span><span class="hint">Для госуслуг, суда и долгого хранения. Обычный PDF совместим со всем.</span></span>
+            <input type="checkbox" id="ocrPdfa"><span class="track"></span></label>
+          <label class="sw"><span class="txt"><span class="t-body-m">Ещё и текст в .txt</span><span class="hint">Рядом с PDF ляжет распознанный текст отдельным файлом.</span></span>
+            <input type="checkbox" id="ocrTxt"><span class="track"></span></label>
+          <label class="sw"><span class="txt"><span class="t-body-m">Сжать картинки без потерь</span><span class="hint">Файл станет легче, качество не изменится.</span></span>
+            <input type="checkbox" id="ocrOpt" checked><span class="track"></span></label>
+        </div>
+
         <!-- редактор видео и аудио -->
         <div id="editBox" class="sect" hidden>
           <div class="sect">
@@ -755,6 +800,33 @@ ul.files .up { width: 40px; height: 40px; }
 </div>
 
 <!-- выбор цвета оформления (Material You) -->
+<div class="sheet" id="phoneSheet" hidden role="dialog" aria-modal="true" aria-labelledby="phoneTitle">
+  <div class="dialog phone">
+    <h2 class="t-title-l" id="phoneTitle">Сервер для телефона</h2>
+    <label class="sw"><span class="txt"><span class="t-body-m">Открыть сервер для мобильного приложения</span>
+      <span class="hint">Телефон в той же Wi‑Fi сети сможет качать видео и пользоваться всем остальным через этот компьютер. Docker не нужен, включится сам при следующем запуске.</span></span>
+      <input type="checkbox" id="phoneOn"><span class="track"></span></label>
+    <div id="phoneInfo" class="phone-info" hidden>
+      <img id="phoneQr" alt="QR-код для подключения телефона" width="220" height="220">
+      <div class="phone-data">
+        <span class="t-label-l muted">Адрес</span>
+        <div id="phoneUrls" class="t-body-l mono"></div>
+        <span class="t-label-l muted">Пароль</span>
+        <div class="t-body-l mono" id="phonePass"></div>
+        <div class="row">
+          <button class="btn tonal state" id="phoneCopy" type="button">Скопировать ссылку</button>
+          <button class="btn text state" id="phoneNewPass" type="button">Новый пароль</button>
+        </div>
+      </div>
+      <p class="hint" style="grid-column:1/-1;margin:0">В приложении Universal на телефоне: наведи камеру на QR-код или открой вкладку «Сервер» → «Вставить ссылку подключения». Можно и вручную: адрес и пароль выше, логин любой. Если Windows спросит про брандмауэр, разреши доступ для частной сети.</p>
+    </div>
+    <div class="banner" id="phoneErr" hidden style="margin:0"></div>
+    <div class="row-actions" style="justify-content:flex-end">
+      <button class="btn tonal state" id="phoneClose">Готово</button>
+    </div>
+  </div>
+</div>
+
 <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
   <div class="dialog">
     <h2 class="t-title-l" id="sheetTitle">Цвет оформления</h2>
@@ -843,6 +915,52 @@ ul.files .up { width: 40px; height: 40px; }
   $('sheetClose').onclick = closeSheet;
   $('sheet').addEventListener('click', e => { if (e.target === $('sheet')) closeSheet(); });
   addEventListener('keydown', e => { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
+  /* ---------- сервер для телефона ---------- */
+  const phone = { busy: false };
+  function phoneRender(d) {
+    if (!d) return;
+    $('phoneOn').checked = d.running; $('phoneDot').hidden = !d.running;
+    $('phoneInfo').hidden = !d.running;
+    const err = d.error || (d.docker ? 'В Docker сервер и так открыт в сеть: адрес компьютера с портом 5000 и пароль из APP_PASSWORD.' : '') ||
+      (d.running && !d.urls.length ? 'Не нашёл адрес этого компьютера в локальной сети: подключись к Wi‑Fi или кабелем.' : '');
+    $('phoneErr').hidden = !err; $('phoneErr').textContent = err;
+    $('phoneOn').disabled = phone.busy || d.docker;
+    if (d.running) {
+      $('phoneUrls').innerHTML = d.urls.map(u => `<div>${esc(u)}</div>`).join('') || '—';
+      $('phonePass').textContent = d.password;
+      $('phoneQr').hidden = !d.link;
+      if (d.link) $('phoneQr').src = '/api/phone/qr.svg?' + Date.now();
+      phone.link = d.link;
+    }
+  }
+  function phoneLoad() {
+    return fetch('/api/phone').then(r => r.ok ? r.json() : null).then(d => {
+      $('phoneBtn').hidden = !d;              // с чужого компьютера или с телефона кнопки нет
+      phoneRender(d);
+    }).catch(() => { $('phoneBtn').hidden = true; });
+  }
+  function phoneDo(action) {
+    phone.busy = true; $('phoneOn').disabled = true;
+    const fd = new FormData(); fd.append('action', action);
+    return fetch('/api/phone', { method: 'POST', body: fd }).then(r => r.json()).then(d => { phone.busy = false; phoneRender(d); })
+      .catch(() => { phone.busy = false; $('phoneErr').hidden = false; $('phoneErr').textContent = 'Нет связи с приложением'; });
+  }
+  $('phoneBtn').onclick = () => { $('phoneSheet').hidden = false; phoneLoad(); $('phoneOn').focus(); };
+  const closePhone = () => { $('phoneSheet').hidden = true; $('phoneBtn').focus(); };
+  $('phoneClose').onclick = closePhone;
+  $('phoneSheet').addEventListener('click', e => { if (e.target === $('phoneSheet')) closePhone(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !$('phoneSheet').hidden) closePhone(); });
+  $('phoneOn').onchange = () => phoneDo($('phoneOn').checked ? 'on' : 'off');
+  $('phoneNewPass').onclick = () => {
+    if (confirm('Сделать новый пароль? Телефоны со старым придётся подключить заново.')) phoneDo('password');
+  };
+  $('phoneCopy').onclick = () => {
+    const done = () => { $('phoneCopy').textContent = 'Скопировано'; setTimeout(() => { $('phoneCopy').textContent = 'Скопировать ссылку'; }, 1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(phone.link || '').then(done, () => prompt('Ссылка для приложения:', phone.link));
+    else prompt('Ссылка для приложения:', phone.link);
+  };
+  phoneLoad();
+
   $('sheetReset').onclick = () => { seed = SEEDS[0]; localStorage.removeItem('seed'); applyPalette(seed); $('sd0').checked = true; };
 
   /* ===================================================================
@@ -853,10 +971,10 @@ ul.files .up { width: 40px; height: 40px; }
     image: { title: 'Картинки', kind: 'uni' }, audio: { title: 'Аудио', kind: 'uni' },
     video: { title: 'Видео', kind: 'uni' }, doc: { title: 'Документы', kind: 'uni' },
     pdf: { title: 'PDF в картинки', kind: 'pdf' }, photo: { title: 'Фото в A4', kind: 'photo' }, topdf: { title: 'Фото в PDF', kind: 'topdf' },
-    pdft: { title: 'PDF-инструменты', kind: 'pdft' },
+    pdft: { title: 'PDF-инструменты', kind: 'pdft' }, ocr: { title: 'Распознать текст', kind: 'ocr' },
     edit: { title: 'Редактор видео и аудио', kind: 'edit' }, dl: { title: 'Скачать видео', kind: 'dl' }, qr: { title: 'QR-коды', kind: 'qr' },
   };
-  const isNew = () => ['edit', 'dl', 'qr', 'pdft'].includes(MODES[mode()].kind);
+  const isNew = () => ['edit', 'dl', 'qr', 'pdft', 'ocr'].includes(MODES[mode()].kind);
   const pOp = () => qs('input[name=pop]:checked').value;
   const qrKind = () => qs('input[name=qrk]:checked').value;
   const mode = () => qs('input[name=mode]:checked').value;
@@ -877,6 +995,7 @@ ul.files .up { width: 40px; height: 40px; }
   function accepts(f) {
     const m = mode();
     if (m === 'pdf' || m === 'pdft') return /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+    if (m === 'ocr') return /\.(pdf|png|jpe?g|tiff?|bmp|webp|gif|jp2)$/i.test(f.name);
     if (isPhotoish()) return IMG_RE.test(f.name) || f.type.startsWith('image/');
     if (m === 'qr') return qrKind() === 'doc' ? /\.(docx|md|markdown|html?|odt|rtf|doc|epub)$/i.test(f.name) : /\.(txt|csv|docx)$/i.test(f.name);
     if (m === 'dl') return false;
@@ -931,6 +1050,7 @@ ul.files .up { width: 40px; height: 40px; }
     if (m === 'edit') label = $('eMerge').checked && files.length > 1 ? 'Склеить и сохранить' : 'Применить';
     if (m === 'pdft') { ok = pOp() === 'merge' ? files.length > 1 : files.length > 0; label = { merge: 'Склеить', split: 'Разделить', extract: 'Вытащить', rotate: 'Повернуть', compress: 'Сжать', protect: 'Защитить', unlock: 'Снять пароль' }[pOp()]; }
     if (m === 'dl') { ok = /https?:\/\//i.test($('urls').value); label = 'Скачать'; }
+    if (m === 'ocr') { ok = files.length > 0 && ocrLangs().length > 0; label = 'Распознать'; }
     if (m === 'qr') {
       const k = qrKind();
       if (k === 'doc') { ok = files.length > 0 && docSel.size > 0; label = docSel.size ? `Вставить QR-коды: ${docSel.size}` : 'Вставить QR-коды'; }
@@ -1014,7 +1134,7 @@ ul.files .up { width: 40px; height: 40px; }
   function syncSettings() {
     const m = mode(), k = MODES[m].kind, uni = k === 'uni', topdf = k === 'topdf', photo = k === 'photo' || topdf, pdf = k === 'pdf';
     $('classicBox').hidden = isNew();
-    $('editBox').hidden = k !== 'edit'; $('pdftBox').hidden = k !== 'pdft'; if (k === 'pdft') syncPdft(); $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
+    $('editBox').hidden = k !== 'edit'; $('pdftBox').hidden = k !== 'pdft'; if (k === 'pdft') syncPdft(); $('ocrBox').hidden = k !== 'ocr'; if (k === 'ocr') syncOcr(); $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
     if (isNew()) { if (k === 'edit') syncEdit(); if (k === 'dl') syncDl(); if (k === 'qr') syncQr(); return; }
     $('uniField').hidden = !uni;
     $('formatsField').hidden = !(pdf || k === 'photo');
@@ -1077,14 +1197,15 @@ ul.files .up { width: 40px; height: 40px; }
     edit: 'Обрезка, склейка, кадрирование, поворот, скорость, громкость, сжатие до нужного размера и GIF. Работает ffmpeg.',
     dl: 'Видео и музыка с YouTube, TikTok, VK, Rutube и ещё ~1800 сайтов. Качается сюда, на этот компьютер.',
     pdft: 'Склеить, разделить, вытащить страницы, повернуть, сжать, поставить или снять пароль.',
+    ocr: 'Сканы и фото документов становятся PDF, в котором можно искать и копировать текст. Работают OCRmyPDF и Tesseract.',
     qr: 'Один код для ссылки, Wi‑Fi или контакта, сотни кодов разом из списка или QR вместо ссылок прямо в документе.',
   };
   function applyMode() {
     const m = mode(), k = MODES[m].kind;
     $('title').textContent = MODES[m].title; $('subtitle').textContent = SUBS[m];
-    const acc = { pdf: 'application/pdf,.pdf', pdft: 'application/pdf,.pdf', qr: '.txt,.csv,.docx', dl: '', edit: caps ? caps.categories.edit.inputs.map(e => '.' + e).join(',') : 'audio/*,video/*' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps && caps.categories[m] ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
+    const acc = { pdf: 'application/pdf,.pdf', pdft: 'application/pdf,.pdf', ocr: 'application/pdf,.pdf,image/*,.tif,.tiff,.jp2', qr: '.txt,.csv,.docx', dl: '', edit: caps ? caps.categories.edit.inputs.map(e => '.' + e).join(',') : 'audio/*,video/*' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps && caps.categories[m] ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
     picker.accept = acc; dirPicker.accept = acc;
-    const what = { pdf: 'PDF', image: 'картинки', audio: 'аудиофайлы', video: 'видео', doc: 'документы', pdft: 'PDF', edit: 'видео или аудио', qr: 'списки ссылок' }[m] || 'фото';
+    const what = { pdf: 'PDF', image: 'картинки', audio: 'аудиофайлы', video: 'видео', doc: 'документы', pdft: 'PDF', ocr: 'сканы PDF или фото документов', edit: 'видео или аудио', qr: 'списки ссылок' }[m] || 'фото';
     $('dropTitle').textContent = `Перетащи ${what} сюда`;
     $('dropSub').textContent = k === 'pdf' ? 'Можно сразу сотню. Папку тоже можно перетащить.' : 'или нажми, чтобы выбрать. Папку тоже можно перетащить.';
     const d = { topdf: 200, photo: 300 }[m] || 150; $('dpi').value = d; $('dpiVal').textContent = d + ' DPI';
@@ -1100,7 +1221,7 @@ ul.files .up { width: 40px; height: 40px; }
     const pb = $('engineBanner'); pb.hidden = true; pb.className = 'banner';
     if (caps) {
       const need = { image: ['imagemagick', 'ImageMagick'], audio: ['ffmpeg', 'ffmpeg'], video: ['ffmpeg', 'ffmpeg'], doc: ['pandoc', 'pandoc'],
-        edit: ['ffmpeg', 'ffmpeg'], pdft: ['pypdf', 'Пакет pypdf (pip install pypdf)'], dl: ['ytdlp', 'yt-dlp (pip install yt-dlp)'], qr: ['qrcode', 'Пакет qrcode (pip install qrcode)'] }[m];
+        edit: ['ffmpeg', 'ffmpeg'], pdft: ['pypdf', 'Пакет pypdf (pip install pypdf)'], ocr: ['tesseract', 'Tesseract OCR'], dl: ['ytdlp', 'yt-dlp (pip install yt-dlp)'], qr: ['qrcode', 'Пакет qrcode (pip install qrcode)'] }[m];
       const ff = ['audio', 'video', 'edit', 'dl'].includes(m) && !caps.engines.ffmpeg;
       if (caps.engines.can_install && (ff || (need && INSTALLABLE[need[0]] && !caps.engines[need[0]]) || (m === 'pdf' && !POPPLER_OK))) {
         offerEngine(ff ? 'ffmpeg' : m === 'pdf' ? 'poppler' : need[0]);
@@ -1109,12 +1230,18 @@ ul.files .up { width: 40px; height: 40px; }
       } else if (need && !caps.engines[need[0]]) { pb.hidden = false; pb.textContent = `${need[1]} не найден в PATH. Установи его и перезапусти сервер, иначе этот режим не заработает.`; }
       else if (m === 'pdf' && !POPPLER_OK) { pb.hidden = false; pb.textContent = 'Poppler не найден в PATH. Установи poppler-utils и перезапусти сервер, иначе конвертация PDF не заработает.'; }
       if (m === 'dl' && pb.hidden && caps.engines.ffmpeg && caps.engines.ytdlp && !caps.engines.deno) offerDeno();
+      if (m === 'ocr' && !caps.engines.ocrmypdf) {
+        pb.className = 'banner'; pb.hidden = false;
+        pb.innerHTML = caps.engines.desktop && caps.engines.platform === 'linux'
+          ? 'Для распознавания нужен OCRmyPDF: <code>sudo apt install ocrmypdf tesseract-ocr-rus</code> (Fedora: dnf install ocrmypdf tesseract-langpack-rus, Arch: pacman -S ocrmypdf tesseract-data-rus) и перезапусти приложение.'
+          : 'Не установлен OCRmyPDF: <code>pip install ocrmypdf</code> (нужен Python 3.11+) и перезапусти сервер.';
+      }
     }
     render(); syncSettings();
     if (m === 'qr') qrRefresh();
   }
   /* настольная версия: недостающий движок скачивается одной кнопкой */
-  const INSTALLABLE = { ffmpeg: ['ffmpeg', '≈ 190 МБ'], pandoc: ['pandoc', '≈ 40 МБ'], poppler: ['poppler', '≈ 20 МБ'], imagemagick: ['ImageMagick', '≈ 50 МБ'] };
+  const INSTALLABLE = { ffmpeg: ['ffmpeg', '≈ 190 МБ'], pandoc: ['pandoc', '≈ 40 МБ'], poppler: ['poppler', '≈ 20 МБ'], imagemagick: ['ImageMagick', '≈ 50 МБ'], tesseract: ['Tesseract OCR', '≈ 110 МБ'] };
   function offerEngine(name) {
     const pb = $('engineBanner'), [title, size] = INSTALLABLE[name];
     pb.className = 'banner offer'; pb.hidden = false;
@@ -1135,8 +1262,8 @@ ul.files .up { width: 40px; height: 40px; }
     }
   }
   // macOS и Linux: движки ставит система, подсказываем точную команду
-  const BREW = { ffmpeg: 'ffmpeg', pandoc: 'pandoc', poppler: 'poppler', imagemagick: 'imagemagick' };
-  const APT = { ffmpeg: 'ffmpeg', pandoc: 'pandoc', poppler: 'poppler-utils', imagemagick: 'imagemagick' };
+  const BREW = { ffmpeg: 'ffmpeg', pandoc: 'pandoc', poppler: 'poppler', imagemagick: 'imagemagick', tesseract: 'tesseract tesseract-lang' };
+  const APT = { ffmpeg: 'ffmpeg', pandoc: 'pandoc', poppler: 'poppler-utils', imagemagick: 'imagemagick', tesseract: 'ocrmypdf tesseract-ocr-rus' };
   function systemEngineHint(name) {
     const pb = $('engineBanner'), title = INSTALLABLE[name][0], mac = caps.engines.platform === 'darwin';
     const cmd = mac ? `brew install ${BREW[name]}` : `sudo apt install ${APT[name]}`;
@@ -1184,6 +1311,13 @@ ul.files .up { width: 40px; height: 40px; }
       fd.append('quality', $('pQ').value); fd.append('max_px', $('pMax').value);
       fd.append('password', $('pPass').value); fd.append('new_password', $('pNewPass').value);
       fd.append('merge_name', files[0].name.replace(/\.[^.]+$/, '') + '_merged');
+    }
+    else if (k === 'ocr') {
+      url = '/api/ocr';
+      fd.append('langs', ocrLangs().join('+')); fd.append('mode', qs('input[name=ocrm]:checked').value);
+      fd.append('deskew', $('ocrDeskew').checked ? '1' : '0'); fd.append('rotate', $('ocrRotate').checked ? '1' : '0');
+      fd.append('pdfa', $('ocrPdfa').checked ? '1' : '0'); fd.append('txt', $('ocrTxt').checked ? '1' : '0');
+      fd.append('optimize', $('ocrOpt').checked ? '1' : '0');
     }
     else if (k === 'dl') { url = '/api/dl'; dlForm(fd); }
     else if (k === 'qr') { url = '/api/qr/bulk'; qrStyle(fd); fd.append('links', $('qrLinks').value); fd.append('dedupe', $('qrDedupe').checked ? '1' : '0'); fd.append('column', $('qrCol').value.trim()); }
@@ -1367,6 +1501,36 @@ ul.files .up { width: 40px; height: 40px; }
     protect: 'PDF будет открываться только с паролем (шифрование AES-256).',
     unlock: 'Нужен текущий пароль: взломать PDF без него нельзя.',
   };
+  /* ---------- распознавание текста ---------- */
+  const ocrLangs = () => [...document.querySelectorAll('input[name=ocrl]:checked')].map(i => i.value);
+  const OCR_MODE_HINTS = {
+    skip: 'Страницы, где текст уже есть, останутся как были. Подходит для большинства файлов.',
+    redo: 'Для PDF, где уже есть плохое распознавание: старый текстовый слой заменится новым. Выравнивание и поворот тут не работают.',
+    force: 'Каждая страница превратится в картинку и распознается. Надёжно, но настоящий текст тоже станет картинкой.',
+  };
+  function renderOcrLangs() {
+    const info = caps && caps.engines.ocr_info, have = info ? info.languages : [], names = info ? info.names : {};
+    let saved = [];
+    try { saved = JSON.parse(localStorage.getItem('ocrLangs') || '[]'); } catch (_) {}
+    const want = (saved.length ? saved : ['rus', 'eng']).filter(l => have.includes(l));
+    const order = ['rus', 'eng', ...have.filter(l => !['rus', 'eng'].includes(l)).sort()].filter(l => have.includes(l));
+    $('ocrLangs').innerHTML = order.map(l => `<input type="checkbox" name="ocrl" id="ocrl-${l}" value="${l}" ${want.includes(l) ? 'checked' : ''}><label for="ocrl-${l}">${esc(names[l] || l)}</label>`).join('')
+      || '<span class="hint">Языки появятся, когда будет установлен Tesseract.</span>';
+    const noRus = info && info.tesseract && !have.includes('rus');
+    $('ocrLangHint').textContent = noRus ? 'Нет русского языка для Tesseract: поставь пакет tesseract-ocr-rus (macOS: brew install tesseract-lang).' : 'Отметь все языки, которые есть в документе: лишние замедляют распознавание.';
+  }
+  function syncOcr() {
+    if (!$('ocrLangs').children.length) renderOcrLangs();
+    const m = qs('input[name=ocrm]:checked').value;
+    $('ocrModeHint').textContent = OCR_MODE_HINTS[m];
+    $('ocrDeskew').disabled = $('ocrRotate').disabled = m === 'redo';
+    updateGo();
+  }
+  $('ocrBox').addEventListener('change', e => {
+    if (e.target.name === 'ocrl') { try { localStorage.setItem('ocrLangs', JSON.stringify(ocrLangs())); } catch (_) {} }
+    syncOcr();
+  });
+
   function syncPdft() {
     const op = pOp();
     $('pHint').textContent = P_HINTS[op];

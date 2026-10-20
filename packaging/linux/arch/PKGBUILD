@@ -9,7 +9,9 @@ url="https://github.com/Zaxar1231/Universal-app"
 license=('AGPL-3.0-only')
 depends=('python' 'python-gobject' 'webkit2gtk-4.1' 'python-pillow' 'python-cryptography'
          'ffmpeg' 'imagemagick' 'pandoc-cli' 'poppler')
-optdepends=('libreoffice-fresh: чтение и запись старых .doc')
+optdepends=('libreoffice-fresh: чтение и запись старых .doc'
+            'ocrmypdf: распознавание текста в сканах'
+            'tesseract-data-rus: распознавание русского текста')
 source=("universal-${pkgver}-linux.tar.gz")
 sha256sums=('SKIP')
 noextract=("universal-${pkgver}-linux.tar.gz")

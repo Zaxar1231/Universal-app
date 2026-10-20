@@ -938,3 +938,192 @@ def test_dl_netcheck(client, monkeypatch):
     assert all(c["proxy"] == "" and c["source_address"] == "0.0.0.0" for c in calls)
 
 
+
+
+# ---------------------------------------------------------------- сервер для телефона
+
+@pytest.fixture()
+def phone(tmp_path, monkeypatch):
+    import phoneserver
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path))
+    monkeypatch.setattr(phoneserver, "PORTS", range(18700, 18720))
+    yield phoneserver
+    phoneserver.stop(remember=False)
+
+
+def _get(url, password=None):
+    import base64
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(url)
+    if password is not None:
+        req.add_header("Authorization", "Basic " + base64.b64encode(f"телефон:{password}".encode()).decode())
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+
+
+def test_phone_server_lifecycle(client, phone):
+    d = client.get("/api/phone").get_json()
+    assert d["running"] is False and d["enabled"] is False
+    d = client.post("/api/phone", data={"action": "on"}).get_json()
+    assert d["running"] and d["enabled"] and len(d["password"]) == 8 and d["port"] in phone.PORTS
+    base = f"http://127.0.0.1:{d['port']}"
+    # через сервер для телефона без пароля и с чужим не пускает, с правильным пускает (логин любой)
+    assert _get(base + "/api/formats")[0] == 401
+    assert _get(base + "/api/formats", "wrong")[0] == 401
+    st, body = _get(base + "/api/formats", d["password"])
+    assert st == 200 and b"categories" in body
+    # с телефона сервер не выключить и пароль не подсмотреть
+    assert _get(base + "/api/phone", d["password"])[0] == 403
+    if d["urls"]:
+        assert d["link"].startswith("universal://connect?url=http%3A%2F%2F") and d["password"] in d["link"]
+        assert client.get("/api/phone/qr.svg").data.startswith(b"<svg")
+    # новый пароль сразу заменяет старый
+    old = d["password"]
+    d = client.post("/api/phone", data={"action": "password"}).get_json()
+    assert d["password"] != old
+    assert _get(base + "/api/formats", old)[0] == 401
+    assert _get(base + "/api/formats", d["password"])[0] == 200
+    # настройка запоминается: после перезапуска программы сервер включится сам на том же порту
+    port = d["port"]
+    phone.stop(remember=False)
+    phone.autostart(webapp.app)
+    assert phone.running() and phone.settings()["port"] == port
+    d = client.post("/api/phone", data={"action": "off"}).get_json()
+    assert not d["running"] and not d["enabled"]
+    import urllib.error
+    with pytest.raises(urllib.error.URLError):                     # порт закрыт
+        _get(base + "/api/formats", "x")
+
+
+def test_phone_api_only_from_this_computer(client, phone):
+    assert client.get("/api/phone", environ_base={"REMOTE_ADDR": "192.168.1.5"}).status_code == 403
+    assert client.post("/api/phone", data={"action": "on"}, environ_base={"REMOTE_ADDR": "192.168.1.5"}).status_code == 403
+    assert not phone.running()
+
+
+def test_phone_link_and_addresses(phone):
+    link = phone.link("http://192.168.1.20:5000", "ab cd")
+    assert link == "universal://connect?url=http%3A%2F%2F192.168.1.20%3A5000&password=ab%20cd"
+    assert all(not ip.startswith("127.") for ip in phone.addresses())
+    assert set(phone.new_password()) <= set(phone.ALPHABET)
+
+
+# ---------------------------------------------------------------- распознавание текста (OCRmyPDF)
+
+import ocr  # noqa: E402
+
+needs_ocr = pytest.mark.skipif(not ocr.available() or "eng" not in ocr.languages(), reason="нет OCRmyPDF или Tesseract")
+
+
+def _scan(path: Path, lines: list[str], angle: float = 0) -> None:
+    from PIL import Image, ImageDraw, ImageFont
+    im = Image.new("RGB", (1654, 1169), "white")
+    d = ImageDraw.Draw(im)
+    font = None
+    for f in ("DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "arial.ttf",
+              "/System/Library/Fonts/Supplemental/Arial.ttf"):
+        try:
+            font = ImageFont.truetype(f, 56)
+            break
+        except OSError:
+            continue
+    for i, line in enumerate(lines):
+        d.text((120, 200 + 110 * i), line, fill="black", font=font or ImageFont.load_default())
+    if angle:
+        im = im.rotate(angle, expand=True, fillcolor="white")
+    if path.suffix == ".pdf":
+        im.save(path, resolution=200)
+    else:
+        im.save(path, dpi=(200, 200))
+
+
+def test_ocr_args():
+    o = ocr.read_opts({"langs": "rus+eng", "mode": "redo", "deskew": "1", "rotate": "1", "pdfa": "1"})
+    a = ocr.build_args(Path("in.pdf"), Path("out.pdf"), o, None, True)
+    assert "--redo-ocr" in a and "--deskew" not in a and "--rotate-pages" not in a   # redo с ними несовместим
+    assert a[a.index("-l") + 1] == "rus+eng" and a[-2:] == ["in.pdf", "out.pdf"]
+    o = ocr.read_opts({"langs": "eng", "mode": "skip"})
+    a = ocr.build_args(Path("photo.jpg"), Path("o.pdf"), o, Path("o.txt"), False)
+    assert "--skip-text" in a and "--deskew" in a and "--image-dpi" in a and "--sidecar" in a
+    assert a[a.index("--output-type") + 1] == "pdf"
+    with pytest.raises(ocr.OcrError):
+        ocr.read_opts({"langs": "rus;rm -rf"})
+
+
+def test_ocr_pdfa_without_ghostscript(monkeypatch):
+    monkeypatch.setattr(ocr, "_ghostscript", lambda: None)
+    monkeypatch.setattr(ocr, "version", lambda: "17.13.0")
+    a = ocr.build_args(Path("a.pdf"), Path("b.pdf"), ocr.read_opts({"langs": "eng"}), None, True)
+    assert a[a.index("--pdfa-backend") + 1] == "internal"
+    monkeypatch.setattr(ocr, "version", lambda: "16.10.0")       # старый системный OCRmyPDF такого ключа не знает
+    assert "--pdfa-backend" not in ocr.build_args(Path("a.pdf"), Path("b.pdf"), ocr.read_opts({"langs": "eng"}), None, True)
+
+
+@needs_ocr
+def test_ocr_scan_and_photo(client, tmp_path):
+    from pypdf import PdfReader
+    _scan(tmp_path / "scan.pdf", ["Hello OCR test 12345", "Universal recognises text"])
+    _scan(tmp_path / "photo.png", ["Skewed photo of a page", "Second line 67890"], angle=4)
+    files = [(io.BytesIO((tmp_path / n).read_bytes()), n) for n in ("scan.pdf", "photo.png")]
+    r = client.post("/api/ocr", data={"files": files, "langs": "eng", "txt": "1"}, content_type="multipart/form-data")
+    d = wait_task(client, r.get_json()["task"], timeout=300)
+    assert d["status"] == "done", d
+    assert sorted(d["names"]) == ["photo.txt", "photo_ocr.pdf", "scan.txt", "scan_ocr.pdf"]
+    out = webapp.WORK_ROOT / d["job"] / "out"
+    text = PdfReader(out / "scan_ocr.pdf").pages[0].extract_text()
+    assert "12345" in text and "Universal" in text
+    assert "67890" in (out / "photo.txt").read_text(encoding="utf-8")
+
+
+@needs_ocr
+def test_ocr_pdfa_and_existing_text(client, tmp_path):
+    from pypdf import PdfReader
+    _scan(tmp_path / "scan.pdf", ["Archive copy 2468"])
+    r = client.post("/api/ocr", data={"files": [(io.BytesIO((tmp_path / "scan.pdf").read_bytes()), "scan.pdf")],
+                                      "langs": "eng", "pdfa": "1"}, content_type="multipart/form-data")
+    d = wait_task(client, r.get_json()["task"], timeout=300)
+    assert d["status"] == "done", d
+    done = webapp.WORK_ROOT / d["job"] / "out" / "scan_ocr.pdf"
+    assert b"pdfaid" in done.read_bytes() or d["failed"]           # PDF/A, если сошёлся
+    # PDF уже с текстом: «пропустить» не ломается, текст остаётся
+    r = client.post("/api/ocr", data={"files": [(io.BytesIO(done.read_bytes()), "again.pdf")], "langs": "eng"},
+                    content_type="multipart/form-data")
+    d = wait_task(client, r.get_json()["task"], timeout=300)
+    assert d["status"] == "done", d
+    assert "2468" in PdfReader(webapp.WORK_ROOT / d["job"] / "out" / "again_ocr.pdf").pages[0].extract_text()
+
+
+@needs_ocr
+def test_ocr_unknown_language(client, tmp_path):
+    _scan(tmp_path / "scan.pdf", ["x"])
+    r = client.post("/api/ocr", data={"files": [(io.BytesIO((tmp_path / "scan.pdf").read_bytes()), "scan.pdf")],
+                                      "langs": "klingon"}, content_type="multipart/form-data")
+    d = wait_task(client, r.get_json()["task"])
+    assert d["status"] == "error" and "нет языков" in d["error"]
+
+
+def test_engine_index_and_any_release(monkeypatch):
+    import engines
+    page = ('<a href="tesseract-ocr-w64-setup-5.3.0.20221222.exe">a</a>'
+            '<a href="tesseract-ocr-w64-setup-5.5.0.20241111.exe">b</a><a href="other.zip">c</a>')
+
+    class R(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(engines, "_get", lambda url, timeout=30: R(page.encode()))
+    assets = engines._assets_from_index("https://example.test/tesseract/")
+    assert assets[0] == ("tesseract-ocr-w64-setup-5.5.0.20241111.exe",
+                         "https://example.test/tesseract/tesseract-ocr-w64-setup-5.5.0.20241111.exe")
+    # у последнего релиза установщика нет: берётся из более раннего, а не ошибка
+    monkeypatch.setattr(engines, "_assets_from_api", lambda repo: [("tesseract-5.5.2.tar.gz", "u0")])
+    monkeypatch.setattr(engines, "_assets_from_releases", lambda repo: [
+        ("tesseract-5.5.2.tar.gz", "u0"), ("tesseract-ocr-w64-setup-5.5.1.exe", "u1")])
+    assert engines._resolve_url(engines.CATALOG["tesseract"]) == "u1"
