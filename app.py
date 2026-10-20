@@ -43,6 +43,7 @@ import pdftools
 import phoneserver
 import qrdoc
 import qrtools
+import updater
 from tasks import Task, TaskManager
 
 app = Flask(__name__)
@@ -646,7 +647,7 @@ def formats():
                 "deno": bool(shutil.which("deno")),
                 "ocr": ocr.available(), "ocrmypdf": bool(ocr.version()), "tesseract": bool(ocr.tesseract()),
                 "ocr_info": ocr.status(),
-                "desktop": bool(os.environ.get("UNIVERSAL_DESKTOP"))})
+                "desktop": bool(os.environ.get("UNIVERSAL_DESKTOP")), "version": updater.VERSION})
     cats = {}
     for name, table in conv.CATEGORIES.items():
         tg = conv.targets_for(name)
@@ -1093,6 +1094,26 @@ def ocr_run():
     items = save_uploads(files, job_dir / "in")
     task = Task(job_id, "ocr", job_dir, archive)
     TASKS.submit(task, lambda t: ocr.run_ocr_task(t, items, opts))
+    return jsonify(task.to_dict())
+
+
+# ---------- Обновления ----------
+
+@app.route("/api/update")
+def update_check():
+    _local_only()
+    try:
+        return jsonify(updater.check(force=request.args.get("force") == "1"))
+    except updater.UpdateError as e:
+        return jsonify({"current": updater.VERSION, "error": str(e)}), 502
+
+
+@app.route("/api/update", methods=["POST"])
+def update_install():
+    _local_only()
+    job_id, job_dir, archive = new_job("update")
+    task = Task(job_id, "update", job_dir, archive)
+    TASKS.submit(task, lambda t: updater.install(t, app.config.get("QUIT_APP")))
     return jsonify(task.to_dict())
 
 

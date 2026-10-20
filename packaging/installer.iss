@@ -45,6 +45,8 @@ Name: "{autodesktop}\Universal"; Filename: "{app}\Universal.exe"; Tasks: desktop
 
 [Run]
 Filename: "{app}\Universal.exe"; Description: "{cm:LaunchProgram,Universal}"; Flags: nowait postinstall skipifsilent
+; обновление из самого приложения идёт тихо (/SILENT): после него сразу открываем новую версию
+Filename: "{app}\Universal.exe"; Flags: nowait; Check: WizardSilent
 
 [UninstallDelete]
 ; задания и логи; скачанные движки (ffmpeg и т.д.) удаляются вместе с ними

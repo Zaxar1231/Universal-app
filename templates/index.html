@@ -224,6 +224,11 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
 .swatches input:focus-visible + label { outline: 3px solid var(--md-primary); outline-offset: 2px; }
 .row-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .top-actions { display: flex; gap: 4px; align-items: center; }
+.ver-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; padding-top: 12px;
+  border-top: 1px solid var(--md-outline-variant); }
+#updateBanner ul { margin: 0; padding-left: 18px; }
+#updateBanner a.btn { text-decoration: none; }
+#updateBanner .acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 #phoneBtn { position: relative; }
 #phoneBtn .dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--md-primary); }
 .dialog.phone { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; }
@@ -333,6 +338,7 @@ ul.files .up { width: 40px; height: 40px; }
       </div>
     </header>
 
+    <div class="banner offer" id="updateBanner" hidden></div>
     <div class="banner" id="engineBanner" hidden></div>
 
     <div class="grid">
@@ -831,6 +837,10 @@ ul.files .up { width: 40px; height: 40px; }
   <div class="dialog">
     <h2 class="t-title-l" id="sheetTitle">Цвет оформления</h2>
     <div class="swatches" id="swatches"></div>
+    <div class="ver-row" id="verRow" hidden>
+      <span class="t-body-m" id="verText"></span>
+      <button class="btn text state" id="verCheck" type="button">Проверить обновления</button>
+    </div>
     <div class="row-actions">
       <button class="btn text state" id="sheetReset">Сбросить</button>
       <button class="btn tonal state" id="sheetClose">Готово</button>
@@ -915,6 +925,65 @@ ul.files .up { width: 40px; height: 40px; }
   $('sheetClose').onclick = closeSheet;
   $('sheet').addEventListener('click', e => { if (e.target === $('sheet')) closeSheet(); });
   addEventListener('keydown', e => { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
+  /* ---------- обновления ---------- */
+  // первые пункты из описания релиза (CHANGELOG): **жирный** и ссылки в обычный текст
+  const plainNotes = md => md.split('\n').filter(l => /^\s*[-*] /.test(l)).slice(0, 4)
+    .map(l => l.replace(/^\s*[-*] /, '').replace(/\*\*|`/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'));
+  function updateShow(d) {
+    const b = $('updateBanner'), notes = plainNotes(d.notes || '');
+    b.hidden = false;
+    b.innerHTML = `<span class="t-body-m">Вышла <b>Universal ${esc(d.latest)}</b>, у тебя ${esc(d.current)}.</span>` +
+      (notes.length ? '<ul class="t-body-m">' + notes.map(n => `<li>${esc(n.length > 160 ? n.slice(0, 157) + '…' : n)}</li>`).join('') + '</ul>' : '') +
+      '<div class="acts">' +
+      (d.can_install ? `<button class="btn filled state" id="updGo">Обновить${d.asset && d.asset.size ? ' (' + fmtSize(d.asset.size) + ')' : ''}</button>`
+                     : `<a class="btn filled state" href="${esc(d.url)}" target="_blank" rel="noopener">Скачать</a>`) +
+      `<a class="btn text state" href="${esc(d.url)}" target="_blank" rel="noopener">Что нового</a>` +
+      '<button class="btn text state" id="updLater">Позже</button></div>' +
+      (d.kind === 'source' ? '<span class="hint">Запущено из исходников: скачай архив или сделай git pull, run.sh/run.bat сами доставят зависимости.</span>' : '') +
+      (d.kind === 'docker' ? '<span class="hint">Docker: git pull && docker compose up -d --build</span>' : '');
+    $('updLater').onclick = () => { try { localStorage.setItem('skipVersion', d.latest); } catch (_) {} b.hidden = true; };
+    if ($('updGo')) $('updGo').onclick = () => updateInstall(b);
+  }
+  function updateInstall(box) {
+    box.innerHTML = '<span class="t-body-m">Начинаю…</span><div class="progress busy"><i></i></div>';
+    fetch('/api/update', { method: 'POST' }).then(r => r.json()).then(t => {
+      if (t.error) { box.innerHTML = `<span class="t-body-m">${esc(t.error)}</span>`; return; }
+      const tick = () => fetch('/api/task/' + t.task).then(r => r.json()).then(d => {
+        if (['queued', 'running'].includes(d.status)) {
+          const p = Math.round((d.progress || 0) * 100);
+          box.innerHTML = `<span class="t-body-m">${esc(d.message)} · ${p}%</span><div class="progress"><i style="width:${p}%"></i></div>`;
+          setTimeout(tick, 500); return;
+        }
+        const r = d.result || {};
+        if (d.status === 'done' && r.action === 'restart') {
+          box.innerHTML = '<span class="t-body-m">Ставлю обновление. Приложение закроется и через минуту откроется уже новой версией.</span><div class="progress busy"><i></i></div>';
+        } else if (d.status === 'done') {
+          box.innerHTML = `<span class="t-body-m">Скачал и открыл <b>${esc(r.path.split(/[\\/]/).pop())}</b>. ` +
+            (r.command ? 'Установи его в открывшемся окне или командой:</span><code style="font-family:ui-monospace,monospace;overflow-wrap:anywhere">' + esc(r.command) + '</code>'
+                       : 'Перетащи Universal в «Программы» с заменой и запусти заново.</span>');
+        } else {
+          box.innerHTML = `<span class="t-body-m">Не получилось обновиться: ${esc(d.error || d.message)}</span><button class="btn filled state">Попробовать ещё раз</button>`;
+          box.querySelector('button').onclick = () => updateInstall(box);
+        }
+      }).catch(() => setTimeout(tick, 1500));      // пока установщик закрывает приложение, сервер может не отвечать
+      tick();
+    }).catch(() => { box.innerHTML = '<span class="t-body-m">Нет связи с приложением.</span>'; });
+  }
+  function updateCheck(force) {
+    if (force) $('verText').textContent = 'Проверяю…';
+    return fetch('/api/update' + (force ? '?force=1' : '')).then(r => r.status === 403 ? null : r.json()).then(d => {
+      if (!d) return;
+      $('verRow').hidden = false;
+      if (d.error) { $('verText').textContent = `Universal ${d.current}` + (force ? ` · ${d.error}` : ''); return; }
+      $('verText').textContent = `Universal ${d.current}` + (d.newer ? ` · есть ${d.latest}` : force ? ' · последняя версия' : '');
+      let skipped = '';
+      try { skipped = localStorage.getItem('skipVersion') || ''; } catch (_) {}
+      if (d.newer && (force || skipped !== d.latest)) updateShow(d);
+    }).catch(() => {});
+  }
+  $('verCheck').onclick = () => { updateCheck(true); };
+  setTimeout(() => updateCheck(false), 1500);       // сразу при запуске не мешаем открытию окна
+
   /* ---------- сервер для телефона ---------- */
   const phone = { busy: false };
   function phoneRender(d) {

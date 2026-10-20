@@ -1132,3 +1132,102 @@ def test_engine_index_and_any_release(monkeypatch):
     monkeypatch.setattr(engines, "_assets_from_releases", lambda repo: [
         ("tesseract-5.5.2.tar.gz", "u0"), ("tesseract-ocr-w64-setup-5.5.1.exe", "u1")])
     assert engines._resolve_url(engines.CATALOG["tesseract"]) == "u1"
+
+
+# ---------------------------------------------------------------- обновления
+
+import updater  # noqa: E402
+
+FAKE_RELEASE = {"version": "99.1.0", "notes": "- **Новое**: что-то\n- ещё [ссылка](https://x)\n", "assets": [
+    ("Universal-Setup-99.1.0.exe", "https://example.test/setup.exe", 30_000_000),
+    ("Universal-99.1.0-macos-arm64.dmg", "https://example.test/arm.dmg", 1),
+    ("Universal-99.1.0-macos-x86_64.dmg", "https://example.test/intel.dmg", 1),
+    ("universal_99.1.0_all.deb", "https://example.test/u.deb", 1),
+    ("universal-99.1.0-1.noarch.rpm", "https://example.test/u.rpm", 1),
+    ("universal-99.1.0-1-any.pkg.tar.zst", "https://example.test/u.pkg.tar.zst", 1),
+    ("universal-99.1.0.zip", "https://example.test/u.zip", 1),
+    ("Universal-99.1.0-android.apk", "https://example.test/u.apk", 1)]}
+
+
+@pytest.fixture()
+def fake_release(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path))
+    calls = []
+    monkeypatch.setattr(updater, "_fetch", lambda: calls.append(1) or json.loads(json.dumps(FAKE_RELEASE)))
+    return calls
+
+
+def test_update_check_and_cache(fake_release, monkeypatch):
+    monkeypatch.setattr(updater, "kind", lambda: "installer")
+    d = updater.check()
+    assert d["newer"] and d["latest"] == "99.1.0" and d["current"] == updater.VERSION
+    assert d["asset"]["name"] == "Universal-Setup-99.1.0.exe" and d["can_install"]
+    assert d["url"].endswith("/releases/tag/v99.1.0")
+    updater.check()
+    assert len(fake_release) == 1                         # второй раз из кэша, GitHub не дёргаем
+    updater.check(force=True)
+    assert len(fake_release) == 2
+
+
+def test_update_assets_per_platform(fake_release, monkeypatch):
+    want = {"deb": "universal_99.1.0_all.deb", "rpm": "universal-99.1.0-1.noarch.rpm",
+            "arch": "universal-99.1.0-1-any.pkg.tar.zst", "source": "universal-99.1.0.zip"}
+    for k, name in want.items():
+        monkeypatch.setattr(updater, "kind", lambda k=k: k)
+        d = updater.check()
+        assert d["asset"]["name"] == name and d["can_install"] == (k != "source")
+    monkeypatch.setattr(updater, "kind", lambda: "dmg")
+    monkeypatch.setattr(updater.platform, "machine", lambda: "x86_64")
+    assert updater.check()["asset"]["name"] == "Universal-99.1.0-macos-x86_64.dmg"
+    monkeypatch.setattr(updater.platform, "machine", lambda: "arm64")
+    assert updater.check()["asset"]["name"] == "Universal-99.1.0-macos-arm64.dmg"
+    monkeypatch.setattr(updater, "kind", lambda: "docker")
+    assert not updater.check()["can_install"]
+
+
+def test_update_not_newer(fake_release, monkeypatch):
+    monkeypatch.setattr(updater, "VERSION", "99.1.0")
+    assert not updater.check()["newer"]
+    monkeypatch.setattr(updater, "VERSION", "100.0.0")
+    assert not updater.check()["newer"]
+    assert updater.parse("1.10.0") > updater.parse("1.9.9")
+
+
+def test_update_install_windows_and_linux(fake_release, monkeypatch, client):
+    import engines
+    monkeypatch.setattr(engines, "_download", lambda url, dest, task, a, b: Path(dest).write_bytes(b"x"))
+    started, opened, quit_calls = [], [], []
+    monkeypatch.setattr(updater.subprocess, "Popen", lambda args, **kw: started.append(args))
+    monkeypatch.setattr(updater, "_open", lambda p: opened.append(p))
+    monkeypatch.setattr(updater.threading, "Timer", lambda s, fn: type("T", (), {"start": lambda self: quit_calls.append(fn)})())
+    monkeypatch.setattr(updater, "kind", lambda: "installer")
+    webapp.app.config["QUIT_APP"] = "quit"
+    try:
+        d = wait_task(client, client.post("/api/update").get_json()["task"])
+    finally:
+        webapp.app.config.pop("QUIT_APP")
+    assert d["status"] == "done" and d["result"]["action"] == "restart"
+    assert started[0][0].endswith("Universal-Setup-99.1.0.exe") and "/SILENT" in started[0]
+    assert quit_calls == ["quit"]                          # приложение закроется, чтобы установщик его заменил
+    monkeypatch.setattr(updater, "kind", lambda: "deb")
+    d = wait_task(client, client.post("/api/update").get_json()["task"])
+    assert d["status"] == "done" and d["result"]["command"].startswith("sudo apt install ")
+    assert opened and str(opened[0]).endswith("universal_99.1.0_all.deb")
+    # прошлое скачанное обновление удалено
+    assert sorted(p.name for p in (updater.engines.root() / "updates").iterdir()) == ["universal_99.1.0_all.deb"]
+
+
+def test_update_api_local_only(fake_release, client):
+    assert client.get("/api/update", environ_base={"REMOTE_ADDR": "192.168.1.5"}).status_code == 403
+    assert client.post("/api/update", environ_base={"REMOTE_ADDR": "192.168.1.5"}).status_code == 403
+    assert client.get("/api/update").get_json()["latest"] == "99.1.0"
+
+
+def test_update_github_unreachable(tmp_path, monkeypatch, client):
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path))
+
+    def boom():
+        raise updater.UpdateError("не удалось связаться с GitHub (URLError)")
+    monkeypatch.setattr(updater, "_fetch", boom)
+    r = client.get("/api/update")
+    assert r.status_code == 502 and "GitHub" in r.get_json()["error"] and r.get_json()["current"] == updater.VERSION

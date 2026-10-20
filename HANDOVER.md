@@ -412,3 +412,21 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
   - сканер — getUserMedia плюс BarcodeDetector (Android) или jsQR (iPhone), с разрешениями CAMERA и NSCameraUsageDescription;
   - «Вставить ссылку» читает буфер обмена.
 - Баг масштаба на телефоне: grid-элементы с длинным именем имели `min-width: auto`. Теперь `minmax(0, 1fr)` и `min-width: 0` (то же на сайте).
+
+### 13.14 Обновления из приложения (v1.8.0)
+- `version.py` хранит `VERSION`. В репозитории лежит номер следующего релиза, а `release.yml` в шагах «Версия» перезаписывает файл из входного `version`.
+  - zip собирается так: `git archive --add-file=version.py` с исключением закоммиченного.
+  - Linux: `build.sh` пишет `version.py` в `/usr/lib/universal`.
+- `updater.py`:
+  - последний релиз берётся через API, при лимите — через страницу релиза (`engines._assets_from_html`); кэш 6 ч в `<UNIVERSAL_HOME>/update.json`;
+  - `kind()` определяет способ установки: installer (frozen win), dmg (frozen mac, по `platform.machine`), deb/rpm/arch (пакет в `/usr/lib/universal` и `/etc/os-release`), source, docker.
+- Установка:
+  - Windows: `Universal-Setup-X.exe /SILENT /SP- /NOCANCEL /CLOSEAPPLICATIONS`; приложение закрывает себя через `app.config["QUIT_APP"]`, его задаёт `desktop.main`. `installer.iss` в тихом режиме запускает новую версию (`Check: WizardSilent`).
+  - macOS и Linux: файл открывается (`open` или `xdg-open`), интерфейс показывает команду для терминала.
+- `/api/update` (GET проверка, POST установка) доступен только локально (`_local_only`).
+- Интерфейс: `#updateBanner`, строка версии в окне палитры, «Позже» сохраняет версию в `localStorage.skipVersion`.
+- Телефон:
+  - `mobile.js` раз в 6 ч запрашивает `api.github.com/.../releases/latest` (CapacitorHttp);
+  - Android: APK качается в `Directory.Cache`, затем `ApkInstallPlugin.install` вызывает FileProvider и `ACTION_VIEW`; без разрешения открывает `ACTION_MANAGE_UNKNOWN_APP_SOURCES`. В манифесте `REQUEST_INSTALL_PACKAGES`;
+  - iOS: ссылка на релиз.
+

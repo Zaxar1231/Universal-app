@@ -130,6 +130,14 @@ def main() -> None:
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{port}/"
     _wait(url + "api/engines")
+    def quit_app():
+        # обновление на Windows: установщик ждёт, пока приложение закроется
+        try:
+            for w in list(webview.windows):
+                w.destroy()
+        finally:
+            threading.Timer(2, os._exit, [0]).start()
+    webapp.app.config["QUIT_APP"] = quit_app
     if "--smoke" not in sys.argv:
         import phoneserver
         phoneserver.autostart(webapp.app)     # «Сервер для телефона» был включён — включаем снова
