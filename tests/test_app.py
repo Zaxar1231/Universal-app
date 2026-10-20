@@ -1059,8 +1059,13 @@ def test_ocr_pdfa_without_ghostscript(monkeypatch):
     monkeypatch.setattr(ocr, "version", lambda: "17.13.0")
     a = ocr.build_args(Path("a.pdf"), Path("b.pdf"), ocr.read_opts({"langs": "eng"}), None, True)
     assert a[a.index("--pdfa-backend") + 1] == "internal"
-    monkeypatch.setattr(ocr, "version", lambda: "16.10.0")       # старый системный OCRmyPDF такого ключа не знает
-    assert "--pdfa-backend" not in ocr.build_args(Path("a.pdf"), Path("b.pdf"), ocr.read_opts({"langs": "eng"}), None, True)
+    # старый OCRmyPDF такого ключа не знает и без Ghostscript PDF/A не сделает: сохраняем обычный PDF
+    monkeypatch.setattr(ocr, "version", lambda: "17.12.1")
+    a = ocr.build_args(Path("a.pdf"), Path("b.pdf"), ocr.read_opts({"langs": "eng"}), None, True)
+    assert "--pdfa-backend" not in a and a[a.index("--output-type") + 1] == "pdf"
+    monkeypatch.setattr(ocr, "_ghostscript", lambda: "gs")
+    a = ocr.build_args(Path("a.pdf"), Path("b.pdf"), ocr.read_opts({"langs": "eng"}), None, True)
+    assert "--pdfa-backend" not in a and a[a.index("--output-type") + 1] == "pdfa"
 
 
 @needs_ocr
