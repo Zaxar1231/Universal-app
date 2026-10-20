@@ -356,3 +356,26 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - `_cobalt_download` удаляет уже скачанные файлы карусели при ошибке. `_cd_filename` берёт `filename*=UTF-8''…` (cobalt шлёт `filename="????"` для старых клиентов).
 - Тесты: `broken_cobalt` (пустое, мусор, обрезанное тело) — на старом коде задача «готово» с `клип.mp4` 0 байт, на новом файл скачан yt-dlp.
 
+### 13.11 Android и iOS (v1.6.0)
+- `mobile/` — Capacitor 8. Нативные проекты `android/` и `ios/` в репозитории. `www/` не коммитится: его собирает `node build-www.mjs`.
+- `build-www.mjs` склеивает свой каркас и куски сайта:
+  - из каркаса: `src/index.html`, `src/mobile.js`;
+  - из `site/index.html`: `<style>`, `<section id="try">` и последний inline-`<script>`;
+  - из `downloader.py`: `COBALT_ERRORS` и `EMPTY_TUNNEL` (регуляркой).
+  - Если на сайте поменять эти куски, сборка упадёт с понятной ошибкой.
+- Сайт сохраняет через `window.universalSave`, если он есть. На телефоне это запись в `Directory.Documents/Universal` через Filesystem. Service worker в Capacitor не регистрируется.
+- Сеть идёт через `CapacitorHttp`, а не fetch: так нет CORS у Flask, и http:// к домашнему серверу не блокируется.
+- Файлы качает `Filesystem.downloadFile`, не в память. Basic-auth собирается в UTF-8.
+- Через свой сервер: `POST /api/dl` (urlencoded) → опрос `/api/task/<id>` → `/api/file/<job>/<name>` для каждого имени из `names`.
+- cobalt напрямую: tunnel, redirect и picker. Если файл 0 байт — удаляется, ошибка `EMPTY_TUNNEL`.
+- Android:
+  - `ShareInPlugin` (ACTION_SEND text/plain) шлёт событие `shared` с retain;
+  - cleartext разрешён, `requestLegacyExternalStorage`, права на хранилище до API 29;
+  - `versionName`/`versionCode` задаются через `-P`;
+  - ключ подписи `android/app/universal.jks` (пароль `universal-public`) лежит в репозитории, чтобы обновления вставали поверх. Его можно заменить секретами `ANDROID_KEYSTORE_BASE64` и `ANDROID_KEYSTORE_PASSWORD`, но тогда старое приложение придётся переустановить.
+- iOS:
+  - сборка без подписи, `CODE_SIGNING_ALLOWED=NO`, `Payload/App.app` → .ipa для AltStore и Sideloadly;
+  - в Info.plist: `UIFileSharingEnabled`, ATS `NSAllowsArbitraryLoads`, описание доступа к локальной сети.
+- CI: `.github/workflows/mobile.yml`. На PR и main собирает и кладёт в артефакты; из `release.yml` (job `mobile`) выкладывает в релиз.
+- Иконки и заставки: `python mobile/icons.py` из `packaging/icon.png`.
+- На телефоне нет yt-dlp и ffmpeg. Конвертер видео и документов, редактор и сжатие PDF работают только через свой сервер (вкладка «Сервер» → полная версия).

@@ -65,6 +65,15 @@
 
 Если нужной программы нет, интерфейс покажет красный баннер в соответствующем режиме.
 
+## Приложение для Android и iPhone
+В каждом релизе лежат `Universal-X.Y.Z-android.apk` и `Universal-X.Y.Z-ios-unsigned.ipa`. Внутри:
+- **Скачать**: ссылки на видео (или «Поделиться → Universal» из YouTube, TikTok, браузера на Android) качаются прямо на телефон. Работает через свой сервер cobalt или через свой сервер Universal (тогда качает yt-dlp и cobalt на компьютере, с его VPN, а файл приезжает на телефон).
+- **Инструменты**: QR-коды, картинки и PDF, как на сайте, без интернета.
+- **Файлы**: всё скачанное и сохранённое (Android: папка «Документы/Universal», iPhone: «Файлы → На iPhone → Universal»), кнопка «Поделиться» отправит в галерею, Telegram и куда угодно.
+- **Сервер**: адрес и пароль своего Universal, проверка и вход в полную версию.
+
+Установка на Android: скачай APK на телефон и открой, разреши установку из этого источника. На iPhone без аккаунта разработчика Apple IPA ставится через [AltStore](https://altstore.io) или [Sideloadly](https://sideloadly.io) (подпись на 7 дней, они продлевают её сами). Подробности и сборка: [`mobile/README.md`](mobile/README.md).
+
 ## Открыть с телефона
 Телефон и компьютер в одной Wi‑Fi сети. Запусти сервер открытым в сеть и с паролем:
 ```bash
@@ -108,7 +117,7 @@ Linux-пакеты собирает `packaging/linux/build.sh` (дерево `/u
 Windows: `desktop.py` запускает тот же сервер внутри окна pywebview, `engines.py` качает движки в `%LOCALAPPDATA%\Universal\engines`. Exe собирает PyInstaller (`packaging/universal.spec`), установщик Inno Setup (`packaging/installer.iss`); всё это делает workflow «Релиз» на Windows-раннере и перед публикацией запускает `Universal.exe --smoke`. Локально: `pip install -r packaging/requirements-desktop.txt && python desktop.py`.
 
 ## Релизы
-Описание версий в `CHANGELOG.md`. Новый релиз: добавь раздел `## vX.Y.Z` в CHANGELOG и запусти workflow «Релиз» (Actions → Релиз → Run workflow) или запушь тег `vX.Y.Z`. Архив и описание соберутся сами. К релизу прикладываются установщик и портативная версия для Windows, а также архив исходников только с файлами для работы: модули `*.py`, `templates/`, `requirements.txt`, `run.bat`, `run.sh`, README и LICENSE. Тесты, Docker и сайт берутся из репозитория (`git clone`).
+Описание версий в `CHANGELOG.md`. Новый релиз: добавь раздел `## vX.Y.Z` в CHANGELOG и запусти workflow «Релиз» (Actions → Релиз → Run workflow) или запушь тег `vX.Y.Z`. Архив и описание соберутся сами. К релизу прикладываются установщик и портативная версия для Windows, пакеты для Linux и macOS, APK для Android и IPA для iPhone, а также архив исходников только с файлами для работы: модули `*.py`, `templates/`, `requirements.txt`, `run.bat`, `run.sh`, README и LICENSE. Тесты, Docker и сайт берутся из репозитория (`git clone`).
 
 ## Лицензии
 Проект под AGPL-3.0 (см. `LICENSE`): набор форматов и логика параметров звука/видео в конвертере взяты из проекта VERT (AGPL-3.0). yt-dlp — Unlicense. Скачивай только то, на что у тебя есть права.

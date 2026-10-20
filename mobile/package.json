@@ -1,0 +1,23 @@
+{
+  "name": "universal-mobile",
+  "private": true,
+  "version": "1.6.0",
+  "description": "Universal для Android и iOS (Capacitor)",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "build": "node build-www.mjs",
+    "sync": "node build-www.mjs && cap sync"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/browser": "^8.0.5",
+    "@capacitor/clipboard": "^8.0.1",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/ios": "^8.5.3",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3"
+  }
+}

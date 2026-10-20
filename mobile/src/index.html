@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Universal</title>
+<style>
+/* стили сайта (site/index.html), подставляются при сборке */
+/*SITE_CSS*/
+
+/* ---------- приложение для телефона ---------- */
+:root { --top: max(env(safe-area-inset-top), var(--safe-area-inset-top, 0px)); --bottom: max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom, 0px)); }
+body { padding-bottom: calc(80px + var(--bottom)); overscroll-behavior-y: none; }
+header.bar { padding-top: var(--top); }
+header.bar .wrap { height: 56px; }
+main.wrap { padding-bottom: 24px; }
+.page > h2 { margin: 8px 0 16px; }
+.page { display: grid; gap: 16px; }
+.page[hidden] { display: none !important; }
+#try { padding: 0; }
+#try .tool { margin-top: 12px; }
+
+nav.navbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--c); display: grid; grid-template-columns: repeat(4, 1fr);
+  padding: 12px 0 calc(12px + var(--bottom)); }
+nav.navbar button { border: 0; background: none; display: grid; justify-items: center; gap: 4px; cursor: pointer; font-size: .75rem; font-weight: 500;
+  color: var(--on-surface-variant); padding: 0; }
+nav.navbar .pill { width: 64px; height: 32px; border-radius: 16px; display: grid; place-items: center; transition: background .2s; }
+nav.navbar svg { width: 24px; height: 24px; fill: currentColor; }
+nav.navbar button[aria-current="page"] { color: var(--on-surface); }
+nav.navbar button[aria-current="page"] .pill { background: var(--secondary-container); color: var(--on-secondary-container); }
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row > .grow { flex: 1; min-width: 0; }
+details.card > summary { cursor: pointer; font-weight: 500; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+details.card > summary::after { content: "▾"; color: var(--on-surface-variant); }
+details.card[open] > summary { margin-bottom: 16px; }
+details.card[open] > summary::after { content: "▴"; }
+.hint { font-size: .8125rem; line-height: 1.25rem; color: var(--on-surface-variant); margin: 0; }
+.ok { color: var(--primary); }
+.bad { color: var(--error); }
+
+.jobs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.jobs li { background: var(--c-low); border-radius: 16px; padding: 12px 16px; display: grid; gap: 6px; }
+.jobs .t { font-weight: 500; overflow-wrap: anywhere; }
+.jobs .m { font-size: .8125rem; color: var(--on-surface-variant); overflow-wrap: anywhere; }
+.jobs .m.bad { color: var(--error); }
+.bar2 { height: 4px; border-radius: 2px; background: var(--secondary-container); overflow: hidden; }
+.bar2 > i { display: block; height: 100%; width: 0; background: var(--primary); border-radius: 2px; transition: width .2s; }
+.bar2.ind > i { width: 30%; animation: ind 1.2s infinite linear; }
+@keyframes ind { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+
+.btn.sm { height: 32px; padding: 0 12px; font-size: .8125rem; }
+.saved .files li { gap: 8px; }
+.saved .files .acts { display: flex; gap: 4px; flex: none; }
+
+#snack { position: fixed; left: 16px; right: 16px; bottom: calc(92px + var(--bottom)); z-index: 30; background: var(--on-surface); color: var(--surface);
+  border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; font-size: .875rem; box-shadow: 0 3px 8px rgba(0,0,0,.25); }
+#snack span { flex: 1; overflow-wrap: anywhere; }
+#snack button { border: 0; background: none; color: var(--primary-container); font-weight: 500; cursor: pointer; padding: 4px; }
+</style>
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <img src="img/icon-192.png" alt=""><b id="title">Скачать</b>
+</div></header>
+
+<main class="wrap">
+
+  <!-- ===================== скачивание ===================== -->
+  <div class="page" id="pageDl">
+    <div class="card stack">
+      <textarea class="ta" id="dUrls" placeholder="Ссылки на видео, по одной на строку (YouTube, TikTok, VK, Instagram…)" autocapitalize="off" spellcheck="false"></textarea>
+      <div class="row">
+        <button class="btn tonal" id="dPaste">Вставить</button>
+        <button class="btn text" id="dClear">Очистить</button>
+      </div>
+      <div class="seg">
+        <input type="radio" name="dm" id="dm1" value="video" checked><label for="dm1">Видео</label>
+        <input type="radio" name="dm" id="dm2" value="audio"><label for="dm2">Только звук</label>
+      </div>
+      <div class="two">
+        <label class="tf" id="dQRow"><span>Качество</span><select id="dQ">
+          <option value="best">Лучшее</option><option value="2160">2160p (4K)</option><option value="1440">1440p</option>
+          <option value="1080" selected>1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option>
+        </select></label>
+        <label class="tf" id="dARow" hidden><span>Формат звука</span><select id="dA">
+          <option value="mp3">MP3</option><option value="m4a">M4A (лучшее качество)</option><option value="opus">Opus</option><option value="wav">WAV</option>
+        </select></label>
+        <label class="tf"><span>Качать через</span><select id="dVia">
+          <option value="cobalt">cobalt</option><option value="server">мой сервер Universal</option>
+        </select></label>
+      </div>
+      <p class="hint" id="dViaHint"></p>
+      <button class="btn filled lg" id="dGo">Скачать</button>
+    </div>
+    <ul class="jobs" id="dJobs"></ul>
+
+    <details class="card stack" id="dSettings">
+      <summary>Настройки cobalt</summary>
+      <div class="stack">
+        <label class="tf"><span>Адрес сервера cobalt</span><input id="cUrl" type="url" inputmode="url" placeholder="https://cobalt.example.com/" autocapitalize="off" spellcheck="false"></label>
+        <label class="tf"><span>API-ключ (если сервер просит)</span><input id="cKey" autocapitalize="off" spellcheck="false" autocomplete="off"></label>
+        <div class="row"><button class="btn tonal" id="cCheck">Проверить</button><span class="small grow" id="cState"></span></div>
+        <p class="hint">Нужен сервер cobalt, который пускает приложения без проверки в браузере: свой (инструкция в README, раздел «Свой cobalt») или публичный без Turnstile. Официальный cobalt.tools из приложений не работает.</p>
+      </div>
+    </details>
+  </div>
+
+  <!-- ===================== инструменты с сайта ===================== -->
+  <div class="page" id="pageTools" hidden>
+    <section id="try"><!--SITE_TOOLS--></section>
+  </div>
+
+  <!-- ===================== сохранённые файлы ===================== -->
+  <div class="page saved" id="pageFiles" hidden>
+    <div class="card stack">
+      <div class="row"><span class="grow small muted" id="fWhere"></span><button class="btn text sm" id="fRefresh">Обновить</button></div>
+      <ul class="files" id="fList"></ul>
+      <p class="small muted" id="fEmpty" style="margin:0">Тут появятся скачанные видео и всё, что сохранили инструменты</p>
+    </div>
+  </div>
+
+  <!-- ===================== свой сервер ===================== -->
+  <div class="page" id="pageServer" hidden>
+    <div class="card stack">
+      <h3>Свой сервер Universal</h3>
+      <p class="hint">Полная версия (конвертер видео и документов, редактор на ffmpeg, yt-dlp, сжатие PDF) работает на компьютере или домашнем сервере, а телефон ей управляет. Сервер должен быть открыт в сеть: Docker-версия или запуск с <code>HOST=0.0.0.0 APP_PASSWORD=пароль</code>.</p>
+      <label class="tf"><span>Адрес</span><input id="sUrl" type="url" inputmode="url" placeholder="http://192.168.1.20:5000" autocapitalize="off" spellcheck="false"></label>
+      <label class="tf"><span>Пароль (APP_PASSWORD)</span><input id="sPass" type="password" autocomplete="off"></label>
+      <div class="row"><button class="btn tonal" id="sCheck">Проверить</button><span class="small grow" id="sState"></span></div>
+      <button class="btn filled lg" id="sOpen">Открыть полную версию</button>
+      <p class="hint">Откроется во встроенном браузере, логин любой, пароль тот же. Скачивание видео через сервер работает и прямо на вкладке «Скачать»: выбери «мой сервер Universal», файл сам приедет на телефон.</p>
+    </div>
+    <div class="card stack">
+      <h3>О приложении</h3>
+      <p class="hint">Universal <span id="ver"></span> · <a href="https://github.com/Zaxar1231/Universal-app" id="gh">исходный код</a> · AGPL-3.0. Скачивай только то, на что у тебя есть права.</p>
+    </div>
+  </div>
+</main>
+
+<nav class="navbar" aria-label="Разделы">
+  <button data-page="pageDl" aria-current="page"><span class="pill"><svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg></span>Скачать</button>
+  <button data-page="pageTools"><span class="pill"><svg viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg></span>Инструменты</button>
+  <button data-page="pageFiles"><span class="pill"><svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></span>Файлы</button>
+  <button data-page="pageServer"><span class="pill"><svg viewBox="0 0 24 24"><path d="M20 13H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1v-6c0-.55-.45-1-1-1zM7 19c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM20 3H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zM7 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg></span>Сервер</button>
+</nav>
+
+<div id="snack" hidden><span></span><button></button></div>
+
+<script src="vendor/capacitor.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="vendor/pdf-lib.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script>
+/*COBALT_ERRORS*/
+</script>
+<script src="mobile.js"></script>
+<script>
+/* инструменты сайта: QR, картинки, PDF (сохранение идёт через window.universalSave из mobile.js) */
+/*SITE_TOOLS_JS*/
+</script>
+</body>
+</html>
