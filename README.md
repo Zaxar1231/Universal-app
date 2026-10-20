@@ -60,7 +60,7 @@
    - Windows: `choco install ffmpeg imagemagick pandoc poppler libreoffice-fresh`
    - Debian/Ubuntu: `sudo apt install ffmpeg imagemagick pandoc poppler-utils libreoffice tesseract-ocr-rus`
    - macOS: `brew install ffmpeg imagemagick pandoc poppler tesseract tesseract-lang`
-3. [Скачай последний релиз](https://github.com/Zaxar1231/Universal-app/releases/latest) (`universal-X.Y.Z.zip`) и распакуй.
+3. Скачай код: `git clone https://github.com/Zaxar1231/Universal-app` (или Code → Download ZIP на GitHub) и распакуй.
 4. Запуск: Windows `run.bat`, Linux/macOS `./run.sh`. Скрипты сами создадут окружение, доставят новые зависимости после обновления и каждый раз обновят yt-dlp.
 5. Открой http://localhost:5000
 
@@ -126,7 +126,7 @@ Windows: `desktop.py` запускает тот же сервер внутри �
 PR из веток `claude/…` сливаются в `main` сами (workflow «Автомерж»), когда на последнем коммите все проверки зелёные. Черновики, PR с красными проверками и с конфликтами не сливаются. После слияния он же обновляет сайт на GitHub Pages.
 
 ## Релизы
-Описание версий в `CHANGELOG.md`. Новый релиз: добавь раздел `## vX.Y.Z` в CHANGELOG и запусти workflow «Релиз» (Actions → Релиз → Run workflow) или запушь тег `vX.Y.Z`. Архив и описание соберутся сами. К релизу прикладываются установщик и портативная версия для Windows, пакеты для Linux и macOS, APK для Android и IPA для iPhone, а также архив исходников только с файлами для работы: модули `*.py`, `templates/`, `requirements.txt`, `run.bat`, `run.sh`, README и LICENSE. Тесты, Docker и сайт берутся из репозитория (`git clone`).
+Описание версий в `CHANGELOG.md`. Новый релиз: добавь раздел `## vX.Y.Z` в CHANGELOG и запусти workflow «Релиз» (Actions → Релиз → Run workflow) или запушь тег `vX.Y.Z`. Файлы и описание соберутся сами. В релизе только приложения: установщик и портативная версия для Windows, пакеты для Linux и macOS, APK для Android и IPA для iPhone. Запуск из исходников, Docker и сайт — из репозитория (`git clone`).
 
 ## Лицензии
 Проект под AGPL-3.0 (см. `LICENSE`): набор форматов и логика параметров звука/видео в конвертере взяты из проекта VERT (AGPL-3.0). yt-dlp — Unlicense. Скачивай только то, на что у тебя есть права.

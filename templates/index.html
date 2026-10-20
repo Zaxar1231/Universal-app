@@ -939,7 +939,7 @@ ul.files .up { width: 40px; height: 40px; }
                      : `<a class="btn filled state" href="${esc(d.url)}" target="_blank" rel="noopener">Скачать</a>`) +
       `<a class="btn text state" href="${esc(d.url)}" target="_blank" rel="noopener">Что нового</a>` +
       '<button class="btn text state" id="updLater">Позже</button></div>' +
-      (d.kind === 'source' ? '<span class="hint">Запущено из исходников: скачай архив или сделай git pull, run.sh/run.bat сами доставят зависимости.</span>' : '') +
+      (d.kind === 'source' ? '<span class="hint">Запущено из исходников: обнови код командой <code>git pull</code> в папке Universal, run.sh/run.bat сами доставят зависимости.</span>' : '') +
       (d.kind === 'docker' ? '<span class="hint">Docker: git pull && docker compose up -d --build</span>' : '');
     $('updLater').onclick = () => { try { localStorage.setItem('skipVersion', d.latest); } catch (_) {} b.hidden = true; };
     if ($('updGo')) $('updGo').onclick = () => updateInstall(b);
