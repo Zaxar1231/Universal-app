@@ -1,0 +1,60 @@
+name: Автомерж
+
+# PR из веток claude/… сливаются в main сами, когда на последнем коммите всё зелёное
+# (Тесты и, если они запускались, Телефоны). Встроенный auto-merge GitHub для этого
+# требует настроек репозитория, поэтому так.
+#
+# Слияние от имени GITHUB_TOKEN не запускает другие workflow на push в main,
+# поэтому сайт на GitHub Pages обновляется отдельным вызовом.
+on:
+  workflow_run:
+    workflows: ["Тесты", "Телефоны"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  checks: read
+
+concurrency:
+  group: automerge-${{ github.event.workflow_run.head_branch }}
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'claude/') &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Слить PR, если все проверки зелёные
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          PR=$(gh pr list -R "$REPO" --head "$BRANCH" --state open --json number,headRefOid,isDraft \
+            -q ".[] | select(.headRefOid == \"$SHA\" and (.isDraft | not)) | .number")
+          if [ -z "$PR" ]; then echo "открытого PR на этом коммите нет (или он черновик)"; exit 0; fi
+          # ждём, пока досчитаются остальные проверки этого коммита (Тесты и Телефоны идут параллельно)
+          for i in $(seq 1 40); do
+            bad=$(gh api "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
+              -q '[.check_runs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required")] | length')
+            busy=$(gh api "repos/$REPO/commits/$SHA/check-runs?per_page=100" -q '[.check_runs[] | select(.status != "completed")] | length')
+            if [ "$bad" != 0 ]; then echo "есть красные проверки — не сливаю"; exit 0; fi
+            if [ "$busy" = 0 ]; then break; fi
+            echo "ещё идут проверки: $busy"; sleep 30
+          done
+          if [ "$busy" != 0 ]; then echo "проверки не закончились за 20 минут — сольёт следующий запуск"; exit 0; fi
+          state=$(gh pr view "$PR" -R "$REPO" --json state,mergeable -q '.state + " " + .mergeable')
+          case "$state" in
+            "OPEN CONFLICTING") echo "конфликт с main — нужен ручной разбор"; exit 0 ;;
+            OPEN*) ;;
+            *) echo "PR уже $state"; exit 0 ;;
+          esac
+          gh pr merge "$PR" -R "$REPO" --merge || { echo "не слилось (возможно, уже слит другим запуском)"; exit 0; }
+          echo "PR #$PR слит"
+          gh workflow run pages.yml -R "$REPO" --ref main
