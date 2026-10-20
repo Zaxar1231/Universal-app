@@ -210,6 +210,8 @@
     adj.gray = $('pe_gray').checked; adj.sepia = $('pe_sepia').checked;
     $('peSize_v').textContent = $('peSize').value + '%'; $('peOpac_v').textContent = $('peOpac').value + '%';
     $('peQ_v').textContent = $('peQ').value; $('peQRow').hidden = document.querySelector('input[name=peFmt]:checked').value === 'image/png';
+    // заливка дорожки (--p) у всех ползунков, и после сброса и фильтров тоже
+    view.querySelectorAll('input[type=range]').forEach(el => el.style.setProperty('--p', ((el.value - el.min) / (el.max - el.min) * 100) + '%'));
   }
   function syncControls() {
     SLIDERS.forEach(([k]) => { $('pe_' + k).value = adj[k]; });

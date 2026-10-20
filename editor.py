@@ -74,7 +74,7 @@ def fmt_time(sec: float) -> str:
 def encoders() -> frozenset:
     if not shutil.which("ffmpeg"):
         return frozenset()
-    res = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True)
+    res = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     return frozenset(m.group(1) for m in re.finditer(r"^\s*[VAS][\w.]{5}\s+(\S+)", res.stdout, re.M))
 
 
@@ -83,7 +83,7 @@ def probe(path: Path) -> dict:
     if not shutil.which("ffprobe"):
         raise ConvertError("ffprobe не найден в PATH (ставится вместе с ffmpeg)")
     res = subprocess.run(["ffprobe", "-v", "error", "-print_format", "json", "-show_format",
-                          "-show_streams", str(path)], capture_output=True, text=True, timeout=120)
+                          "-show_streams", str(path)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
     if res.returncode != 0:
         raise ConvertError("Файл повреждён или это не аудио/видео")
     data = json.loads(res.stdout or "{}")

@@ -265,7 +265,7 @@ def _extract_7z(archive: Path, target: Path) -> None:
         shutil.rmtree(target, ignore_errors=True)
     import subprocess
     res = subprocess.run([_seven_zip_exe(), "x", str(archive), f"-o{target}", "-y"],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, errors="replace")
     if res.returncode != 0:
         raise EngineError("Не удалось распаковать архив движка: " + (res.stderr or res.stdout).strip()[-200:])
 
@@ -305,7 +305,7 @@ def _seven_zip_full() -> str:
 def _extract_nsis(installer: Path, target: Path) -> None:
     import subprocess
     res = subprocess.run([_seven_zip_full(), "x", str(installer), f"-o{target}", "-y"],
-                         capture_output=True, text=True, timeout=600)
+                         capture_output=True, text=True, errors="replace", timeout=600)
     if res.returncode != 0:
         raise EngineError("Не удалось распаковать установщик: " + (res.stderr or res.stdout).strip()[-200:])
 

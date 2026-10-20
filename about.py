@@ -117,7 +117,7 @@ def _git_commit() -> str:
     if (root / ".git").exists():
         try:
             r = subprocess.run(["git", "-C", str(root), "rev-parse", "--short=7", "HEAD"], capture_output=True,
-                               text=True, timeout=5)
+                               text=True, encoding="utf-8", errors="replace", timeout=5)
             return r.stdout.strip() + " (из исходников)" if r.returncode == 0 else ""
         except (OSError, subprocess.SubprocessError):
             return ""

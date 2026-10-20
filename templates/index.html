@@ -154,6 +154,22 @@ ul.files .size { color: var(--md-on-surface-variant); font-size: .75rem; font-va
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z'/%3E%3C/svg%3E") center/contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z'/%3E%3C/svg%3E") center/contain no-repeat; }
 .chips input:focus-visible + label { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.fmt-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.fmt-picks:empty { display: none; }
+.fmt-pick { height: 28px; padding: 0 10px; white-space: nowrap; border-radius: 14px; border: 1px solid var(--md-outline-variant); background: none; color: inherit; cursor: pointer; font: 500 .75rem/1 inherit; }
+.fmt-pick:hover { background: var(--md-secondary-container); }
+.fmt-pick b { color: var(--md-primary); margin-left: 4px; }
+.fmt-card { margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: var(--md-surface-container); display: grid; gap: 6px; font-size: .8125rem; line-height: 1.4; }
+.fmt-card p { margin: 0; }
+.fmt-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fmt-badge { padding: 2px 8px; border-radius: 8px; background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); font-size: .6875rem; font-weight: 500; }
+.fmt-meters { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--md-on-surface-variant); font-size: .75rem; }
+.fmt-meters i { font-style: normal; color: var(--md-primary); letter-spacing: 1px; }
+.help-btn { width: 18px; height: 18px; margin-left: 6px; border-radius: 50%; border: 1px solid var(--md-outline); background: none; color: var(--md-on-surface-variant);
+  font: 600 .6875rem/1 inherit; cursor: pointer; padding: 0; vertical-align: middle; display: inline-grid; place-items: center; }
+.help-btn:hover { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+[hidden] + .help-pop { display: none; }
+.help-pop { padding: 8px 12px; border-radius: 12px; background: var(--md-surface-container); }
 .chip-group { flex-basis: 100%; margin: 8px 0 -2px; }
 .chips.scroll { max-height: 172px; overflow: auto; padding: 2px 2px 20px; scrollbar-width: thin;
   -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent); mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
@@ -638,8 +654,12 @@ ul.files .up { width: 40px; height: 40px; }
         <!-- универсальные режимы -->
         <div class="field" id="uniField" hidden>
           <span class="lbl t-label-l" id="uniLbl">Конвертировать в</span>
+          <div class="fmt-picks" id="fmtPicks"></div>
           <div class="chips scroll" id="uniChips" role="radiogroup"></div>
+          <div id="fmtCard"></div>
           <p class="hint" id="uniHint"></p>
+          <label class="sw" id="autoRow"><span class="txt"><span class="t-body-m">Настройки под формат</span><span class="hint">При выборе формата сами ставятся подходящие качество и битрейт</span></span>
+            <input type="checkbox" id="autoFmt" checked><span class="track"></span></label>
         </div>
 
         <!-- PDF -> картинки -->
@@ -665,6 +685,7 @@ ul.files .up { width: 40px; height: 40px; }
         <div class="slider-row" id="qField" hidden>
           <div class="top"><label class="t-label-l muted" for="quality">Качество</label><span class="t-label-l" id="qVal">90</span></div>
           <input type="range" id="quality" min="10" max="100" step="1" value="90">
+          <p class="hint" id="qHint"></p>
         </div>
 
         <!-- аудио/видео -->
@@ -681,6 +702,7 @@ ul.files .up { width: 40px; height: 40px; }
               <option value="16000">16000 Гц</option><option value="11025">11025 Гц</option><option value="8000">8000 Гц</option>
             </select></label>
         </div>
+        <p class="hint" id="avHint" hidden></p>
 
         <label class="sw" id="metaRow" hidden><span class="txt"><span class="t-body-m">Сохранять метаданные</span><span class="hint">Теги, обложка, EXIF</span></span>
           <input type="checkbox" id="keepMeta" checked><span class="track"></span></label>
@@ -1110,6 +1132,7 @@ ul.files .up { width: 40px; height: 40px; }
   </div>
 </div>
 
+<script src="{{ url_for('static', filename='hints.js') }}"></script>
 <script>
 
 (() => {
@@ -1428,15 +1451,8 @@ ul.files .up { width: 40px; height: 40px; }
   $('wnSheet').addEventListener('click', e => { if (e.target === $('wnSheet')) closeNews(); });
   addEventListener('keydown', e => { if (e.key === 'Escape' && !$('wnSheet').hidden) closeNews(); });
   $('infoNews').onclick = () => fetch('/api/whatsnew').then(r => r.json()).then(d => showNews(d, 'Что нового')).catch(() => {});
-  (function newsAfterUpdate() {
-    let seen = null;
-    try { seen = localStorage.getItem('seenVersion'); } catch (_) { return; }
-    fetch('/api/whatsnew' + (seen ? '?since=' + encodeURIComponent(seen) : '')).then(r => r.json()).then(d => {
-      if (!d.version || d.version === seen || d.version === '0.0.0') return;
-      try { localStorage.setItem('seenVersion', d.version); } catch (_) { /* без памяти покажем ещё раз */ }
-      showNews(d, `Universal обновился до ${d.version}`);
-    }).catch(() => {});
-  })();
+  // сервер сам помнит, какую версию уже показывал (localStorage окна мог теряться при смене порта)
+  fetch('/api/whatsnew?auto=1').then(r => r.json()).then(d => showNews(d, `Universal обновился до ${d.version}`)).catch(() => {});
   const IMG_RE = /\.(jpe?g|png|webp|tiff?|bmp)$/i;
 
   function accepts(f) {
@@ -1563,6 +1579,8 @@ ul.files .up { width: 40px; height: 40px; }
 
   function paintSlider(el) { el.style.setProperty('--p', ((el.value - el.min) / (el.max - el.min) * 100) + '%'); }
   ['dpi', 'quality'].forEach(id => paintSlider($(id)));
+  // любой ползунок, в том числе в редакторах, перекрашивает заливку сам
+  document.addEventListener('input', e => { if (e.target.matches && e.target.matches('input[type=range]')) paintSlider(e.target); }, true);
 
   // какие форматы предлагать: с учётом выбранных файлов (видео -> ещё и аудио и т.д.)
   function uniOutputs() {
@@ -1578,17 +1596,45 @@ ul.files .up { width: 40px; height: 40px; }
     const crossName = { video: 'Достать звук', audio: 'Сделать видео' }[m];
     $('uniChips').innerHTML = cat.native.map(chip).join('') +
       (cat.cross.length ? `<span class="chip-group t-label-m muted">${crossName}</span>` + cat.cross.map(chip).join('') : '');
-    $('uniHint').textContent = m === 'audio' ? 'Видеоформаты делают ролик с обложкой альбома или чёрным фоном.' : m === 'video' ? 'Аудиоформаты вытаскивают из видео звук.' : '';
+    $('uniHint').textContent = [m === 'audio' ? 'Видеоформаты делают ролик с обложкой альбома или чёрным фоном.' : m === 'video' ? 'Аудиоформаты вытаскивают из видео звук.' : '',
+      H ? H.tip(m) : ''].filter(Boolean).join(' ');
+    $('fmtPicks').innerHTML = H ? H.picks(m, outs).map(([l, f]) => `<button type="button" class="fmt-pick" data-f="${f}">${l}<b>${f.toUpperCase()}</b></button>`).join('') : '';
+    applyAuto(); fmtHints();
   }
+  const H = window.UniversalHints;
+  // карточка выбранного формата и подсказки к значениям настроек
+  function fmtHints() {
+    if (!H || !caps) return;
+    const m = mode(); if (MODES[m].kind !== 'uni') return;
+    const f = uniTarget[m];
+    $('fmtCard').innerHTML = H.card(m, f);
+    $('qHint').textContent = H.qualityText(+$('quality').value, f);
+    const av = m === 'audio' || m === 'video';
+    $('avHint').hidden = !av;
+    $('avHint').textContent = av ? [H.bitrateText($('bitrate').value, f), H.rateText($('sampleRate').value)].filter(Boolean).join(' ') : '';
+  }
+  function applyAuto() {                      // «Настройки под формат»
+    if (!H || !$('autoFmt').checked) return;
+    const m = mode(), a = H.auto(m, uniTarget[m]);
+    if (m === 'image') { $('quality').value = a.quality || 90; $('qVal').textContent = $('quality').value; paintSlider($('quality')); }
+    if (m === 'audio' || m === 'video') { $('bitrate').value = a.bitrate || 'auto'; $('sampleRate').value = 'auto'; }
+  }
+  $('fmtPicks').addEventListener('click', e => {
+    const b = e.target.closest('[data-f]'); if (!b) return;
+    const r = $('u-' + b.dataset.f); if (!r) return;
+    r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); r.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  });
+  ['bitrate', 'sampleRate'].forEach(id => $(id).addEventListener('change', fmtHints));
+  $('autoFmt').addEventListener('change', () => { applyAuto(); fmtHints(); });
   function refreshUniTargets() { /* список форматов зависит от режима, не от файлов */ }
-  $('uniChips').addEventListener('change', e => { uniTarget[mode()] = e.target.value; syncSettings(); });
+  $('uniChips').addEventListener('change', e => { uniTarget[mode()] = e.target.value; applyAuto(); syncSettings(); fmtHints(); });
 
   function syncSettings() {
     const m = mode(), k = MODES[m].kind, uni = k === 'uni', topdf = k === 'topdf', photo = k === 'photo' || topdf, pdf = k === 'pdf';
     $('classicBox').hidden = isNew();
     $('editBox').hidden = k !== 'edit'; $('pdftBox').hidden = k !== 'pdft'; if (k === 'pdft') syncPdft(); $('ocrBox').hidden = k !== 'ocr'; if (k === 'ocr') syncOcr(); $('filesBox').hidden = k !== 'files'; if (k === 'files') syncFiles(); $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
     if (isNew()) { if (k === 'edit') syncEdit(); if (k === 'dl') syncDl(); if (k === 'qr') syncQr(); return; }
-    $('uniField').hidden = !uni;
+    $('uniField').hidden = !uni; $('autoRow').hidden = !(uni && m !== 'doc');
     $('formatsField').hidden = !(pdf || k === 'photo');
     $('pdfOpts').hidden = uni || topdf; $('pdfOpts').style.display = (uni || topdf) ? 'none' : 'grid';
     $('pdfBox').hidden = !topdf; $('pdfBox').style.display = topdf ? 'grid' : 'none';
@@ -1629,7 +1675,7 @@ ul.files .up { width: 40px; height: 40px; }
   document.querySelectorAll('input[name=fmt]').forEach(r => r.addEventListener('change', syncSettings));
   $('a4').addEventListener('change', syncSettings);
   $('dpi').oninput = e => { $('dpiVal').textContent = e.target.value + ' DPI'; paintSlider(e.target); syncSettings(); };
-  $('quality').oninput = e => { $('qVal').textContent = e.target.value; paintSlider(e.target); };
+  $('quality').oninput = e => { $('qVal').textContent = e.target.value; paintSlider(e.target); fmtHints(); };
 
   function updatePP() {
     const n = ppVal(), [c, r] = GRID[n];

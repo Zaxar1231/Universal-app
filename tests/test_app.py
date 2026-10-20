@@ -1393,3 +1393,44 @@ def test_whatsnew_route(client):
     assert d["version"] == updater.VERSION
     assert d["sections"] and d["sections"][0]["version"] == updater.VERSION   # CHANGELOG.md не отстаёт от version.py
     assert client.get("/api/whatsnew?since=" + updater.VERSION).get_json()["sections"] == []
+
+
+def test_whatsnew_after_update_once(tmp_path, monkeypatch):
+    import changelog
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path))
+    monkeypatch.setattr(changelog, "sections", lambda text=None: [
+        {"version": "2.1.0", "date": "", "md": "- b"}, {"version": "2.0.0", "date": "", "md": "- a"}])
+    (tmp_path / "seen_version.txt").write_text("2.0.0", encoding="utf-8")
+    assert [s["version"] for s in changelog.after_update("2.1.0")] == ["2.1.0"]
+    assert changelog.after_update("2.1.0") == []          # второй запуск — окна нет
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="нужен ffmpeg")
+def test_media_progress_reported(tmp_path):
+    import converters as conv
+    src = tmp_path / "tone.wav"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=20", str(src)], check=True)
+    seen = []
+    out = conv.convert_media(src, tmp_path, "tone", "mp3", progress=seen.append)
+    assert out.exists() and seen and max(seen) > 0.5 and all(0 <= x <= 1 for x in seen)
+
+
+def test_heic_via_pillow(tmp_path):
+    pytest.importorskip("pillow_heif")
+    from PIL import Image
+    import converters as conv
+    src = tmp_path / "a.png"
+    Image.new("RGB", (40, 30), "red").save(src)
+    out = tmp_path / "a.heic"
+    assert conv._pillow_encode(src, out, "heic", 70, True, 0)
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+    assert Image.open(out).size == (40, 30)
+
+
+def test_ffprobe_utf8_output(monkeypatch):
+    # в Windows text=True без encoding читал UTF-8 вывод как cp1252, поток падал и probe видел пустой файл
+    import inspect
+    import converters as conv
+    assert 'encoding="utf-8"' in inspect.getsource(editor.probe)
+    assert 'encoding="utf-8"' in inspect.getsource(conv._run)
