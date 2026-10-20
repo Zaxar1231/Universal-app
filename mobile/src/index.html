@@ -69,6 +69,11 @@ details.card[open] > summary::after { content: "▴"; }
 #scan button { position: absolute; bottom: calc(32px + var(--bottom)); }
 .upd { background: var(--tertiary-container); color: var(--on-tertiary-container); margin-bottom: 16px; gap: 12px; }
 .upd ul { margin: 0; padding-left: 18px; font-size: .875rem; }
+#nerdBody h4 { margin: 12px 0 4px; font-size: .875rem; font-weight: 500; color: var(--primary); }
+#nerdBody table { width: 100%; border-collapse: collapse; font-size: .75rem; table-layout: fixed; }
+#nerdBody td { padding: 3px 2px; border-bottom: 1px solid var(--outline-variant); vertical-align: top; overflow-wrap: anywhere; }
+#nerdBody td:first-child { color: var(--on-surface-variant); width: 40%; }
+#nerdBody td:last-child { font-family: ui-monospace, monospace; }
 .info-list { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: .875rem; line-height: 1.35; }
 nav.navbar button { font-size: .6875rem; min-width: 0; }
 #snack { position: fixed; left: 16px; right: 16px; bottom: calc(92px + var(--bottom)); z-index: 30; background: var(--on-surface); color: var(--surface);
@@ -179,6 +184,14 @@ nav.navbar button { font-size: .6875rem; min-width: 0; }
       <p class="hint">Свободная программа, лицензия AGPL-3.0. Внутри работают yt-dlp, ffmpeg, OCRmyPDF, Tesseract, pdf-lib, qrcode-generator, jsQR и Capacitor — спасибо их авторам. Скачивай только то, на что у тебя есть права.</p>
       <p class="hint" id="infoDevice"></p>
     </div>
+    <details class="card stack" id="nerd">
+      <summary>Для зануд</summary>
+      <div class="stack">
+        <p class="hint">Телефон, сборка, подключённый компьютер, настройки — всё, что пригодится при разборе ошибки.</p>
+        <div class="row"><button class="btn tonal" id="nerdCopy">Скопировать для отчёта</button><span class="small grow" id="nerdState"></span></div>
+        <div id="nerdBody"></div>
+      </div>
+    </details>
   </div>
 </main>
 

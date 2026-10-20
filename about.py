@@ -92,3 +92,122 @@ def open_folder() -> str:
     else:
         subprocess.Popen(["xdg-open", str(d)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return str(Path(d))
+
+
+# ---------------------------------------------------------------------------
+# «Для зануд»: всё, что пригодится при разборе ошибки
+# ---------------------------------------------------------------------------
+import json  # noqa: E402
+import locale  # noqa: E402
+import time  # noqa: E402
+from importlib import metadata  # noqa: E402
+
+STARTED = time.time()
+PACKAGES = ["flask", "werkzeug", "jinja2", "pillow", "pypdf", "cryptography", "qrcode", "yt-dlp", "yt-dlp-ejs",
+            "ocrmypdf", "pikepdf", "pypdfium2", "pywebview", "py7zr"]
+ENV_KEYS = ["UNIVERSAL_HOME", "WORK_DIR", "HOST", "PORT", "TASK_WORKERS", "UNIVERSAL_DESKTOP", "UNIVERSAL_PROXY",
+            "UNIVERSAL_DOCKER", "TESSDATA_PREFIX"]
+
+
+def _git_commit() -> str:
+    from version import COMMIT
+    if COMMIT:
+        return COMMIT
+    root = Path(__file__).resolve().parent
+    if (root / ".git").exists():
+        try:
+            r = subprocess.run(["git", "-C", str(root), "rev-parse", "--short=7", "HEAD"], capture_output=True,
+                               text=True, timeout=5)
+            return r.stdout.strip() + " (из исходников)" if r.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError):
+            return ""
+    return ""
+
+
+def _uptime(sec: float) -> str:
+    sec = int(sec)
+    d, sec = divmod(sec, 86400)
+    h, sec = divmod(sec, 3600)
+    m, s = divmod(sec, 60)
+    return (f"{d} д " if d else "") + f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def _disk(path: str) -> str:
+    try:
+        u = shutil.disk_usage(path)
+    except OSError:
+        return "—"
+    return f"свободно {u.free / 1073741824:.1f} из {u.total / 1073741824:.1f} ГБ"
+
+
+def _folder_stats(path: str) -> str:
+    p = Path(path)
+    if not path or not p.is_dir():
+        return "—"
+    n = size = 0
+    for f in p.rglob("*"):
+        try:
+            if f.is_file():
+                n += 1
+                size += f.stat().st_size
+        except OSError:
+            continue
+    return f"{n} файлов, {size / 1048576:.1f} МБ"
+
+
+def nerd(tasks, host: str, work_root) -> dict:
+    """Разделы с парами «название — значение». tasks — TaskManager приложения, work_root — папка заданий."""
+    import phoneserver
+    from version import BUILT
+    base = info()
+    base["jobs"] = str(work_root)
+    sections = []
+
+    def section(title, rows):
+        sections.append({"title": title, "rows": [[k, "" if v is None else str(v)] for k, v in rows]})
+
+    section("Приложение", [
+        ("Версия", base["version"]), ("Коммит", _git_commit() or "—"), ("Собрано", BUILT or "—"),
+        ("Установка", base["install"]), ("Окно приложения", "да" if base["desktop"] else "нет, браузер"),
+        ("Собран в exe/.app", "да" if getattr(sys, "frozen", False) else "нет"),
+        ("Исполняемый файл", sys.executable), ("PID", os.getpid()), ("Работает", _uptime(time.time() - STARTED)),
+        ("Рабочая папка процесса", os.getcwd()),
+    ])
+    section("Система", [
+        ("ОС", platform.platform()), ("Процессор", f"{platform.machine()} · ядер: {os.cpu_count()}"),
+        ("Python", f"{platform.python_implementation()} {platform.python_version()} ({platform.python_build()[1]})"),
+        ("Кодировка файлов", sys.getfilesystemencoding()), ("Локаль", ".".join(filter(None, locale.getlocale())) or "—"),
+        ("Часовой пояс", time.strftime("%Z (UTC%z)")),
+        ("Диск с настройками", _disk(base["home"])),
+    ])
+    ph = phoneserver.info()
+    section("Сеть", [
+        ("Адрес окна", host), ("Сервер для телефона", f"порт {ph['port']}, " + ", ".join(ph["urls"]) if ph["running"] else "выключен"),
+        ("Системный прокси", downloader.system_proxy() or "нет"), ("Пароль APP_PASSWORD", "задан" if os.environ.get("APP_PASSWORD") else "нет"),
+    ])
+    running = [t for t in tasks.tasks.values() if t.status in ("queued", "running")]
+    section("Задания", [
+        ("Одновременно тяжёлых задач", tasks.pool._max_workers), ("В памяти", len(tasks.tasks)),
+        ("Сейчас идут", ", ".join(f"{t.kind} {int((t.progress or 0) * 100)}%" for t in running) or "нет"),
+        ("Временные файлы", f"{base['jobs'] or '—'} · {_folder_stats(base['jobs'])}"),
+        ("Диск с временными файлами", _disk(base["jobs"]) if base["jobs"] else "—"),
+    ])
+    pk = []
+    for name in PACKAGES:
+        try:
+            pk.append((name, metadata.version(name)))
+        except metadata.PackageNotFoundError:
+            pk.append((name, "нет"))
+    section("Python-пакеты", pk)
+    section("Движки", [(t["name"], f"{t['version'] or ('есть' if t['installed'] else 'нет')}" + (f" · {t['path']}" if t["path"] else ""))
+                       for t in base["tools"]] + [("Языки Tesseract", ", ".join(base["languages"]) or "—")])
+    try:
+        upd = json.loads((engines.root() / "update.json").read_text(encoding="utf-8"))
+        checked = time.strftime("%Y-%m-%d %H:%M", time.localtime(upd.get("checked", 0)))
+        section("Обновления", [("Последний релиз", upd.get("version", "—")), ("Проверено", checked),
+                               ("Файлов в релизе", len(upd.get("assets", [])))])
+    except (OSError, ValueError):
+        section("Обновления", [("Последний релиз", "ещё не проверялось")])
+    section("Папки и окружение", [("Настройки и движки", base["home"]), ("Состав папки", _folder_stats(base["home"]))]
+            + [(k, os.environ[k]) for k in ENV_KEYS if os.environ.get(k)])
+    return {"sections": sections}

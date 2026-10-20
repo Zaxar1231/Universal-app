@@ -248,6 +248,19 @@ dl.kv { margin: 0; display: grid; gap: 2px; font-size: .875rem; }
 dl.kv dt { color: var(--md-on-surface-variant); margin-top: 6px; }
 dl.kv dd { margin: 0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; overflow-wrap: anywhere; }
 ul.links { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+details.nerd > summary { cursor: pointer; list-style: none; display: grid; gap: 2px; }
+details.nerd > summary::-webkit-details-marker { display: none; }
+details.nerd > summary .t-title-m::after { content: " ▾"; color: var(--md-on-surface-variant); }
+details.nerd[open] > summary .t-title-m::after { content: " ▴"; }
+details.nerd .acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.nerd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+.nerd-grid section { min-width: 0; }
+.nerd-grid h4 { margin: 0 0 6px; font: 500 .875rem/1.4 var(--md-font, inherit); color: var(--md-primary); }
+.nerd-grid table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+.nerd-grid td { padding: 3px 4px; border-bottom: 1px solid var(--md-outline-variant); vertical-align: top; }
+.nerd-grid td:first-child { color: var(--md-on-surface-variant); width: 42%; }
+.nerd-grid td:last-child { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .nerd-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 900px) { .info-cols { grid-template-columns: minmax(0, 1fr); } }
 .ver-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; padding-top: 12px;
   border-top: 1px solid var(--md-outline-variant); }
@@ -430,6 +443,16 @@ ul.files .up { width: 40px; height: 40px; }
           LibreOffice, pypdf, Flask, pywebview и Capacitor — спасибо их авторам. Скачивай только то, на что у тебя есть права.</p>
         <p class="t-body-m muted" id="infoSys" style="margin:0"></p>
       </div>
+
+      <details class="card nerd" id="nerd">
+        <summary><span class="t-title-m">Для зануд</span><span class="t-body-m muted">сборка, система, сеть, пакеты, пути — всё, что пригодится при разборе ошибки</span></summary>
+        <div class="acts">
+          <button class="btn tonal state" id="nerdCopy" type="button">Скопировать для отчёта об ошибке</button>
+          <button class="btn text state" id="nerdRefresh" type="button">Обновить</button>
+          <span class="t-body-m muted" id="nerdState"></span>
+        </div>
+        <div class="nerd-grid" id="nerdBody"></div>
+      </details>
     </div>
 
     <div class="grid">
@@ -1041,6 +1064,41 @@ ul.files .up { width: 40px; height: 40px; }
         (d.languages && d.languages.length ? ` · языки распознавания: ${d.languages.join(', ')}` : '');
     }).catch(() => { $('infoTools').innerHTML = '<tr><td>Нет связи с приложением</td></tr>'; });
   }
+  // «Для зануд»: данные сервера плюс то, что знает само окно (WebView или браузер)
+  let nerdData = null;
+  function clientSection() {
+    const mm = q => matchMedia(q).matches;
+    let ls = 0;
+    try { ls = localStorage.length; } catch (_) {}
+    return { title: 'Окно', rows: [
+      ['Движок окна', navigator.userAgent], ['Экран', `${screen.width}×${screen.height}, окно ${innerWidth}×${innerHeight}, масштаб ${devicePixelRatio}`],
+      ['Язык', navigator.languages ? navigator.languages.join(', ') : navigator.language],
+      ['Часовой пояс', Intl.DateTimeFormat().resolvedOptions().timeZone],
+      ['Тема системы', mm('(prefers-color-scheme: dark)') ? 'тёмная' : 'светлая'],
+      ['Меньше анимаций', mm('(prefers-reduced-motion: reduce)') ? 'да' : 'нет'],
+      ['Настроек в localStorage', ls], ['Адрес страницы', location.href] ] };
+  }
+  function loadNerd() {
+    $('nerdState').textContent = 'Собираю…';
+    return fetch('/api/about/nerd').then(r => r.status === 403 ? null : r.json()).then(d => {
+      if (!d) { $('nerdState').textContent = 'Доступно только на самом компьютере'; return; }
+      nerdData = [...d.sections, clientSection()];
+      $('nerdBody').innerHTML = nerdData.map(sec => `<section><h4>${esc(sec.title)}</h4><table>` +
+        sec.rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('') + '</table></section>').join('');
+      $('nerdState').textContent = '';
+    }).catch(() => { $('nerdState').textContent = 'Нет связи с приложением'; });
+  }
+  $('nerd').addEventListener('toggle', () => { if ($('nerd').open && !nerdData) loadNerd(); });
+  $('nerdRefresh').onclick = () => loadNerd();
+  $('nerdCopy').onclick = async () => {
+    if (!nerdData) await loadNerd();
+    if (!nerdData) return;
+    const text = '### Universal — информация для отчёта\n' + nerdData.map(sec => `\n**${sec.title}**\n` +
+      sec.rows.map(([k, v]) => `- ${k}: ${v}`).join('\n')).join('\n');
+    const done = () => { $('nerdState').textContent = 'Скопировано — вставь в отчёт об ошибке'; };
+    try { await navigator.clipboard.writeText(text); done(); }
+    catch (_) { prompt('Скопируй текст:', text); }
+  };
   $('infoRefresh').onclick = () => { $('infoTools').innerHTML = '<tr><td class="muted">Смотрю…</td></tr>'; loadInfo(true); };
   $('infoOpen').onclick = () => fetch('/api/about/open', { method: 'POST' });
   $('infoPhone').onclick = () => $('phoneBtn').click();
