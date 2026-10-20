@@ -145,8 +145,9 @@ class ConvertError(Exception):
 
 
 def _run(cmd: list[str], timeout: int = 3600) -> subprocess.CompletedProcess:
+    # вывод программ читаем как UTF-8: с кодировкой Windows (cp1252) поток чтения падал, и stdout терялся
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
     except subprocess.TimeoutExpired:
         raise ConvertError("Слишком долго конвертируется (таймаут)")
     except FileNotFoundError:
@@ -221,6 +222,37 @@ def _probe(path: Path, entry: str) -> int | None:
         return None
 
 
+def _duration(path: Path) -> float:
+    if not _which("ffprobe"):
+        return 0.0
+    res = _run(["ffprobe", "-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)], 60)
+    try:
+        return float(res.stdout.strip().splitlines()[0])
+    except (ValueError, IndexError):
+        return 0.0
+
+
+def _run_progress(cmd: list[str], duration: float, progress) -> subprocess.CompletedProcess:
+    """ffmpeg с -progress: progress(доля 0..1) по мере кодирования. Ошибки — как у _run."""
+    import tempfile
+    cmd = cmd[:1] + ["-nostats", "-progress", "pipe:1"] + cmd[1:]
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as err:
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=err, stdin=subprocess.DEVNULL,
+                                    text=True, encoding="utf-8", errors="replace")
+        except FileNotFoundError:
+            raise ConvertError(f"Не найдена программа {cmd[0]}")
+        for line in proc.stdout:
+            if line.startswith("out_time_us=") and duration > 0:
+                try:
+                    progress(min(1.0, int(line.split("=", 1)[1]) / 1e6 / duration))
+                except ValueError:
+                    pass
+        proc.wait()
+        err.seek(0)
+        return subprocess.CompletedProcess(cmd, proc.returncode, "", err.read())
+
+
 def _has_video_stream(path: Path) -> bool:
     if not _which("ffprobe"):
         return False
@@ -235,7 +267,7 @@ def _has_video_stream(path: Path) -> bool:
 
 def convert_media(src: Path, dst_dir: Path, stem: str, to: str, *,
                   bitrate: str = "auto", sample_rate: str = "auto",
-                  keep_metadata: bool = True) -> Path:
+                  keep_metadata: bool = True, progress=None) -> Path:
     """Аудио/видео -> аудио/видео. Логика выбора параметров повторяет VERT."""
     if not _which("ffmpeg"):
         raise ConvertError("ffmpeg не найден в PATH")
@@ -347,7 +379,8 @@ def convert_media(src: Path, dst_dir: Path, stem: str, to: str, *,
     if to in VIDEO_MUXER:
         cmd += ["-f", VIDEO_MUXER[to]]
     cmd.append(str(out))
-    res = _run(cmd)
+    duration = _duration(src) if progress else 0.0
+    res = _run_progress(cmd, duration, progress) if duration > 0 else _run(cmd)
     if res.returncode != 0 or not out.exists() or out.stat().st_size == 0:
         out.unlink(missing_ok=True)
         err = _last_error(res, "ffmpeg завершился с ошибкой")
@@ -365,6 +398,40 @@ def convert_media(src: Path, dst_dir: Path, stem: str, to: str, *,
 # ----------------------------------------------------------------------------
 # Картинки (ImageMagick)
 # ----------------------------------------------------------------------------
+
+PILLOW_ENCODE = {"heic": "HEIF", "heif": "HEIF", "avif": "AVIF"}
+
+
+def _pillow_encode(src: Path, out: Path, to: str, quality: int, keep_metadata: bool, resize: int) -> bool:
+    """Запасной путь для HEIC/AVIF: Pillow (AVIF с 11.2) и pillow-heif. True, если получилось."""
+    try:
+        from PIL import Image, ImageOps
+    except ImportError:
+        return False
+    if to in ("heic", "heif"):
+        try:
+            import pillow_heif
+            pillow_heif.register_heif_opener()
+        except ImportError:
+            return False
+    try:
+        with Image.open(src) as im:
+            im.seek(0)
+            exif = im.info.get("exif") if keep_metadata else None
+            im = ImageOps.exif_transpose(im)
+            alpha = im.mode in ("RGBA", "LA", "PA") or (im.mode == "P" and "transparency" in im.info)
+            im = im.convert("RGBA" if alpha else "RGB")
+            if resize:
+                im.thumbnail((resize, resize))
+            kw = {"quality": max(1, min(100, quality))}
+            if exif:
+                kw["exif"] = exif
+            im.save(out, format=PILLOW_ENCODE[to], **kw)
+        return out.exists() and out.stat().st_size > 0
+    except Exception:
+        out.unlink(missing_ok=True)
+        return False
+
 
 def convert_image(src: Path, dst_dir: Path, stem: str, to: str, *,
                   quality: int = 90, keep_metadata: bool = True,
@@ -397,8 +464,8 @@ def convert_image(src: Path, dst_dir: Path, stem: str, to: str, *,
         cmd += ["-quality", str(max(1, min(100, quality)))]
     if resize:
         cmd += ["-resize", f"{resize}x{resize}>"]  # только уменьшаем, длинная сторона
-    if to == "ico":
-        cmd += ["-resize", "256x256>"]  # ico не больше 256 px
+    if to in ("ico", "cur"):
+        cmd += ["-resize", "256x256>"]  # иконки и курсоры не больше 256 px
     cmd += ["-auto-orient", f"{fmt_prefix}:{out}"]
     res = _run(cmd, 600)
     if res.returncode != 0 or not out.exists() or out.stat().st_size == 0:
@@ -407,6 +474,9 @@ def convert_image(src: Path, dst_dir: Path, stem: str, to: str, *,
         if "no decode delegate" in err.lower():
             err = f"ImageMagick на этом компьютере не умеет читать .{src_ext}"
         if "no encode delegate" in (res.stderr or "").lower():
+            # сборки ImageMagick для Windows часто без кодировщика HEIC: пробуем Pillow (+ pillow-heif)
+            if to in PILLOW_ENCODE and _pillow_encode(src, out, to, quality, keep_metadata, resize):
+                return out
             err = f"Эта версия ImageMagick не умеет создавать .{to}. Поставь ImageMagick 7 с поддержкой {to.upper()}"
         if "not allowed by the security policy" in err.lower():
             err = "ImageMagick запрещает этот формат политикой безопасности (policy.xml)"
@@ -492,7 +562,7 @@ def _pandoc(src: Path, src_ext: str, out: Path, to: str) -> None:
 # Единая точка входа
 # ----------------------------------------------------------------------------
 
-def convert_any(src: Path, dst_dir: Path, stem: str, to: str, opts: dict) -> Path:
+def convert_any(src: Path, dst_dir: Path, stem: str, to: str, opts: dict, progress=None) -> Path:
     """Выбирает движок по типу исходного файла и целевому формату."""
     src_ext = src.suffix.lower().lstrip(".")
     cat = category_of(src_ext)
@@ -511,7 +581,7 @@ def convert_any(src: Path, dst_dir: Path, stem: str, to: str, opts: dict) -> Pat
         return convert_media(src, dst_dir, stem, to,
                              bitrate=str(opts.get("bitrate", "auto")),
                              sample_rate=str(opts.get("sample_rate", "auto")),
-                             keep_metadata=common_meta)
+                             keep_metadata=common_meta, progress=progress)
     if cat == "image":
         if dst_cat != "image":
             raise ConvertError(f"Из картинки нельзя сделать .{to}")

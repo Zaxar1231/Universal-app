@@ -18,7 +18,7 @@ a = Analysis(
     + collect_data_files("ocrmypdf") + copy_metadata("ocrmypdf"),
     # yt-dlp подгружает экстракторы динамически, а app импортирует модули по имени
     hiddenimports=collect_submodules("yt_dlp") + collect_submodules("yt_dlp_ejs") + collect_submodules("ocrmypdf")
-    + ["about", "app", "changelog", "converters", "docedit", "downloader", "filetools", "editor", "engines", "ocr", "pdftools", "phoneserver", "qrdoc", "qrtools", "tasks", "updater", "version", "py7zr"],
+    + ["about", "app", "changelog", "converters", "docedit", "downloader", "filetools", "editor", "engines", "ocr", "pdftools", "phoneserver", "qrdoc", "qrtools", "tasks", "updater", "version", "py7zr", "pillow_heif"],
     excludes=["tkinter", "pytest", "playwright"],
 )
 pyz = PYZ(a.pure)

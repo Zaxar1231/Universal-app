@@ -249,7 +249,7 @@ def convert_one(pdf: Path, out_dir: Path, fmt: str, dpi: int, quality: int,
         cmd += [str(pdf), str(target)]
 
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
     except subprocess.TimeoutExpired:
         return {"name": stem, "ok": False, "error": "Слишком долго конвертируется (таймаут 5 минут)"}
 
@@ -713,17 +713,29 @@ def run_convert_task(task: Task, items: list, to: str, opts: dict, template: str
     out_dir = task.out_dir
     n = task.total = len(items)
 
+    partial: dict[int, float] = {}    # доля готовности файлов, которые сейчас кодируются
+
+    def report():   # полоска только вперёд: доля файла пропадает чуть раньше, чем растёт finished
+        task.update(max(task.progress, min(1.0, (finished + sum(partial.values())) / n)))
+
     def work(t):
         src, stem = t
         if task.cancel_event.is_set():
             return None
         out_stem = apply_name_template(template, stem)
+        key = id(t)
+
+        def progress(frac):
+            partial[key] = frac
+            report()
         try:
-            conv.convert_any(src, out_dir, out_stem, to, opts)
+            conv.convert_any(src, out_dir, out_stem, to, opts, progress=progress)
         except conv.ConvertError as e:
             return {"name": src.name, "error": str(e)}
         except Exception as e:  # неожиданная ошибка одного файла не должна валить пачку
             return {"name": src.name, "error": f"Внутренняя ошибка: {e.__class__.__name__}"}
+        finally:
+            partial.pop(key, None)
         return {}
 
     # видео тяжёлое: меньше потоков, чтобы не съесть весь процессор
@@ -740,7 +752,7 @@ def run_convert_task(task: Task, items: list, to: str, opts: dict, template: str
                 task.failed.append(res)
             else:
                 task.done += 1
-            task.update(finished / n, f"Готово {finished} из {n}")
+            task.update(max(task.progress, finished / n), f"Готово {finished} из {n}")
 
     shutil.rmtree(task.job_dir / "in", ignore_errors=True)
     for hidden in out_dir.glob(".*"):   # временные обложки и профили LibreOffice
@@ -1203,6 +1215,10 @@ def ocr_run():
 @app.route("/api/whatsnew")
 def whatsnew():
     """Изменения новее версии, которую окно уже показывало (?since=), для «Что нового»."""
+    if request.args.get("auto") == "1":       # один раз после обновления: сервер помнит показанную версию
+        if updater.VERSION == "0.0.0" or request.environ.get(phoneserver.MARK):
+            return jsonify({"version": updater.VERSION, "sections": []})
+        return jsonify({"version": updater.VERSION, "sections": changelog.after_update(updater.VERSION)})
     seen = (request.args.get("since") or "")[:20]
     return jsonify({"version": updater.VERSION, "sections": changelog.since(seen, updater.VERSION)})
 

@@ -41,3 +41,26 @@ def since(seen: str, current: str, limit: int = 5, text: str | None = None) -> l
     else:
         items = [s for s in items if _key(s["version"]) == cur] or items[:1]
     return items[:limit]
+
+
+def seen_file() -> Path:
+    import engines
+    return engines.root() / "seen_version.txt"
+
+
+def after_update(current: str) -> list[dict]:
+    """Для окна после обновления: разделы новее последней показанной версии; запоминает текущую.
+    Помним на диске, а не в браузере: localStorage окна теряется, если сменился порт."""
+    f = seen_file()
+    try:
+        seen = f.read_text(encoding="utf-8").strip()
+    except OSError:
+        seen = ""
+    if seen == current:
+        return []
+    try:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(current, encoding="utf-8")
+    except OSError:
+        return []          # запомнить негде — лучше не показывать при каждом запуске
+    return since(seen, current)

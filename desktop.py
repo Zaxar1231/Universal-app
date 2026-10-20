@@ -39,6 +39,25 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
+PORTS = range(47615, 47625)   # постоянный порт: localStorage окна привязан к адресу, со случайным портом он терялся
+
+
+def _listen(app):
+    """Сервер на первом свободном порту из PORTS, иначе на любом."""
+    from werkzeug.serving import make_server
+    for port in PORTS:
+        with socket.socket() as probe:          # занят другой копией Universal или чужой программой
+            probe.settimeout(0.2)
+            if probe.connect_ex(("127.0.0.1", port)) == 0:
+                continue
+        try:
+            return make_server("127.0.0.1", port, app, threaded=True), port
+        except OSError:
+            continue
+    port = _free_port()
+    return make_server("127.0.0.1", port, app, threaded=True), port
+
+
 def _wait(url: str, timeout: float = 20) -> None:
     t0 = time.time()
     while time.time() - t0 < timeout:
@@ -78,7 +97,7 @@ def smoke(url: str) -> int:
         # В пакетах Linux он необязательная системная зависимость: проверяем, только если стоит
         import ocr
         if getattr(sys, "frozen", False) or ocr.version():
-            r = subprocess.run(ocr.command(["--version"]), timeout=180, capture_output=True, text=True)
+            r = subprocess.run(ocr.command(["--version"]), timeout=180, capture_output=True, text=True, encoding="utf-8", errors="replace")
             checks["ocrmypdf"] = r.returncode == 0 and bool(ocr.version()) and r.stdout.strip() == ocr.version()
             if not checks["ocrmypdf"]:
                 checks["ocrmypdf_error"] = (r.stderr or r.stdout or "")[-400:]   # в логе CI сразу видно почему
@@ -121,12 +140,9 @@ def main() -> None:
     os.environ["UNIVERSAL_DESKTOP"] = "1"
     engines.activate()            # PATH к движкам и свежий yt-dlp, до импорта app
 
-    from werkzeug.serving import make_server
-
     import app as webapp
 
-    port = _free_port()
-    server = make_server("127.0.0.1", port, webapp.app, threaded=True)
+    server, port = _listen(webapp.app)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{port}/"
     _wait(url + "api/engines")
