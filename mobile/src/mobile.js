@@ -1,5 +1,5 @@
 /*
- * Universal для телефона: скачивание видео (свой cobalt или свой сервер Universal),
+ * Universal для телефона: скачивание видео через свой сервер Universal (yt-dlp),
  * сохранённые файлы и вход в полную версию. QR, картинки и PDF берутся с сайта
  * (site/index.html) и сохраняют результат через window.universalSave.
  *
@@ -204,55 +204,6 @@
     return job;
   }
 
-  /* ===================== скачивание через cobalt ===================== */
-  function cobaltError(d) {
-    const code = (d && d.error && d.error.code) || '';
-    const short = code.replace(/^error\.api\./, '');
-    return COBALT_ERRORS[short] || (short ? 'ошибка ' + short : 'неизвестная ошибка');
-  }
-  function cobaltHeaders() {
-    const key = store.get('cobaltKey').trim(), h = { Accept: 'application/json', 'Content-Type': 'application/json' };
-    if (key) h.Authorization = key.includes(' ') ? key : 'Api-Key ' + key;
-    return h;
-  }
-  async function viaCobalt(url, o, job, stop) {
-    const api = baseUrl(store.get('cobaltUrl'));
-    if (!api) throw new Error('укажи адрес сервера cobalt в настройках внизу или выбери «мой сервер Universal»');
-    const body = { url, filenameStyle: 'pretty', videoQuality: o.quality === 'best' ? 'max' : o.quality };
-    if (o.mode === 'audio') {
-      body.downloadMode = 'audio';
-      body.audioFormat = ['mp3', 'opus', 'wav'].includes(o.audio) ? o.audio : 'best';
-      body.audioBitrate = '320';
-    } else {
-      body.youtubeVideoCodec = 'h264';                // открывается в галерее любого телефона
-      body.youtubeVideoContainer = 'mp4';
-    }
-    job.msg('Спрашиваю cobalt…');
-    const r = await http('POST', api, { headers: cobaltHeaders(), data: body });
-    const d = r.data && typeof r.data === 'object' ? r.data : {};
-    if (d.status === 'error' || r.status >= 400) throw new Error('cobalt: ' + cobaltError(d));
-    let items;
-    if (d.status === 'tunnel' || d.status === 'redirect') items = [{ url: d.url, name: d.filename }];
-    else if (d.status === 'picker') {
-      const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
-      items = (d.picker || []).map((p, i) => ({ url: p.url,
-        name: `cobalt_${stamp}_${i + 1}.${p.type === 'photo' ? 'jpg' : p.type === 'gif' ? 'gif' : 'mp4'}` }));
-      if (d.audio) items.push({ url: d.audio, name: d.audioFilename || `cobalt_${stamp}.mp3` });
-    } else if (d.status === 'local-processing') {
-      throw new Error('cobalt: этот сервер просит склеивать файл на устройстве, так приложение не умеет. Выбери «мой сервер Universal»');
-    } else {
-      throw new Error(`cobalt ответил непонятно (статус ${d.status || r.status}). Это точно адрес API cobalt?`);
-    }
-    const files = [];
-    for (const it of items) {
-      if (stop()) break;
-      const f = await fetchTo(it.url, it.name, {}, job);
-      if (!f) throw new Error(EMPTY_TUNNEL + '. Попробуй через «мой сервер Universal»');
-      files.push(f);
-    }
-    return files;
-  }
-
   /* ===================== скачивание через свой сервер ===================== */
   async function viaServer(urls, o, job, stop) {
     const srv = baseUrl(store.get('serverUrl'));
@@ -291,17 +242,18 @@
 
   /* ===================== кнопка «Скачать» ===================== */
   const URL_RE = /https?:\/\/[^\s<>"']+/gi;
-  const opts = () => ({ mode: qs('input[name=dm]:checked').value, quality: $('dQ').value, audio: $('dA').value, via: $('dVia').value });
+  const opts = () => ({ mode: qs('input[name=dm]:checked').value, quality: $('dQ').value, audio: $('dA').value });
   let running = false, stopAsked = false;
   function syncDl() {
     const o = opts();
     $('dQRow').hidden = o.mode === 'audio'; $('dARow').hidden = o.mode !== 'audio';
-    $('dViaHint').textContent = o.via === 'server'
-      ? `Качает твой Universal (yt-dlp и cobalt, с его VPN и настройками), потом файл приезжает на телефон. Сервер: ${host(baseUrl(store.get('serverUrl'))) || 'не указан, вкладка «Сервер»'}.`
-      : `Качает сервер cobalt: ${host(baseUrl(store.get('cobaltUrl'))) || 'не указан, открой «Настройки cobalt» ниже'}.`;
+    const srv = host(baseUrl(store.get('serverUrl')));
+    $('dViaHint').textContent = srv
+      ? `Качает yt-dlp на твоём сервере ${srv} (с его VPN и настройками), потом файл сам приезжает на телефон.`
+      : 'Качает yt-dlp на твоём сервере Universal: укажи его адрес на вкладке «Сервер».';
     $('dGo').textContent = running ? (stopAsked ? 'Останавливаю…' : 'Остановить') : 'Скачать';
     $('dGo').disabled = running && stopAsked;
-    for (const k of ['mode', 'quality', 'audio', 'via']) store.set('dl.' + k, o[k]);
+    for (const k of ['mode', 'quality', 'audio']) store.set('dl.' + k, o[k]);
   }
   async function start() {
     if (running) { stopAsked = true; syncDl(); return; }
@@ -310,18 +262,9 @@
     const o = opts(), stop = () => stopAsked;
     running = true; stopAsked = false; syncDl();
     try {
-      if (o.via === 'server') {
-        const job = jobRow(urls.length === 1 ? urls[0] : `Ссылок: ${urls.length}`);
-        try { const { files, errors } = await viaServer(urls, o, job, stop); job.finish(files, errors); }
-        catch (e) { job.finish([], [String(e.message || e)]); }
-      } else {
-        for (const u of urls) {
-          if (stopAsked) break;
-          const job = jobRow(u);
-          try { job.finish(await viaCobalt(u, o, job, stop), []); }
-          catch (e) { job.finish([], [String(e.message || e)]); }
-        }
-      }
+      const job = jobRow(urls.length === 1 ? urls[0] : `Ссылок: ${urls.length}`);
+      try { const { files, errors } = await viaServer(urls, o, job, stop); job.finish(files, errors); }
+      catch (e) { job.finish([], [String(e.message || e)]); }
       $('dUrls').value = '';
     } finally {
       running = false; stopAsked = false; syncDl();
@@ -343,31 +286,13 @@
     return found.length;
   }
   document.querySelectorAll('input[name=dm]').forEach(r => r.addEventListener('change', syncDl));
-  ['dQ', 'dA', 'dVia'].forEach(id => $(id).addEventListener('change', syncDl));
+  ['dQ', 'dA'].forEach(id => $(id).addEventListener('change', syncDl));
   {
     const m = store.get('dl.mode'); if (m) { const r = qs(`input[name=dm][value="${m}"]`); if (r) r.checked = true; }
-    for (const [k, id] of [['quality', 'dQ'], ['audio', 'dA'], ['via', 'dVia']]) {
+    for (const [k, id] of [['quality', 'dQ'], ['audio', 'dA']]) {
       const v = store.get('dl.' + k); if (v && [...$(id).options].some(op => op.value === v)) $(id).value = v;
     }
   }
-
-  /* ===================== настройки cobalt ===================== */
-  $('cUrl').value = store.get('cobaltUrl'); $('cKey').value = store.get('cobaltKey');
-  $('cUrl').addEventListener('input', () => { store.set('cobaltUrl', $('cUrl').value.trim()); syncDl(); });
-  $('cKey').addEventListener('input', () => store.set('cobaltKey', $('cKey').value.trim()));
-  if (!store.get('cobaltUrl')) $('dSettings').open = true;
-  $('cCheck').onclick = async () => {
-    const api = baseUrl($('cUrl').value), st = $('cState');
-    if (!api) { st.className = 'small grow bad'; st.textContent = 'Укажи адрес'; return; }
-    st.className = 'small grow'; st.textContent = 'Проверяю…';
-    try {
-      const r = await http('GET', api, { headers: cobaltHeaders() });
-      const info = r.data && r.data.cobalt;
-      if (!info) throw new Error('это не сервер cobalt (нужен адрес API, а не сайта)');
-      st.className = 'small grow ok';
-      st.textContent = `cobalt ${info.version || ''} работает` + (info.services ? `, сайтов: ${info.services.length}` : '');
-    } catch (e) { st.className = 'small grow bad'; st.textContent = String(e.message || e); }
-  };
 
   /* ===================== свой сервер ===================== */
   $('sUrl').value = store.get('serverUrl'); $('sPass').value = store.get('serverPass');
@@ -381,7 +306,7 @@
       const r = await http('GET', srv + 'api/formats', { headers: serverAuth() });
       if (r.status === 401) throw new Error('неверный пароль');
       if (r.status !== 200 || !r.data || !r.data.categories) throw new Error(`ответ ${r.status}, это не Universal`);
-      const eng = r.data.engines || {}, have = Object.keys(eng).filter(k => eng[k]);
+      const eng = r.data.engines || {}, have = Object.keys(eng).filter(k => eng[k] === true);
       st.className = 'small grow ok';
       st.textContent = 'Работает' + (have.length ? `: ${have.join(', ')}` : '');
     } catch (e) { st.className = 'small grow bad'; st.textContent = String(e.message || e); }

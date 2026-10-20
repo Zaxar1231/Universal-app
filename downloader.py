@@ -163,24 +163,6 @@ def net_opts(o: dict | None) -> dict:
     return n
 
 
-def _is_loopback(url: str) -> bool:
-    from urllib.parse import urlsplit
-    host = (urlsplit(url).hostname or "").lower()
-    return host in ("localhost", "::1") or host.startswith("127.")
-
-
-def _urlopen(req, timeout: float, o: dict | None = None):
-    """urllib с теми же настройками сети: свой сервер на этом компьютере всегда напрямую."""
-    import urllib.request
-    url = req.full_url if hasattr(req, "full_url") else req
-    mode = (o or {}).get("proxy", "auto")
-    if not _is_loopback(url) and (mode == "auto" or mode.lower().startswith("socks")):
-        return urllib.request.urlopen(req, timeout=timeout)   # системные настройки (urllib не умеет socks)
-    proxy = "" if _is_loopback(url) or mode == "none" else mode
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({"http": proxy, "https": proxy} if proxy else {}))
-    return opener.open(req, timeout=timeout)
-
-
 def _base_opts(cookiefile: Path | None, net: dict | None = None) -> dict:
     o = {
         "quiet": True, "no_warnings": True, "noprogress": True,
@@ -297,13 +279,8 @@ def read_opts(form) -> dict:
         "thumbnail": form.get("thumbnail", "1") == "1",
         "metadata": form.get("metadata", "1") == "1",
         "compat": form.get("compat", "1") == "1",
-        # необязательный сервер cobalt (github.com/imputnet/cobalt): из формы или из окружения
-        "cobalt_url": (form.get("cobalt_url") or os.environ.get("COBALT_URL") or "").strip(),
-        "cobalt_key": (form.get("cobalt_key") or os.environ.get("COBALT_API_KEY") or "").strip(),
     }
     o.update(read_net(form))
-    if o["cobalt_url"] and not re.match(r"^https?://", o["cobalt_url"], re.I):
-        o["cobalt_url"] = ""
     if o["mode"] not in ("video", "audio"):
         o["mode"] = "video"
     if o["quality"] not in QUALITIES:
@@ -382,224 +359,6 @@ def net_check(net: dict) -> dict:
             "ipv6": v6.result(), "sites": sites}
 
 
-# ----------------------------------------------------------------------------
-# cobalt: если указан свой сервер, сначала пробуем его, при ошибке берёт yt-dlp
-# ----------------------------------------------------------------------------
-
-COBALT_ERRORS = {
-    "content.too_long": "видео длиннее, чем разрешает этот сервер cobalt",
-    "content.video.unavailable": "видео недоступно",
-    "content.video.private": "видео закрыто",
-    "content.video.age": "видео 18+, нужен вход",
-    "content.video.region": "видео заблокировано в регионе сервера",
-    "content.post.unavailable": "пост недоступен",
-    "content.post.private": "пост закрыт",
-    "link.unsupported": "сайт не поддерживается cobalt",
-    "link.invalid": "cobalt не понял ссылку",
-    "service.unsupported": "сайт не поддерживается cobalt",
-    "fetch.rate": "сервер cobalt ограничил частоту запросов",
-    "fetch.fail": "сервер cobalt не смог открыть сайт",
-    "fetch.critical": "сервер cobalt не смог открыть сайт",
-    "fetch.empty": "сайт ничего не отдал",
-    "youtube.login": "YouTube требует вход на сервере cobalt",
-    "youtube.decipher": "cobalt не справился с защитой YouTube",
-    "content.video.live": "прямые эфиры cobalt не качает",
-    "auth.key.missing": "серверу cobalt нужен API-ключ",
-    "auth.key.invalid": "API-ключ cobalt не подошёл",
-    "auth.jwt.missing": "сервер cobalt требует проверку в браузере (Turnstile), из приложения его использовать нельзя",
-    "auth.jwt.invalid": "сервер cobalt требует проверку в браузере (Turnstile), из приложения его использовать нельзя",
-    "auth.turnstile.missing": "сервер cobalt требует проверку в браузере (Turnstile), из приложения его использовать нельзя",
-    "auth.not_configured": "сервер cobalt настроен с ошибкой (авторизация)",
-    "rate_exceeded": "сервер cobalt ограничил число запросов в минуту. Свой сервер: нажми «Перезапустить и обновить сервер», лимиты снимутся",
-    "fetch.short_link": "cobalt не раскрыл короткую ссылку, вставь полную",
-    "fetch.critical.core": "сервер cobalt не смог открыть сайт",
-    "content.region": "заблокировано в регионе сервера",
-    "content.paid": "платный контент",
-    "content.post.age": "пост 18+, нужен вход",
-    "service.disabled": "этот сайт выключен на сервере cobalt",
-    "service.audio_not_supported": "с этого сайта cobalt не умеет отдавать только звук",
-    "youtube.no_session_tokens": "серверу cobalt нужен сервер сессий YouTube (YOUTUBE_SESSION_SERVER)",
-    "youtube.token_expired": "у сервера cobalt истёк вход в YouTube",
-    "youtube.api_error": "YouTube отклонил запрос сервера cobalt",
-    "youtube.no_matching_format": "у YouTube нет подходящего формата для cobalt",
-    "youtube.no_hls_streams": "у YouTube нет подходящего формата для cobalt",
-    "youtube.drm": "видео защищено DRM",
-    "invalid_body": "сервер cobalt не понял запрос (слишком старая или новая версия)",
-    "generic": "внутренняя ошибка сервера cobalt",
-}
-# сайт не открылся у самого сервера: свой cobalt в Docker ходит в интернет отдельно от приложения
-COBALT_NET = ("fetch.fail", "fetch.critical", "fetch.critical.core", "fetch.empty", "youtube.login")
-
-
-class CobaltFail(Exception):
-    pass
-
-
-def _cobalt_headers(key: str) -> dict:
-    h = {"Accept": "application/json", "Content-Type": "application/json", "User-Agent": "Universal-app"}
-    if key:
-        h["Authorization"] = key if " " in key else f"Api-Key {key}"
-    return h
-
-
-def cobalt_info(base: str, key: str = "", net: dict | None = None) -> dict:
-    """GET / сервера cobalt: версия и список сайтов (для кнопки «Проверить»)."""
-    import urllib.request
-    req = urllib.request.Request(base.rstrip("/") + "/", headers=_cobalt_headers(key))
-    try:
-        with _urlopen(req, 15, net) as r:
-            data = json.load(r)
-    except Exception as e:
-        raise CobaltFail(f"сервер не ответил ({e.__class__.__name__})")
-    info = data.get("cobalt") or {}
-    if not info:
-        raise CobaltFail("это не сервер cobalt")
-    return {"version": info.get("version", ""), "services": info.get("services", [])}
-
-
-def _cobalt_payload(url: str, o: dict) -> dict:
-    p = {"url": url, "filenameStyle": "pretty", "disableMetadata": not o["metadata"],
-         "videoQuality": "max" if o["quality"] == "best" else o["quality"]}
-    if o["mode"] == "audio":
-        p["downloadMode"] = "audio"
-        p["audioFormat"] = o["audio_format"] if o["audio_format"] in ("mp3", "opus", "wav") else "best"
-        p["audioBitrate"] = o["abitrate"] if o["abitrate"] in ("320", "256", "128", "96") else "320"
-    else:
-        p["youtubeVideoCodec"] = "h264" if o["compat"] else "vp9"
-        p["youtubeVideoContainer"] = o["container"]
-        if o["subs"]:
-            p["subtitleLang"] = "ru"
-    return p
-
-
-EMPTY_TUNNEL = ("сервер cobalt отдал пустой файл: сам он не смог скачать видео с сайта "
-                "(сайт не пустил сервер или сервер ходит мимо VPN)")
-
-
-def _media_ok(path: Path) -> bool:
-    """Есть ли в файле хоть один пакет видео/звука/картинки. Туннель cobalt при ошибке на его
-    стороне отвечает «200 OK» и пустым или обрезанным телом — такой файл не считаем скачанным."""
-    if path.stat().st_size == 0:
-        return False
-    ffprobe = shutil.which("ffprobe")
-    if not ffprobe:
-        return True                               # проверить нечем, размер уже не нулевой
-    try:
-        r = subprocess.run([ffprobe, "-v", "error", "-read_intervals", "%+#5", "-count_packets",
-                            "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", str(path)],
-                           capture_output=True, text=True, timeout=60)
-    except (OSError, subprocess.SubprocessError):
-        return True
-    return r.returncode == 0 and any(int(x) for x in r.stdout.split() if x.strip().isdigit())
-
-
-def _cd_filename(cd: str) -> str:
-    """Имя из Content-Disposition. cobalt шлёт filename="????.mp4" для старых клиентов
-    и настоящее имя в filename*=UTF-8''%D0%BA…, его и берём."""
-    from urllib.parse import unquote
-    m = re.search(r"filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)", cd)
-    if m:
-        return unquote(m.group(1).strip().strip('"'))
-    m = re.search(r'filename\s*=\s*"((?:[^"\\]|\\.)*)"|filename\s*=\s*([^;]+)', cd)
-    if m:
-        return (m.group(1) if m.group(1) is not None else m.group(2)).replace('\\"', '"').strip()
-    return ""
-
-
-def _fetch_file(url: str, dest_dir: Path, name: str, emit, base: float, span: float, title: str,
-                net: dict | None = None) -> Path:
-    import urllib.request
-    req = urllib.request.Request(url, headers={"User-Agent": "Universal-app"})
-    part = None
-    try:
-        with _urlopen(req, 60, net) as r:
-            if not name:
-                name = _cd_filename(r.headers.get("Content-Disposition") or "") \
-                    or url.rsplit("/", 1)[-1].split("?")[0] or "file"
-            name = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", name).strip(" .")[:150] or "file"
-            dest = dest_dir / name
-            n = 2
-            while dest.exists():                      # в карусели у файлов бывает одно имя
-                dest = dest_dir / f"{Path(name).stem} ({n}){Path(name).suffix}"
-                n += 1
-            total = int(r.headers.get("Content-Length") or 0)
-            # склейку на лету cobalt отдаёт без длины, только с оценкой
-            estimate = total or int(r.headers.get("Estimated-Content-Length") or 0)
-            got, t0, last = 0, time.time(), 0.0
-            part = dest.with_suffix(dest.suffix + ".part")
-            with open(part, "wb") as f:
-                while chunk := r.read(1 << 16):
-                    f.write(chunk)
-                    got += len(chunk)
-                    now = time.time()
-                    if now - last > 0.5:
-                        last = now
-                        speed = got / max(now - t0, 0.001) / 1048576
-                        frac = min(got / estimate, 1) if estimate else 0
-                        emit({"progress": base + span * frac * 0.95,
-                              "message": f"Качаю через cobalt: {title} · {speed:.1f} МБ/с"})
-        if got == 0:
-            raise CobaltFail(EMPTY_TUNNEL)
-        if total and got < total:
-            raise CobaltFail(f"файл от cobalt оборвался ({got} из {total} байт)")
-        if not _media_ok(part):
-            raise CobaltFail(EMPTY_TUNNEL.replace("пустой файл", "битый файл"))
-    except BaseException:
-        if part:
-            part.unlink(missing_ok=True)
-        raise
-    part.replace(dest)
-    return dest
-
-
-def _cobalt_download(url: str, o: dict, out: Path, emit, base: float, span: float) -> int:
-    """Скачать одну ссылку через cobalt. Возвращает число файлов или бросает CobaltFail."""
-    import urllib.error
-    import urllib.request
-    req = urllib.request.Request(o["cobalt_url"].rstrip("/") + "/", method="POST",
-                                 data=json.dumps(_cobalt_payload(url, o)).encode(),
-                                 headers=_cobalt_headers(o["cobalt_key"]))
-    try:
-        with _urlopen(req, 60, o) as r:
-            data = json.load(r)
-    except urllib.error.HTTPError as e:
-        try:
-            data = json.load(e)
-        except Exception:
-            raise CobaltFail(f"сервер ответил {e.code}")
-    except Exception as e:
-        raise CobaltFail(f"сервер не ответил ({e.__class__.__name__})")
-    status = data.get("status")
-    if status == "error":
-        code = (data.get("error") or {}).get("code", "")
-        short = re.sub(r"^error\.api\.", "", code)          # сервер шлёт error.api.link.invalid
-        text = COBALT_ERRORS.get(short, f"ошибка {short}" if short else "неизвестная ошибка")
-        if short in COBALT_NET and _is_loopback(o["cobalt_url"]):
-            text += (" (свой сервер в Docker ходит в интернет сам: если сайт открывается только через VPN, "
-                     "нажми «Перезапустить и обновить сервер» при включённом VPN — прокси передастся в контейнер)")
-        raise CobaltFail(text)
-    made: list[Path] = []
-    try:
-        if status in ("tunnel", "redirect"):
-            title = data.get("filename") or url
-            made.append(_fetch_file(data["url"], out, data.get("filename", ""), emit, base, span, title, o))
-            return 1
-        if status == "picker":
-            items = [x["url"] for x in data.get("picker", []) if x.get("url")]
-            if data.get("audio"):
-                items.append(data["audio"])
-            for k, item in enumerate(items):
-                made.append(_fetch_file(item, out, "", emit, base + span * k / len(items), span / len(items),
-                                        f"{k + 1} из {len(items)}", o))
-            return len(items)
-    except Exception as e:
-        for p in made:                            # карусель не до конца: yt-dlp скачает всё заново
-            p.unlink(missing_ok=True)
-        if isinstance(e, CobaltFail):
-            raise
-        raise CobaltFail(f"файл не скачался ({e.__class__.__name__})")
-    raise CobaltFail(f"неожиданный ответ сервера: {status}")
-
 
 def _download_all(urls: list[str], o: dict, out: Path, cookiefile: Path | None, emit) -> None:
     """Основной цикл; emit(dict) сообщает прогресс. Выполняется в отдельном процессе."""
@@ -635,15 +394,6 @@ def _download_all(urls: list[str], o: dict, out: Path, cookiefile: Path | None, 
     for i, url in enumerate(urls):
         state["i"], state["title"] = i, url
         emit({"progress": i / n, "message": f"Ссылка {i + 1} из {n}: получаю данные…"})
-        cobalt_error = ""
-        if o.get("cobalt_url") and not o["playlist"]:      # плейлисты cobalt не умеет
-            try:
-                _cobalt_download(url, o, out, emit, i / n, 1 / n)
-                emit({"done": url})
-                continue
-            except CobaltFail as e:
-                cobalt_error = f"cobalt: {e}"
-                emit({"message": f"{cobalt_error}. Пробую yt-dlp…"})
         attempts = _net_attempts(o)
         for k, attempt in enumerate(attempts):
             logger = _Quiet()
@@ -659,12 +409,8 @@ def _download_all(urls: list[str], o: dict, out: Path, cookiefile: Path | None, 
                 if k + 1 < len(attempts) and _is_net_error(err.lower()):
                     emit({"message": f"Через системный прокси не вышло, пробую напрямую: {state['title']}"})
                     continue
-                emit({"failed": url, "error": _with(cobalt_error, _human_error(err))})
+                emit({"failed": url, "error": _human_error(err)})
                 break
-
-
-def _with(cobalt_error: str, error: str) -> str:
-    return f"{cobalt_error}; yt-dlp: {error}" if cobalt_error else error
 
 
 def _cleanup(out: Path, cookiefile: Path | None) -> None:

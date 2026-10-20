@@ -360,14 +360,12 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - `mobile/` — Capacitor 8. Нативные проекты `android/` и `ios/` в репозитории. `www/` не коммитится: его собирает `node build-www.mjs`.
 - `build-www.mjs` склеивает свой каркас и куски сайта:
   - из каркаса: `src/index.html`, `src/mobile.js`;
-  - из `site/index.html`: `<style>`, `<section id="try">` и последний inline-`<script>`;
-  - из `downloader.py`: `COBALT_ERRORS` и `EMPTY_TUNNEL` (регуляркой).
+  - из `site/index.html`: `<style>`, `<section id="try">` и последний inline-`<script>`.
   - Если на сайте поменять эти куски, сборка упадёт с понятной ошибкой.
 - Сайт сохраняет через `window.universalSave`, если он есть. На телефоне это запись в `Directory.Documents/Universal` через Filesystem. Service worker в Capacitor не регистрируется.
 - Сеть идёт через `CapacitorHttp`, а не fetch: так нет CORS у Flask, и http:// к домашнему серверу не блокируется.
 - Файлы качает `Filesystem.downloadFile`, не в память. Basic-auth собирается в UTF-8.
-- Через свой сервер: `POST /api/dl` (urlencoded) → опрос `/api/task/<id>` → `/api/file/<job>/<name>` для каждого имени из `names`.
-- cobalt напрямую: tunnel, redirect и picker. Если файл 0 байт — удаляется, ошибка `EMPTY_TUNNEL`.
+- Скачивание только через свой сервер: `POST /api/dl` (urlencoded) → опрос `/api/task/<id>` → `/api/file/<job>/<name>` для каждого имени из `names`. Файл 0 байт удаляется.
 - Android:
   - `ShareInPlugin` (ACTION_SEND text/plain) шлёт событие `shared` с retain;
   - cleartext разрешён, `requestLegacyExternalStorage`, права на хранилище до API 29;
@@ -379,3 +377,12 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - CI: `.github/workflows/mobile.yml`. На PR и main собирает и кладёт в артефакты; из `release.yml` (job `mobile`) выкладывает в релиз.
 - Иконки и заставки: `python mobile/icons.py` из `packaging/icon.png`.
 - На телефоне нет yt-dlp и ffmpeg. Конвертер видео и документов, редактор и сжатие PDF работают только через свой сервер (вкладка «Сервер» → полная версия).
+
+### 13.12 cobalt убран (v1.6.0)
+- По решению владельца cobalt удалён целиком, видео качает только yt-dlp. Разделы 13.6–13.10 остались для истории.
+- Удалены:
+  - `cobaltlocal.py`;
+  - маршруты `/api/dl/cobalt-check` и `/api/cobalt/local`;
+  - в `downloader.py`: `COBALT_*`, `CobaltFail`, `_cobalt_*`, `_fetch_file`, `_media_ok`, `_cd_filename`, `EMPTY_TUNNEL`, `_urlopen`, `_is_loopback`, а также `cobalt_url` и `cobalt_key` в `read_opts`;
+  - блок в шаблоне, сервис в `docker-compose.yml`, cobalt-тесты, вариант cobalt в телефоне.
+- Блок «Сеть и VPN» (прокси, IPv4, «Проверить сеть») остался: он для yt-dlp.

@@ -23,7 +23,7 @@
 | Фото в PDF | 1, 2, 4, 6, 8 или 9 фото на лист A4 | Pillow |
 | **Правка PDF** | склеить, разделить по страницам, вытащить страницы (1-3, 5, 8-), повернуть, сжать сканы, поставить или снять пароль | pypdf (ставится сам) |
 | **Редактор** | обрезка, склейка, кадрирование 9:16/1:1/…, поворот, разрешение, fps, скорость 0.25–4×, громкость, нормализация, появление/затухание, без звука, сжатие до N МБ, H.264/H.265/VP9/AV1, видео в GIF, предпросмотр с выбором начала и конца | ffmpeg |
-| **Скачать видео** | YouTube, TikTok, VK, Rutube, Instagram, X, Twitch, SoundCloud и ~1800 сайтов; видео до 4K или только звук (MP3/M4A/Opus/FLAC/WAV), плейлисты, субтитры, обложки, cookies для закрытого; по желанию через свой сервер [cobalt](https://github.com/imputnet/cobalt) с запасным yt-dlp (кнопка «Создать свой сервер» сама поднимает его в Docker) | yt-dlp, ffmpeg, deno для YouTube |
+| **Скачать видео** | YouTube, TikTok, VK, Rutube, Instagram, X, Twitch, SoundCloud и ~1800 сайтов; видео до 4K или только звук (MP3/M4A/Opus/FLAC/WAV), плейлисты, субтитры, обложки, cookies для закрытого | yt-dlp, ffmpeg, deno для YouTube |
 | **QR-коды** | текст/ссылка, Wi‑Fi, контакт (vCard) с живым предпросмотром; пачка из списка, .txt, .csv или .docx; PNG/SVG/JPG, цвета, прозрачный фон; **QR вместо ссылок прямо в документе** (Word, Markdown, HTML, ODT, RTF, DOC, EPUB) с выбором ссылок галочками | qrcode |
 
 Конвертер, редактор, скачивание и правка PDF идут в фоне: видно проценты, их можно отменить.
@@ -67,7 +67,7 @@
 
 ## Приложение для Android и iPhone
 В каждом релизе лежат `Universal-X.Y.Z-android.apk` и `Universal-X.Y.Z-ios-unsigned.ipa`. Внутри:
-- **Скачать**: ссылки на видео (или «Поделиться → Universal» из YouTube, TikTok, браузера на Android) качаются прямо на телефон. Работает через свой сервер cobalt или через свой сервер Universal (тогда качает yt-dlp и cobalt на компьютере, с его VPN, а файл приезжает на телефон).
+- **Скачать**: ссылки на видео (или «Поделиться → Universal» из YouTube, TikTok, браузера на Android) качаются прямо на телефон. Качает yt-dlp на твоём сервере Universal (компьютер или Docker, с его VPN), а готовый файл сам приезжает на телефон.
 - **Инструменты**: QR-коды, картинки и PDF, как на сайте, без интернета.
 - **Файлы**: всё скачанное и сохранённое (Android: папка «Документы/Universal», iPhone: «Файлы → На iPhone → Universal»), кнопка «Поделиться» отправит в галерею, Telegram и куда угодно.
 - **Сервер**: адрес и пароль своего Universal, проверка и вход в полную версию.
@@ -86,7 +86,7 @@ set HOST=0.0.0.0&& set APP_PASSWORD=мой-пароль&& run.bat      # Windows
 ```bash
 docker compose up -d --build
 ```
-Внутри уже есть ffmpeg, ImageMagick, pandoc, poppler и LibreOffice. Чтобы рядом поднялся свой [cobalt](https://github.com/imputnet/cobalt) для скачивания видео: `docker compose --profile cobalt up -d` (приложение уже настроено на него через `COBALT_URL`). Поменяй `APP_PASSWORD` в `docker-compose.yml`. Обновить yt-dlp: `docker compose build --no-cache && docker compose up -d`.
+Внутри уже есть ffmpeg, ImageMagick, pandoc, poppler и LibreOffice. Поменяй `APP_PASSWORD` в `docker-compose.yml`. Обновить yt-dlp: `docker compose build --no-cache && docker compose up -d`.
 
 ## Настройки (переменные окружения)
 | Переменная | По умолчанию | Зачем |
@@ -96,7 +96,6 @@ docker compose up -d --build
 | `APP_PASSWORD` | пусто | пароль на вход (браузер спросит, логин любой) |
 | `WORK_DIR` | временная папка | где лежат задания; результаты удаляются через час |
 | `TASK_WORKERS` | `2` | сколько тяжёлых задач идёт одновременно |
-| `COBALT_URL`, `COBALT_API_KEY` | пусто | свой сервер cobalt для «Скачать видео» (в интерфейсе можно задать и так) |
 
 ## Тесты
 ```bash

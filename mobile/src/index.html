@@ -79,7 +79,7 @@ details.card[open] > summary::after { content: "▴"; }
         <input type="radio" name="dm" id="dm1" value="video" checked><label for="dm1">Видео</label>
         <input type="radio" name="dm" id="dm2" value="audio"><label for="dm2">Только звук</label>
       </div>
-      <div class="two">
+      <div>
         <label class="tf" id="dQRow"><span>Качество</span><select id="dQ">
           <option value="best">Лучшее</option><option value="2160">2160p (4K)</option><option value="1440">1440p</option>
           <option value="1080" selected>1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option>
@@ -87,24 +87,12 @@ details.card[open] > summary::after { content: "▴"; }
         <label class="tf" id="dARow" hidden><span>Формат звука</span><select id="dA">
           <option value="mp3">MP3</option><option value="m4a">M4A (лучшее качество)</option><option value="opus">Opus</option><option value="wav">WAV</option>
         </select></label>
-        <label class="tf"><span>Качать через</span><select id="dVia">
-          <option value="cobalt">cobalt</option><option value="server">мой сервер Universal</option>
-        </select></label>
       </div>
       <p class="hint" id="dViaHint"></p>
       <button class="btn filled lg" id="dGo">Скачать</button>
     </div>
     <ul class="jobs" id="dJobs"></ul>
 
-    <details class="card stack" id="dSettings">
-      <summary>Настройки cobalt</summary>
-      <div class="stack">
-        <label class="tf"><span>Адрес сервера cobalt</span><input id="cUrl" type="url" inputmode="url" placeholder="https://cobalt.example.com/" autocapitalize="off" spellcheck="false"></label>
-        <label class="tf"><span>API-ключ (если сервер просит)</span><input id="cKey" autocapitalize="off" spellcheck="false" autocomplete="off"></label>
-        <div class="row"><button class="btn tonal" id="cCheck">Проверить</button><span class="small grow" id="cState"></span></div>
-        <p class="hint">Нужен сервер cobalt, который пускает приложения без проверки в браузере: свой (инструкция в README, раздел «Свой cobalt») или публичный без Turnstile. Официальный cobalt.tools из приложений не работает.</p>
-      </div>
-    </details>
   </div>
 
   <!-- ===================== инструменты с сайта ===================== -->
@@ -130,7 +118,7 @@ details.card[open] > summary::after { content: "▴"; }
       <label class="tf"><span>Пароль (APP_PASSWORD)</span><input id="sPass" type="password" autocomplete="off"></label>
       <div class="row"><button class="btn tonal" id="sCheck">Проверить</button><span class="small grow" id="sState"></span></div>
       <button class="btn filled lg" id="sOpen">Открыть полную версию</button>
-      <p class="hint">Откроется во встроенном браузере, логин любой, пароль тот же. Скачивание видео через сервер работает и прямо на вкладке «Скачать»: выбери «мой сервер Universal», файл сам приедет на телефон.</p>
+      <p class="hint">Откроется во встроенном браузере, логин любой, пароль тот же. Видео с вкладки «Скачать» качает этот же сервер через yt-dlp, а готовый файл сам приезжает на телефон.</p>
     </div>
     <div class="card stack">
       <h3>О приложении</h3>
@@ -153,7 +141,7 @@ details.card[open] > summary::after { content: "▴"; }
 <script src="vendor/pdf-lib.min.js"></script>
 <script src="vendor/jszip.min.js"></script>
 <script>
-/*COBALT_ERRORS*/
+/*APP_VERSION*/
 </script>
 <script src="mobile.js"></script>
 <script>

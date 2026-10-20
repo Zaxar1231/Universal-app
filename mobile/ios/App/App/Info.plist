@@ -80,7 +80,7 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Чтобы подключаться к твоему серверу Universal или cobalt в домашней сети</string>
+	<string>Чтобы подключаться к твоему серверу Universal в домашней сети</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Чтобы сохранять скачанные видео и картинки в «Фото»</string>
 </dict>

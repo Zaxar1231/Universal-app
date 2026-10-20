@@ -689,17 +689,6 @@ ul.files .up { width: 40px; height: 40px; }
             <div class="row"><button class="btn text state" id="netCheck" type="button">Проверить сеть</button></div>
             <div id="netState" class="hint" hidden></div>
           </div>
-          <div class="field">
-            <span class="lbl t-label-l">Сервер cobalt (необязательно)</span>
-            <label class="tf"><span>Адрес</span><input type="url" id="cobaltUrl" placeholder="http://localhost:9000/" spellcheck="false" autocomplete="off"></label>
-            <label class="tf"><span>API-ключ, если сервер его требует</span><input type="password" id="cobaltKey" autocomplete="off"></label>
-            <div class="row"><button class="btn text state" id="cobaltCheck" type="button">Проверить сервер</button><span class="hint" id="cobaltState"></span></div>
-            <p class="hint">Если указан, ссылки сначала идут через <a href="https://github.com/imputnet/cobalt" target="_blank" rel="noopener">cobalt</a>, а если он не справился, качает yt-dlp. Нужен свой сервер (один Docker-контейнер) или ключ от владельца: публичный api.cobalt.tools сторонним программам закрыт.</p>
-            <div class="row"><button class="btn tonal state" id="cobaltLocal" type="button">Создать свой сервер</button>
-              <button class="btn text state" id="cobaltLocalDel" type="button" hidden>Удалить</button></div>
-            <div id="cobaltLocalBox" class="banner offer" hidden></div>
-            <p class="hint" id="cobaltLocalHint">Поднимет cobalt в Docker на этом компьютере и сам впишет адрес. Нужен установленный <a href="https://www.docker.com/products/docker-desktop/" target="_blank" rel="noopener">Docker</a>. Сервер виден только с этого компьютера.</p>
-          </div>
           <p class="hint" id="ytdlpVer"></p>
           <div id="ytdlpUpd" class="field" hidden>
             <button class="btn tonal state" id="ytdlpUpdBtn" type="button">Обновить yt-dlp</button>
@@ -1426,7 +1415,6 @@ ul.files .up { width: 40px; height: 40px; }
     fd.append('playlist', $('dlPl').checked ? '1' : '0'); fd.append('thumbnail', $('dlThumb').checked ? '1' : '0');
     fd.append('metadata', $('dlMeta').checked ? '1' : '0');
     if ($('dlCookies').files[0]) fd.append('cookies', $('dlCookies').files[0]);
-    fd.append('cobalt_url', $('cobaltUrl').value.trim()); fd.append('cobalt_key', $('cobaltKey').value.trim());
     netForm(fd);
   }
   // сеть: прокси и IPv4 запоминаем у себя
@@ -1466,74 +1454,6 @@ ul.files .up { width: 40px; height: 40px; }
       else if (bad) tip = 'Часть сайтов не открылась: их блокирует провайдер или, наоборот, не пускает страна сервера VPN. Для российских сайтов VPN лучше выключить или включить для них раздельное туннелирование.';
       box.innerHTML = `${sys} Проверка ${how}${d.ipv4 ? ', только IPv4' : ''}. IPv6 ${d.ipv6 ? 'работает' : 'не работает'}.<ul style="margin:6px 0 0;padding-left:18px">${rows}</ul>${tip ? '<p style="margin:6px 0 0">' + tip + '</p>' : ''}`;
     }).catch(() => { btn.disabled = false; box.textContent = 'Нет связи с приложением'; });
-  };
-  // сервер cobalt запоминаем (только у себя в браузере/приложении)
-  try { $('cobaltUrl').value = localStorage.getItem('cobaltUrl') || ''; $('cobaltKey').value = localStorage.getItem('cobaltKey') || ''; } catch (_) {}
-  ['cobaltUrl', 'cobaltKey'].forEach(id => $(id).addEventListener('change', () => {
-    try { localStorage.setItem(id, $(id).value.trim()); } catch (_) {}
-    $('cobaltState').textContent = '';
-  }));
-  // свой cobalt в Docker одной кнопкой
-  const setCobalt = url => {
-    $('cobaltUrl').value = url; $('cobaltKey').value = '';
-    try { localStorage.setItem('cobaltUrl', url); localStorage.setItem('cobaltKey', ''); } catch (_) {}
-  };
-  function cobaltLocalState(st) {
-    const has = !!(st && st.state);
-    $('cobaltLocal').textContent = has ? 'Перезапустить и обновить сервер' : 'Создать свой сервер';
-    $('cobaltLocalDel').hidden = !has;
-    if (!st) return;
-    let h = '';
-    if (!st.docker) h = 'Docker не найден. Установи <a href="https://www.docker.com/products/docker-desktop/" target="_blank" rel="noopener">Docker Desktop</a> (на Linux пакет docker и docker-compose-plugin), потом нажми кнопку.';
-    else if (!st.daemon) h = st.can_start_desktop ? 'Docker установлен, но не запущен: кнопка сама его запустит.' : 'Docker установлен, но служба не запущена: <code>sudo systemctl start docker</code>.';
-    else if (has) h = `Свой сервер: ${st.state === 'running' ? 'работает' : 'остановлен (' + esc(st.state) + ')'}, ${esc(st.url)}, в интернет ходит ${st.proxy ? 'через прокси ' + esc(st.proxy) : 'напрямую, мимо прокси'}. ` +
-      `Включил или сменил VPN — нажми «Перезапустить», прокси подхватится из блока «Сеть и VPN». Файлы: ${esc(st.folder)}. Положи туда cookies.json и перезапусти, если нужен вход на сайты.`;
-    if (h) $('cobaltLocalHint').innerHTML = h;
-  }
-  function cobaltLocalRefresh() {
-    fetch('/api/cobalt/local').then(r => r.json()).then(cobaltLocalState).catch(() => {});
-  }
-  cobaltLocalRefresh();
-  $('cobaltLocal').onclick = () => {
-    const box = $('cobaltLocalBox'), btn = $('cobaltLocal');
-    box.hidden = false; btn.disabled = true;
-    box.innerHTML = '<span class="t-body-m">Начинаю…</span><div class="progress busy"><i></i></div>';
-    const fail = msg => { btn.disabled = false; box.innerHTML = `<span class="t-body-m">Не получилось: ${esc(msg)}</span>`; cobaltLocalRefresh(); };
-    fetch('/api/cobalt/local', { method: 'POST', body: netForm(new FormData()) }).then(r => r.json()).then(t => {
-      if (t.error) return fail(t.error);
-      const tick = () => fetch('/api/task/' + t.task).then(r => r.json()).then(d => {
-        if (['queued', 'running'].includes(d.status)) {
-          const p = Math.round((d.progress || 0) * 100);
-          box.innerHTML = `<span class="t-body-m">${esc(d.message)}</span><div class="progress"><i style="width:${p}%"></i></div>`;
-          setTimeout(tick, 700); return;
-        }
-        if (d.status === 'done' && d.result) {
-          btn.disabled = false; setCobalt(d.result.url);
-          box.innerHTML = `<span class="t-body-m">Готово: cobalt ${esc(d.result.version)} работает на ${esc(d.result.url)}, адрес уже вписан выше. Docker сам запустит его после перезагрузки компьютера.</span>`;
-          $('cobaltState').textContent = ''; cobaltLocalRefresh(); return;
-        }
-        fail(d.error || d.message);
-      }).catch(() => fail('нет связи с приложением'));
-      tick();
-    }).catch(() => fail('нет связи с приложением'));
-  };
-  $('cobaltLocalDel').onclick = () => {
-    if (!confirm('Остановить и удалить свой сервер cobalt? Его можно будет создать заново.')) return;
-    const box = $('cobaltLocalBox'); box.hidden = false;
-    box.innerHTML = '<span class="t-body-m">Удаляю…</span><div class="progress busy"><i></i></div>';
-    fetch('/api/cobalt/local', { method: 'DELETE' }).then(r => r.json()).then(st => {
-      if (st.error) { box.innerHTML = `<span class="t-body-m">${esc(st.error)}</span>`; return; }
-      box.hidden = true;
-      if (/^http:\/\/localhost:90(0\d|10)\/$/.test($('cobaltUrl').value)) setCobalt('');
-      cobaltLocalState(st);
-    }).catch(() => { box.innerHTML = '<span class="t-body-m">Нет связи с приложением.</span>'; });
-  };
-  $('cobaltCheck').onclick = () => {
-    const fd = netForm(new FormData()); fd.append('cobalt_url', $('cobaltUrl').value.trim()); fd.append('cobalt_key', $('cobaltKey').value.trim());
-    $('cobaltState').textContent = 'Проверяю…';
-    fetch('/api/dl/cobalt-check', { method: 'POST', body: fd }).then(r => r.json()).then(d => {
-      $('cobaltState').textContent = d.error ? d.error : `Работает: cobalt ${d.version}, сайтов: ${d.services.length}`;
-    }).catch(() => { $('cobaltState').textContent = 'Нет связи с приложением'; });
   };
   $('peekUrls').onclick = () => {
     const fd = netForm(new FormData()); fd.append('urls', $('urls').value);

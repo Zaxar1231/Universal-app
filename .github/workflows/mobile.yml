@@ -11,10 +11,10 @@ on:
         required: true
   workflow_dispatch:
   pull_request:
-    paths: ["mobile/**", "site/**", "downloader.py", ".github/workflows/mobile.yml"]
+    paths: ["mobile/**", "site/**", ".github/workflows/mobile.yml"]
   push:
     branches: [main]
-    paths: ["mobile/**", "site/**", "downloader.py", ".github/workflows/mobile.yml"]
+    paths: ["mobile/**", "site/**", ".github/workflows/mobile.yml"]
 
 permissions:
   contents: write
