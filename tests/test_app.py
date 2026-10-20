@@ -1232,3 +1232,21 @@ def test_update_github_unreachable(tmp_path, monkeypatch, client):
     monkeypatch.setattr(updater, "_fetch", boom)
     r = client.get("/api/update")
     assert r.status_code == 502 and "GitHub" in r.get_json()["error"] and r.get_json()["current"] == updater.VERSION
+
+
+# ---------------------------------------------------------------- информация
+
+def test_about_info(client, phone):
+    d = client.get("/api/about").get_json()
+    assert d["version"] == updater.VERSION and d["home"] and d["python"]
+    names = {t["name"] for t in d["tools"]}
+    assert {"ffmpeg", "yt-dlp", "OCRmyPDF", "Tesseract"} <= names
+    ff = next(t for t in d["tools"] if t["name"] == "ffmpeg")
+    if shutil.which("ffmpeg"):
+        assert ff["installed"] and ff["version"] and ff["path"]
+    # с телефона (через сервер для телефона) пути на компьютере не отдаются
+    on = client.post("/api/phone", data={"action": "on"}).get_json()
+    st, body = _get(f"http://127.0.0.1:{on['port']}/api/about", on["password"])
+    remote = json.loads(body)
+    assert st == 200 and "home" not in remote and "jobs" not in remote and all(not t["path"] for t in remote["tools"])
+    assert client.post("/api/about/open", environ_base={"REMOTE_ADDR": "10.0.0.2"}).status_code == 403

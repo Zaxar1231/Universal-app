@@ -224,6 +224,31 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
 .swatches input:focus-visible + label { outline: 3px solid var(--md-primary); outline-offset: 2px; }
 .row-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .top-actions { display: flex; gap: 4px; align-items: center; }
+.info { display: grid; gap: 16px; }
+.info .card { padding: 24px; display: grid; gap: 12px; align-content: start; }
+.info h3 { margin: 0; }
+.info a { color: var(--md-primary); }
+.info p { margin: 0; }
+.info-hero .acts { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 16px; }
+.info-cols { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.info-cols > * { min-width: 0; }
+.stack-cards { display: grid; gap: 16px; }
+.modes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.modes-grid button { text-align: left; border: 0; border-radius: var(--sh-l); background: var(--md-surface-container); color: var(--md-on-surface);
+  padding: 12px 14px; cursor: pointer; display: grid; gap: 2px; font: inherit; }
+.modes-grid button:hover { background: var(--md-surface-container-highest); }
+.modes-grid b { font-weight: 500; }
+.modes-grid span { font-size: .8125rem; color: var(--md-on-surface-variant); line-height: 1.3; }
+table.eng { width: 100%; border-collapse: collapse; font-size: .875rem; }
+table.eng td { padding: 6px 4px; border-bottom: 1px solid var(--md-outline-variant); vertical-align: top; }
+table.eng td:nth-child(2) { color: var(--md-on-surface-variant); }
+table.eng .ok { color: var(--md-primary); white-space: nowrap; }
+table.eng .no { color: var(--md-error); white-space: nowrap; }
+dl.kv { margin: 0; display: grid; gap: 2px; font-size: .875rem; }
+dl.kv dt { color: var(--md-on-surface-variant); margin-top: 6px; }
+dl.kv dd { margin: 0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; overflow-wrap: anywhere; }
+ul.links { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+@media (max-width: 900px) { .info-cols { grid-template-columns: minmax(0, 1fr); } }
 .ver-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; padding-top: 12px;
   border-top: 1px solid var(--md-outline-variant); }
 #updateBanner ul { margin: 0; padding-left: 18px; }
@@ -298,6 +323,7 @@ ul.files .up { width: 40px; height: 40px; }
       'topdf': 'M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.500-23.500T160-160v-640q0-33 23.500-56.500T240-880h320l240 240v480q0 33-23.500 56.500T720-80H240Zm280-520h200L520-800v200Z',
       'pdft': 'M120-120v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80ZM240-280q-33 0-56.500-23.500T160-360v-400q0-33 23.500-56.500T240-840h480q33 0 56.500 23.500T800-760v400q0 33-23.500 56.500T720-280H240Zm0-80h480v-400H240v400Zm80-80h320v-80H320v80Zm0-160h320v-80H320v80Z',
       'ocr': 'M80-680v-200h200v80H160v120H80Zm0 600v-200h80v120h120v80H80Zm600 0v-80h120v-120h80v200H680Zm120-600v-120H680v-80h200v200h-80ZM240-320h480v-80H240v80Zm0-120h480v-80H240v80Zm0-120h320v-80H240v80Z',
+      'info': 'M440-280h80v-240h-80v240Zm40-320q17 0 28.500-11.500T520-640q0-17-11.500-28.500T480-680q-17 0-28.500 11.500T440-640q0 17 11.500 28.500T480-600Zm0 520q-83 0-156-31.500T197-197q-54-54-85.500-127T80-480q0-83 31.500-156T197-763q54-54 127-85.500T480-880q83 0 156 31.500T763-763q54 54 85.500 127T880-480q0 83-31.500 156T763-197q-54 54-127 85.500T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Z',
       'edit': 'M760-120 480-400l-94 94q8 15 11 32t3 34q0 66-47 113T240-80q-66 0-113-47T80-240q0-66 47-113t113-47q18 0 34.500 3t31.500 11l94-94-94-94q-15 8-31.500 11t-34.500 3q-66 0-113-47T80-720q0-66 47-113t113-47q66 0 113 47t47 113q0 18-3 34t-11 32l494 494v40H760ZM600-520l-80-80 240-240h120v40L600-520ZM240-640q33 0 56.500-23.500T320-720q0-33-23.500-56.500T240-800q-33 0-56.500 23.500T160-720q0 33 23.500 56.500T240-640Zm240 180q8 0 14-6t6-14q0-8-6-14t-14-6q-8 0-14 6t-6 14q0 8 6 14t14 6ZM240-160q33 0 56.500-23.500T320-240q0-33-23.500-56.500T240-320q-33 0-56.500 23.500T160-240q0 33 23.500 56.500T240-160Z',
       'dl': 'M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.500-23.500T160-240v-120h80v120h480v-120h80v120q0 33-23.500 56.500T720-160H240Z',
       'qr': 'M120-520v-320h320v320H120Zm80-80h160v-160H200v160Zm-80 480v-320h320v320H120Zm80-80h160v-160H200v160Zm320-320v-320h320v320H520Zm80-80h160v-160H600v160Zm160 480v-80h80v80h-80ZM520-360v-80h80v80h-80Zm80 80v-80h80v80h-80Zm-80 80v-80h80v80h-80Zm80 80v-80h80v80h-80Zm80-80v-80h80v80h-80Zm0-160v-80h80v80h-80Zm80 80v-80h80v80h-80Z'
@@ -319,6 +345,10 @@ ul.files .up { width: 40px; height: 40px; }
       <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
       <span class="t-label-m">{{ label }}</span></label>
     {% endfor %}
+    <span class="sep" role="separator"></span>
+    <label class="nav"><input type="radio" name="mode" value="info">
+      <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons['info'] }}"/></svg></span>
+      <span class="t-label-m">Инфо</span></label>
   </nav>
 
   <main>
@@ -340,6 +370,67 @@ ul.files .up { width: 40px; height: 40px; }
 
     <div class="banner offer" id="updateBanner" hidden></div>
     <div class="banner" id="engineBanner" hidden></div>
+
+    <!-- информация о приложении -->
+    <div id="infoView" class="info" hidden>
+      <div class="card info-hero">
+        <span id="infoIcon" hidden></span>
+        <div>
+          <h2 class="t-headline" style="margin:0">Universal <span id="infoVer"></span></h2>
+          <p class="t-body-l" style="margin:8px 0 0">Один набор инструментов для файлов, видео и документов. Всё работает на этом компьютере: файлы никуда не отправляются, интернет нужен только для скачивания видео и обновлений.</p>
+          <div class="acts">
+            <button class="btn filled state" id="infoUpd" type="button">Проверить обновления</button>
+            <span class="t-body-m" id="infoUpdState"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="t-title-m">Для чего он нужен</h3>
+        <p class="t-body-m muted">Вместо десятка сайтов-конвертеров и отдельных программ: перевести файл в нужный формат, обрезать и сжать видео, скачать ролик или музыку, распознать скан, склеить PDF, сделать QR-код. Можно бросить сразу сотню файлов или целую папку — результат придёт одним архивом. Нажми на режим, чтобы перейти к нему.</p>
+        <div class="modes-grid" id="infoModes"></div>
+      </div>
+
+      <div class="info-cols">
+        <div class="card">
+          <h3 class="t-title-m">Движки</h3>
+          <p class="t-body-m muted" style="margin-top:4px">Программы, которые делают основную работу. Чего не хватает, приложение предложит поставить в нужном режиме.</p>
+          <table class="eng" id="infoTools"><tr><td class="muted">Смотрю…</td></tr></table>
+          <button class="btn text state" id="infoRefresh" type="button">Обновить список</button>
+        </div>
+        <div class="stack-cards">
+          <div class="card">
+            <h3 class="t-title-m">Телефон</h3>
+            <p class="t-body-m muted">Приложение Universal для Android и iPhone качает видео через этот компьютер, а QR, картинки и PDF делает само. Подключение — значок телефона вверху справа.</p>
+            <button class="btn tonal state" id="infoPhone" type="button">Сервер для телефона</button>
+          </div>
+          <div class="card">
+            <h3 class="t-title-m">Где лежат данные</h3>
+            <dl class="kv" id="infoPaths"></dl>
+            <button class="btn text state" id="infoOpen" type="button" hidden>Открыть папку</button>
+          </div>
+          <div class="card">
+            <h3 class="t-title-m">Ссылки</h3>
+            <ul class="links t-body-m">
+              <li><a href="https://zaxar1231.github.io/Universal-app/" target="_blank" rel="noopener">Сайт</a>: QR, картинки и PDF прямо в браузере</li>
+              <li><a href="https://github.com/Zaxar1231/Universal-app/releases/latest" target="_blank" rel="noopener">Все версии</a>: Windows, macOS, Linux, Android, iPhone</li>
+              <li><a href="https://github.com/Zaxar1231/Universal-app/issues" target="_blank" rel="noopener">Сообщить об ошибке</a></li>
+              <li><a href="https://github.com/Zaxar1231/Universal-app" target="_blank" rel="noopener">Исходный код</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="t-title-m">Лицензия и благодарности</h3>
+        <p class="t-body-m muted">Universal — свободная программа под лицензией AGPL-3.0. Список форматов и часть логики конвертера взяты из <a href="https://github.com/VERT-sh/VERT" target="_blank" rel="noopener">VERT</a>. Внутри работают
+          <a href="https://ffmpeg.org" target="_blank" rel="noopener">ffmpeg</a>, <a href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noopener">yt-dlp</a>,
+          <a href="https://github.com/ocrmypdf/OCRmyPDF" target="_blank" rel="noopener">OCRmyPDF</a> и <a href="https://github.com/tesseract-ocr/tesseract" target="_blank" rel="noopener">Tesseract</a>,
+          <a href="https://imagemagick.org" target="_blank" rel="noopener">ImageMagick</a>, <a href="https://pandoc.org" target="_blank" rel="noopener">pandoc</a>, <a href="https://poppler.freedesktop.org" target="_blank" rel="noopener">poppler</a>,
+          LibreOffice, pypdf, Flask, pywebview и Capacitor — спасибо их авторам. Скачивай только то, на что у тебя есть права.</p>
+        <p class="t-body-m muted" id="infoSys" style="margin:0"></p>
+      </div>
+    </div>
 
     <div class="grid">
       <section aria-label="Файлы">
@@ -925,6 +1016,44 @@ ul.files .up { width: 40px; height: 40px; }
   $('sheetClose').onclick = closeSheet;
   $('sheet').addEventListener('click', e => { if (e.target === $('sheet')) closeSheet(); });
   addEventListener('keydown', e => { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
+  /* ---------- информация ---------- */
+  function goMode(m) { const r = qs(`input[name=mode][value="${m}"]`); if (r) { r.checked = true; applyMode(); window.scrollTo(0, 0); } }
+  function renderInfoModes() {
+    $('infoModes').innerHTML = Object.keys(MODES).filter(m => m !== 'info').map(m =>
+      `<button type="button" data-m="${m}"><b>${esc(MODES[m].title)}</b><span>${esc(SUBS[m] || '')}</span></button>`).join('');
+    $('infoModes').querySelectorAll('button').forEach(b => { b.onclick = () => goMode(b.dataset.m); });
+  }
+  const INSTALL_NAMES = { installer: 'установлено через Universal-Setup', dmg: 'приложение macOS', deb: 'пакет .deb', rpm: 'пакет .rpm',
+    arch: 'пакет Arch', source: 'запуск из исходников', docker: 'Docker' };
+  function loadInfo(refresh) {
+    if (!$('infoModes').children.length) renderInfoModes();
+    $('infoIcon').hidden = true;
+    return fetch('/api/about' + (refresh ? '?refresh=1' : '')).then(r => r.json()).then(d => {
+      $('infoVer').textContent = d.version;
+      $('infoTools').innerHTML = d.tools.map(t => `<tr><td>${esc(t.name)}</td><td>${esc(t.for)}</td>` +
+        `<td class="${t.installed ? 'ok' : 'no'}">${t.installed ? (t.version ? esc(t.version) : 'есть') : 'не установлен'}</td></tr>`).join('');
+      const paths = [];
+      if (d.home) paths.push(['Настройки и движки', d.home]);
+      if (d.jobs) paths.push(['Временные задания (удаляются через час)', d.jobs]);
+      $('infoPaths').innerHTML = paths.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('') || '<dd>—</dd>';
+      $('infoOpen').hidden = !d.home || !d.desktop;
+      $('infoSys').textContent = `Версия ${d.version} · ${INSTALL_NAMES[d.install] || d.install} · ${d.os} · Python ${d.python}` +
+        (d.languages && d.languages.length ? ` · языки распознавания: ${d.languages.join(', ')}` : '');
+    }).catch(() => { $('infoTools').innerHTML = '<tr><td>Нет связи с приложением</td></tr>'; });
+  }
+  $('infoRefresh').onclick = () => { $('infoTools').innerHTML = '<tr><td class="muted">Смотрю…</td></tr>'; loadInfo(true); };
+  $('infoOpen').onclick = () => fetch('/api/about/open', { method: 'POST' });
+  $('infoPhone').onclick = () => $('phoneBtn').click();
+  $('infoUpd').onclick = () => {
+    $('infoUpdState').textContent = 'Проверяю…';
+    fetch('/api/update?force=1').then(r => r.status === 403 ? null : r.json()).then(d => {
+      if (!d) { $('infoUpdState').textContent = 'Проверка доступна только на самом компьютере'; return; }
+      if (d.error) { $('infoUpdState').textContent = d.error; return; }
+      $('infoUpdState').textContent = d.newer ? `Есть версия ${d.latest} — баннер вверху` : 'У тебя последняя версия';
+      if (d.newer) { try { localStorage.removeItem('skipVersion'); } catch (_) {} updateShow(d); }
+    }).catch(() => { $('infoUpdState').textContent = 'Нет связи с приложением'; });
+  };
+
   /* ---------- обновления ---------- */
   // первые пункты из описания релиза (CHANGELOG): **жирный** и ссылки в обычный текст
   const plainNotes = md => md.split('\n').filter(l => /^\s*[-*] /.test(l)).slice(0, 4)
@@ -1040,10 +1169,10 @@ ul.files .up { width: 40px; height: 40px; }
     image: { title: 'Картинки', kind: 'uni' }, audio: { title: 'Аудио', kind: 'uni' },
     video: { title: 'Видео', kind: 'uni' }, doc: { title: 'Документы', kind: 'uni' },
     pdf: { title: 'PDF в картинки', kind: 'pdf' }, photo: { title: 'Фото в A4', kind: 'photo' }, topdf: { title: 'Фото в PDF', kind: 'topdf' },
-    pdft: { title: 'PDF-инструменты', kind: 'pdft' }, ocr: { title: 'Распознать текст', kind: 'ocr' },
+    pdft: { title: 'PDF-инструменты', kind: 'pdft' }, ocr: { title: 'Распознать текст', kind: 'ocr' }, info: { title: 'Информация', kind: 'info' },
     edit: { title: 'Редактор видео и аудио', kind: 'edit' }, dl: { title: 'Скачать видео', kind: 'dl' }, qr: { title: 'QR-коды', kind: 'qr' },
   };
-  const isNew = () => ['edit', 'dl', 'qr', 'pdft', 'ocr'].includes(MODES[mode()].kind);
+  const isNew = () => ['edit', 'dl', 'qr', 'pdft', 'ocr', 'info'].includes(MODES[mode()].kind);
   const pOp = () => qs('input[name=pop]:checked').value;
   const qrKind = () => qs('input[name=qrk]:checked').value;
   const mode = () => qs('input[name=mode]:checked').value;
@@ -1267,6 +1396,7 @@ ul.files .up { width: 40px; height: 40px; }
     dl: 'Видео и музыка с YouTube, TikTok, VK, Rutube и ещё ~1800 сайтов. Качается сюда, на этот компьютер.',
     pdft: 'Склеить, разделить, вытащить страницы, повернуть, сжать, поставить или снять пароль.',
     ocr: 'Сканы и фото документов становятся PDF, в котором можно искать и копировать текст. Работают OCRmyPDF и Tesseract.',
+    info: 'Что это за приложение, что оно умеет, версия, движки и где лежат данные.',
     qr: 'Один код для ссылки, Wi‑Fi или контакта, сотни кодов разом из списка или QR вместо ссылок прямо в документе.',
   };
   function applyMode() {
@@ -1287,6 +1417,8 @@ ul.files .up { width: 40px; height: 40px; }
     docLinks = null; docSel.clear(); docFileKey = ''; $('qrDocLinks').hidden = true;
     $('filesPane').hidden = m === 'dl' || (m === 'qr' && !['list', 'doc'].includes(qrKind()));
     $('previewCard').hidden = true; cancelBtn.hidden = true;
+    $('infoView').hidden = m !== 'info'; qs('.grid').hidden = m === 'info';
+    if (m === 'info') loadInfo();
     const pb = $('engineBanner'); pb.hidden = true; pb.className = 'banner';
     if (caps) {
       const need = { image: ['imagemagick', 'ImageMagick'], audio: ['ffmpeg', 'ffmpeg'], video: ['ffmpeg', 'ffmpeg'], doc: ['pandoc', 'pandoc'],

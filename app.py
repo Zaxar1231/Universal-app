@@ -34,6 +34,7 @@ from urllib.parse import quote
 
 from flask import Flask, Response, jsonify, render_template, request, send_file, abort
 
+import about
 import converters as conv
 import downloader
 import editor
@@ -1095,6 +1096,24 @@ def ocr_run():
     task = Task(job_id, "ocr", job_dir, archive)
     TASKS.submit(task, lambda t: ocr.run_ocr_task(t, items, opts))
     return jsonify(task.to_dict())
+
+
+# ---------- Информация ----------
+
+@app.route("/api/about")
+def about_info():
+    d = about.info(refresh=request.args.get("refresh") == "1")
+    if request.environ.get(phoneserver.MARK) or request.remote_addr not in ("127.0.0.1", "::1"):
+        for k in ("home", "jobs"):                 # пути на компьютере телефону ни к чему
+            d.pop(k, None)
+        d["tools"] = [{**t, "path": ""} for t in d["tools"]]
+    return jsonify(d)
+
+
+@app.route("/api/about/open", methods=["POST"])
+def about_open():
+    _local_only()
+    return jsonify({"folder": about.open_folder()})
 
 
 # ---------- Обновления ----------
