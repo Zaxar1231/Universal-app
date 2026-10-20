@@ -29,11 +29,11 @@ main.wrap { padding-bottom: 24px; }
 #try { padding: 0; }
 #try .tool { margin-top: 12px; }
 
-nav.navbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--c); display: grid; grid-template-columns: repeat(4, 1fr);
+nav.navbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--c); display: grid; grid-template-columns: repeat(5, 1fr);
   padding: 12px 0 calc(12px + var(--bottom)); }
 nav.navbar button { border: 0; background: none; display: grid; justify-items: center; gap: 4px; cursor: pointer; font-size: .75rem; font-weight: 500;
   color: var(--on-surface-variant); padding: 0; }
-nav.navbar .pill { width: 64px; height: 32px; border-radius: 16px; display: grid; place-items: center; transition: background .2s; }
+nav.navbar .pill { width: 56px; height: 32px; border-radius: 16px; display: grid; place-items: center; transition: background .2s; }
 nav.navbar svg { width: 24px; height: 24px; fill: currentColor; }
 nav.navbar button[aria-current="page"] { color: var(--on-surface); }
 nav.navbar button[aria-current="page"] .pill { background: var(--secondary-container); color: var(--on-secondary-container); }
@@ -69,6 +69,8 @@ details.card[open] > summary::after { content: "▴"; }
 #scan button { position: absolute; bottom: calc(32px + var(--bottom)); }
 .upd { background: var(--tertiary-container); color: var(--on-tertiary-container); margin-bottom: 16px; gap: 12px; }
 .upd ul { margin: 0; padding-left: 18px; font-size: .875rem; }
+.info-list { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: .875rem; line-height: 1.35; }
+nav.navbar button { font-size: .6875rem; min-width: 0; }
 #snack { position: fixed; left: 16px; right: 16px; bottom: calc(92px + var(--bottom)); z-index: 30; background: var(--on-surface); color: var(--surface);
   border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; font-size: .875rem; box-shadow: 0 3px 8px rgba(0,0,0,.25); }
 #snack span { flex: 1; overflow-wrap: anywhere; }
@@ -142,10 +144,40 @@ details.card[open] > summary::after { content: "▴"; }
       <button class="btn filled lg" id="sOpen">Открыть полную версию</button>
       <p class="hint">Откроется во встроенном браузере, логин любой, пароль тот же. Видео с вкладки «Скачать» качает этот же сервер через yt-dlp, а готовый файл сам приезжает на телефон.</p>
     </div>
+  </div>
+
+  <!-- ===================== информация ===================== -->
+  <div class="page" id="pageInfo" hidden>
     <div class="card stack">
-      <h3>О приложении</h3>
-      <p class="hint">Universal <span id="ver"></span> · <a href="https://github.com/Zaxar1231/Universal-app" id="gh">исходный код</a> · AGPL-3.0. Скачивай только то, на что у тебя есть права.</p>
+      <div class="row"><img src="img/icon-192.png" alt="" width="56" height="56" style="border-radius:14px">
+        <div class="grow"><h2 style="margin:0">Universal <span id="ver"></span></h2><span class="small muted">файлы, видео, PDF и QR</span></div></div>
+      <p class="hint">Набор инструментов для файлов: скачать видео или музыку, сделать QR-код, перевести картинки в другой формат, склеить или разрезать PDF. Тяжёлую работу (конвертер видео, редактор, распознавание текста) делает Universal на твоём компьютере, а телефон им управляет.</p>
       <div class="row"><button class="btn tonal" id="updCheck">Проверить обновления</button><span class="small grow" id="updState"></span></div>
+    </div>
+    <div class="card stack">
+      <h3>Что есть в приложении</h3>
+      <ul class="info-list">
+        <li><b>Скачать</b> — видео и музыка с YouTube, TikTok, VK и ещё ~1800 сайтов. Качает компьютер (yt-dlp), файл сам приезжает на телефон. Ссылку можно отправить из любого приложения через «Поделиться».</li>
+        <li><b>Инструменты</b> — QR-коды (ссылка, Wi‑Fi, контакт), картинки в JPG/PNG/WebP с уменьшением, PDF: склеить, вытащить страницы, разделить, повернуть. Работают без интернета.</li>
+        <li><b>Файлы</b> — всё скачанное и сохранённое, кнопка «Поделиться» отправит в галерею, мессенджер и куда угодно.</li>
+        <li><b>Сервер</b> — подключение к компьютеру по QR-коду и вход в полную версию.</li>
+      </ul>
+    </div>
+    <div class="card stack">
+      <h3>Компьютер</h3>
+      <p class="hint" id="infoServer">Не подключён. На компьютере в Universal нажми значок телефона вверху справа, затем «Сервер» → «Сканировать QR-код».</p>
+      <ul class="info-list" id="infoServerTools" hidden></ul>
+    </div>
+    <div class="card stack">
+      <h3>Ссылки</h3>
+      <ul class="info-list info-links">
+        <li><a href="https://github.com/Zaxar1231/Universal-app/releases/latest">Все версии</a>: Windows, macOS, Linux, Android, iPhone</li>
+        <li><a href="https://zaxar1231.github.io/Universal-app/">Сайт</a> с инструментами в браузере</li>
+        <li><a href="https://github.com/Zaxar1231/Universal-app/issues">Сообщить об ошибке</a></li>
+        <li><a href="https://github.com/Zaxar1231/Universal-app" id="gh">Исходный код</a></li>
+      </ul>
+      <p class="hint">Свободная программа, лицензия AGPL-3.0. Внутри работают yt-dlp, ffmpeg, OCRmyPDF, Tesseract, pdf-lib, qrcode-generator, jsQR и Capacitor — спасибо их авторам. Скачивай только то, на что у тебя есть права.</p>
+      <p class="hint" id="infoDevice"></p>
     </div>
   </div>
 </main>
@@ -155,6 +187,7 @@ details.card[open] > summary::after { content: "▴"; }
   <button data-page="pageTools"><span class="pill"><svg viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg></span>Инструменты</button>
   <button data-page="pageFiles"><span class="pill"><svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></span>Файлы</button>
   <button data-page="pageServer"><span class="pill"><svg viewBox="0 0 24 24"><path d="M20 13H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1v-6c0-.55-.45-1-1-1zM7 19c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM20 3H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zM7 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg></span>Сервер</button>
+  <button data-page="pageInfo"><span class="pill"><svg viewBox="0 0 24 24"><path d="M11 17h2v-6h-2v6zm1-15C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zM11 9h2V7h-2v2z"/></svg></span>Инфо</button>
 </nav>
 
 <div id="scan" hidden>

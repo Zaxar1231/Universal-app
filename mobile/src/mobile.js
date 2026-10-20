@@ -43,7 +43,7 @@
     snackTimer = setTimeout(() => { el.hidden = true; }, action ? 6000 : 3500);
   }
 
-  const TITLES = { pageDl: 'Скачать', pageTools: 'Инструменты', pageFiles: 'Файлы', pageServer: 'Сервер' };
+  const TITLES = { pageDl: 'Скачать', pageTools: 'Инструменты', pageFiles: 'Файлы', pageServer: 'Сервер', pageInfo: 'Информация' };
   function go(page) {
     document.querySelectorAll('.page').forEach(p => { p.hidden = p.id !== page; });
     document.querySelectorAll('nav.navbar button').forEach(b => {
@@ -52,6 +52,7 @@
     $('title').textContent = TITLES[page];
     window.scrollTo(0, 0);
     if (page === 'pageFiles') listFiles();
+    if (page === 'pageInfo') loadInfo();
   }
   document.querySelectorAll('nav.navbar button').forEach(b => { b.onclick = () => go(b.dataset.page); });
 
@@ -388,7 +389,30 @@
   }
 
   $('ver').textContent = typeof APP_VERSION === 'string' ? APP_VERSION : '';
-  $('gh').onclick = e => { if (native) { e.preventDefault(); Browser.open({ url: e.currentTarget.href }); } };
+  // ссылки вкладки «Инфо» открываются во встроенном браузере, а не внутри приложения
+  document.querySelectorAll('#pageInfo a[href^="http"]').forEach(a => {
+    a.onclick = e => { e.preventDefault(); if (native) Browser.open({ url: a.href }); else window.open(a.href, '_blank'); };
+  });
+
+  /* ---------- вкладка «Инфо»: что за компьютер подключён ---------- */
+  async function loadInfo() {
+    $('infoDevice').textContent = `Версия ${typeof APP_VERSION === 'string' ? APP_VERSION : ''} · ${platform === 'ios' ? 'iPhone' : platform === 'android' ? 'Android' : 'браузер'}`;
+    const srv = baseUrl(store.get('serverUrl')), box = $('infoServer'), list = $('infoServerTools');
+    if (!srv) return;
+    box.textContent = `Проверяю ${host(srv)}…`; list.hidden = true;
+    try {
+      const r = await http('GET', srv + 'api/about', { headers: serverAuth() });
+      if (r.status === 401) throw new Error('неверный пароль, обнови его на вкладке «Сервер»');
+      if (r.status !== 200 || !r.data || !r.data.tools) throw new Error(`ответ ${r.status} (старая версия Universal на компьютере?)`);
+      const d = r.data;
+      box.textContent = `Подключён ${host(srv)}: Universal ${d.version}, ${d.os}.` +
+        (typeof APP_VERSION === 'string' && d.version !== APP_VERSION ? ' Версии на телефоне и компьютере отличаются: лучше обновить оба.' : '');
+      list.innerHTML = d.tools.map(t => `<li>${esc(t.name)} — ${t.installed ? esc(t.version || 'есть') : '<span class="bad">не установлен</span>'} <span class="muted">(${esc(t.for)})</span></li>`).join('');
+      list.hidden = false;
+    } catch (e) {
+      box.textContent = `${host(srv)}: ${e.message || e}`;
+    }
+  }
 
   /* ===================== вкладка «Файлы» ===================== */
   $('fWhere').textContent = 'Папка: ' + WHERE;
