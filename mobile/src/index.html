@@ -13,7 +13,8 @@
 :root { --top: max(env(safe-area-inset-top), var(--safe-area-inset-top, 0px)); --bottom: max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom, 0px)); }
 body { padding-bottom: calc(80px + var(--bottom)); overscroll-behavior-y: none; }
 /* длинные имена файлов не должны распирать страницу шире экрана: иначе WebView уменьшает масштаб */
-html, body { overflow-x: hidden; max-width: 100%; }
+/* clip, а не hidden: hidden на html и body делает body отдельной прокруткой, и в WebView страница перестаёт листаться */
+html { overflow-x: clip; }
 main.wrap, .page, .card, .stack, .files, .jobs { min-width: 0; max-width: 100%; }
 .page, .stack, .files, .jobs { grid-template-columns: minmax(0, 1fr); }
 .page > *, .card > *, .stack > *, .files > li, .jobs > li, .files li > *, .jobs li > * { min-width: 0; }

@@ -185,6 +185,10 @@ jobs:
           V="${{ github.event.inputs.version }}"
           [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: qpdf для pikepdf (Intel)
+        # у pikepdf нет готового колеса для macOS x86_64: pip собирает его сам, и ему нужен qpdf
+        if: matrix.arch == 'x86_64'
+        run: brew install qpdf
       - name: Зависимости
         run: pip install -r packaging/requirements-desktop.txt
       - name: Сборка .app
