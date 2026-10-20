@@ -185,10 +185,11 @@ jobs:
           V="${{ github.event.inputs.version }}"
           [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
-      - name: qpdf для pikepdf (Intel)
-        # у pikepdf нет готового колеса для macOS x86_64: pip собирает его сам, и ему нужен qpdf
+      - name: OCRmyPDF под Intel
+        # у pikepdf с 10.14 нет сборок для macOS x86_64 (самосборный не работает в .app),
+        # поэтому здесь последний pikepdf с ними и OCRmyPDF 17.12, который с ним совместим
         if: matrix.arch == 'x86_64'
-        run: brew install qpdf
+        run: printf 'pikepdf<10.14\nocrmypdf<17.13\n' > "$RUNNER_TEMP/intel.txt" && echo "PIP_CONSTRAINT=$RUNNER_TEMP/intel.txt" >> "$GITHUB_ENV"
       - name: Зависимости
         run: pip install -r packaging/requirements-desktop.txt
       - name: Сборка .app

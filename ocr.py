@@ -123,11 +123,11 @@ def build_args(src: Path, out: Path, o: dict, sidecar: Path | None, pdfa: bool) 
         a.append("--deskew")
     if o["rotate"] and o["mode"] != "redo":
         a.append("--rotate-pages")
-    if pdfa:
+    if pdfa and (_ghostscript() or v >= (17, 13)):
         a += ["--output-type", "pdfa"]
-        if not _ghostscript() and v >= (17, 13):
-            a += ["--pdfa-backend", "internal"]
-    else:
+        if not _ghostscript():
+            a += ["--pdfa-backend", "internal"]      # с 17.13 PDF/A собирается без Ghostscript
+    else:                                            # старый OCRmyPDF без Ghostscript PDF/A не умеет
         a += ["--output-type", "pdf"]
     if src.suffix.lower() in IMAGE_EXT:
         a += ["--image-dpi", "300"]          # используется, только если у фото нет своего DPI

@@ -80,6 +80,8 @@ def smoke(url: str) -> int:
         if getattr(sys, "frozen", False) or ocr.version():
             r = subprocess.run(ocr.command(["--version"]), timeout=180, capture_output=True, text=True)
             checks["ocrmypdf"] = r.returncode == 0 and bool(ocr.version()) and r.stdout.strip() == ocr.version()
+            if not checks["ocrmypdf"]:
+                checks["ocrmypdf_error"] = (r.stderr or r.stdout or "")[-400:]   # в логе CI сразу видно почему
         if sys.platform.startswith("linux"):
             import webview.platforms.gtk  # noqa: F401  (GTK и WebKit2 из зависимостей пакета)
             checks["gui"] = True
