@@ -14,11 +14,11 @@ a = Analysis(
     pathex=[ROOT],
     # yt_dlp_ejs: JS-скрипты, которыми deno решает задачки YouTube
     # ocrmypdf: шрифты и данные для текстового слоя, а версию он читает из метаданных пакета
-    datas=[(ROOT + "/templates", "templates")] + collect_data_files("yt_dlp_ejs")
+    datas=[(ROOT + "/templates", "templates"), (ROOT + "/static", "static")] + collect_data_files("yt_dlp_ejs")
     + collect_data_files("ocrmypdf") + copy_metadata("ocrmypdf"),
     # yt-dlp подгружает экстракторы динамически, а app импортирует модули по имени
     hiddenimports=collect_submodules("yt_dlp") + collect_submodules("yt_dlp_ejs") + collect_submodules("ocrmypdf")
-    + ["about", "app", "converters", "downloader", "editor", "engines", "ocr", "pdftools", "phoneserver", "qrdoc", "qrtools", "tasks", "updater", "version", "py7zr"],
+    + ["about", "app", "converters", "docedit", "downloader", "filetools", "editor", "engines", "ocr", "pdftools", "phoneserver", "qrdoc", "qrtools", "tasks", "updater", "version", "py7zr"],
     excludes=["tkinter", "pytest", "playwright"],
 )
 pyz = PYZ(a.pure)

@@ -451,3 +451,21 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
   - в окне добавляется раздел «Окно» (UA, экран, тема); копирование в Markdown;
   - на телефоне `collectNerd()` собирает всё на месте, а данные компьютера берёт из `/api/about`; пароль сервера в отчёт не пишется.
 
+### 13.17 Редактор документов, фоторедактор, архивы (v2.0.0)
+- `static/` теперь отдаётся Flask (`/static/...`). Он попадает в PyInstaller (`datas`) и в Linux-пакет (`build.sh` копирует `static`). Jodit 4.18.4 (MIT) лежит в `static/vendor/jodit` (сборка fat, с русским) и подгружается лениво при первом открытии редактора.
+- Режимы `docedit` и `photoedit` — на всю ширину (`FULL`, вместо `.grid`), их код в `static/docedit.js` и `static/photoedit.js`; наружу каждый отдаёт `window.Universal*Edit.show()`.
+- `docedit.py`:
+  - открытие через LibreOffice `html:HTML (StarWriter):EmbedImages`, запасной путь — pandoc `--extract-media` и вшивание картинок в data: URI;
+  - скрипты и `on*` из чужого HTML вырезаются;
+  - сохранение — LibreOffice `--infilter="HTML (StarWriter)"` (иначе откроется как веб-страница) или pandoc;
+  - **картинки остаются data: URI**: файл рядом с HTML LibreOffice вставил бы в DOCX внешней ссылкой на временную папку.
+- `/api/doc/open|save|caps`, `/api/photo/load` (Pillow, иначе `magick ...[0]` → PNG для браузера).
+- `filetools.py` и `/api/files`:
+  - имена и `relpath` (webkitRelativePath / `entry.fullPath` при перетаскивании) сохраняются как у пользователя;
+  - zip — stdlib, 7z — py7zr (AES-256, `header_encryption`);
+  - распаковка через `_safe_target` (без zip-slip), cp866 для имён без флага UTF-8;
+  - суммы пишутся файлами `*SUMS.txt`, переименование — копиями.
+- Вложенные результаты: `tasks.result_files()` (rglob, без скрытых), `/api/download` пакует с относительными путями, `/api/file/<job>/<path>` пускает вложенные пути, но не выше `out`.
+- Фоторедактор считает цвет попиксельно (ImageData), без `ctx.filter`: в WKWebView и WebKitGTK его нет. Размытие идёт через `ctx.filter`, если он есть, иначе уменьшением и растяжением.
+- Редактор PDF (`static/pdfedit.js`) работает целиком в браузере: pdf.js 4.10.38 legacy (`static/vendor/pdfjs`, Apache-2.0, файлы `.mjs` переименованы в `.js`, плюс `cmaps` и `standard_fonts`) рисует страницы, pdf-lib 1.17.1 (`static/vendor/pdflib`, MIT) собирает файл. `app.py` регистрирует `text/javascript` для `.js`: ES-модулю нужен JS-тип, а реестр Windows иногда отдаёт `text/plain`.
+- Объекты хранятся в пунктах в «базовом виде» страницы (с поворотом из файла, без нашего). При сохранении «замазать» рисуется векторным белым прямоугольником, остальное — одной PNG на занятую область (4 px на пункт), с поворотом по `/Rotate` исходной страницы; потом ставится итоговый `/Rotate`. Зашифрованные или битые для pdf-lib PDF сохраняются только «сплющенными» (страницы картинками JPEG 200 DPI).

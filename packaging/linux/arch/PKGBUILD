@@ -11,7 +11,8 @@ depends=('python' 'python-gobject' 'webkit2gtk-4.1' 'python-pillow' 'python-cryp
          'ffmpeg' 'imagemagick' 'pandoc-cli' 'poppler')
 optdepends=('libreoffice-fresh: чтение и запись старых .doc'
             'ocrmypdf: распознавание текста в сканах'
-            'tesseract-data-rus: распознавание русского текста')
+            'tesseract-data-rus: распознавание русского текста'
+            'python-py7zr: архивы 7z')
 source=("universal-${pkgver}-linux.tar.gz")
 sha256sums=('SKIP')
 noextract=("universal-${pkgver}-linux.tar.gz")
