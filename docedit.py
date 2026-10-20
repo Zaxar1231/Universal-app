@@ -14,6 +14,7 @@ import html as htmllib
 import mimetypes
 import re
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -70,10 +71,14 @@ def _pandoc(args: list[str]) -> str:
     exe = conv._which("pandoc")
     if not exe:
         raise DocError("нужен pandoc или LibreOffice")
-    res = conv._run([exe, *args], 300)
+    # pandoc пишет UTF-8, а text=True в Windows читал бы его как cp1252 (и stdout терялся)
+    try:
+        res = subprocess.run([exe, *args], capture_output=True, encoding="utf-8", errors="replace", timeout=300)
+    except subprocess.TimeoutExpired:
+        raise DocError("pandoc думал слишком долго")
     if res.returncode != 0:
         raise DocError("pandoc не справился: " + conv._last_error(res, "без подробностей"))
-    return res.stdout
+    return res.stdout or ""
 
 
 def _body(html: str) -> str:
