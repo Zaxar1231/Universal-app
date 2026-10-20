@@ -1365,3 +1365,14 @@ def test_photo_load_converts_for_browser(client):
 def test_static_editors_served(client):
     for path in ("/static/docedit.js", "/static/photoedit.js", "/static/vendor/jodit/jodit.min.js"):
         assert client.get(path).status_code == 200
+
+
+def test_pdf_editor_assets(client):
+    # pdf.js грузится как ES-модуль: без JS-типа WebView его не выполнит
+    for path in ("/static/pdfedit.js", "/static/vendor/pdfjs/pdf.min.js", "/static/vendor/pdfjs/pdf.worker.min.js",
+                 "/static/vendor/pdflib/pdf-lib.min.js"):
+        r = client.get(path)
+        assert r.status_code == 200 and "javascript" in r.content_type
+    assert client.get("/static/vendor/pdfjs/cmaps/78-H.bcmap").status_code == 200
+    page = client.get("/").get_data(as_text=True)
+    assert 'id="pdfView"' in page and "pdfedit.js" in page and "'Редактор PDF'" in page

@@ -49,6 +49,8 @@ import qrtools
 import updater
 from tasks import Task, TaskManager, result_files
 
+# pdf.js грузится как ES-модуль, а им нужен JS-тип; в реестре Windows .js бывает text/plain
+mimetypes.add_type("text/javascript", ".js")
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024  # 2 ГБ на запрос
 
