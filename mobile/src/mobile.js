@@ -416,6 +416,86 @@
     $('fEmpty').hidden = entries.length > 0;
   }
 
+  /* ===================== обновления приложения ===================== */
+  // раз в 6 часов смотрим последний релиз на GitHub; на Android APK скачивается и открывается установка
+  const RELEASE_API = 'https://api.github.com/repos/Zaxar1231/Universal-app/releases/latest';
+  const vparse = v => (String(v || '').match(/\d+/g) || []).slice(0, 3).map(Number);
+  function isNewer(a, b) {
+    const x = vparse(a), y = vparse(b);
+    for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+    return false;
+  }
+  const notesList = md => String(md || '').split('\n').filter(l => /^\s*[-*] /.test(l)).slice(0, 3)
+    .map(l => l.replace(/^\s*[-*] /, '').replace(/\*\*|`/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'))
+    .map(l => (l.length > 140 ? l.slice(0, 137) + '…' : l));
+  function showUpdate(info) {
+    const box = $('upd'), apk = platform === 'android' && info.apk;
+    box.hidden = false;
+    box.innerHTML = `<div><b>Вышла Universal ${esc(info.version)}</b>, у тебя ${esc(APP_VERSION)}.</div>` +
+      (info.notes.length ? '<ul>' + info.notes.map(n => `<li>${esc(n)}</li>`).join('') + '</ul>' : '') +
+      '<div class="row">' + (apk ? `<button class="btn filled" id="updGo">Обновить${info.apkSize ? ' (' + fmtSize(info.apkSize) + ')' : ''}</button>`
+                                 : '<button class="btn filled" id="updPage">Скачать</button>') +
+      '<button class="btn text" id="updLater">Позже</button></div>' +
+      (platform === 'ios' ? '<p class="hint" style="color:inherit">Поставь новый .ipa через AltStore или Sideloadly поверх старого: настройки и файлы сохранятся.</p>' : '');
+    $('updLater').onclick = () => { store.set('updSkip', info.version); box.hidden = true; };
+    if ($('updPage')) $('updPage').onclick = () => (native ? Browser.open({ url: info.url }) : window.open(info.url, '_blank'));
+    if ($('updGo')) $('updGo').onclick = () => installUpdate(info);
+  }
+  async function installUpdate(info) {
+    const box = $('upd');
+    box.innerHTML = `<div>Скачиваю Universal ${esc(info.version)}…</div><div class="bar2 ind"><i></i></div>`;
+    const bar = box.querySelector('.bar2'), path = `universal-${info.version}.apk`;
+    const h = await Filesystem.addListener('progress', p => {
+      if (p.contentLength > 0) { bar.classList.remove('ind'); bar.firstChild.style.width = Math.round(p.bytes / p.contentLength * 100) + '%'; }
+    });
+    try {
+      await Filesystem.downloadFile({ url: info.apk, path, directory: 'CACHE', progress: true, connectTimeout: 20000, readTimeout: 120000 });
+      const { uri } = await Filesystem.getUri({ path, directory: 'CACHE' });
+      const ApkInstall = C.registerPlugin('ApkInstall');
+      const r = await ApkInstall.install({ path: uri });
+      box.innerHTML = r.needPermission
+        ? '<div>Разреши установку приложений от Universal в открывшихся настройках, вернись и нажми «Установить».</div><div class="row"><button class="btn filled" id="updAgain">Установить</button></div>'
+        : '<div>Открыл установку: подтверди обновление. Настройки и файлы сохранятся.</div><div class="row"><button class="btn tonal" id="updAgain">Открыть установку ещё раз</button></div>';
+      $('updAgain').onclick = async () => {
+        const again = await ApkInstall.install({ path: uri }).catch(e => ({ error: e.message }));
+        if (again.error) snack('Не открылась установка: ' + again.error);
+      };
+    } catch (e) {
+      box.innerHTML = `<div>Не получилось обновиться: ${esc(e.message || e)}</div><div class="row"><button class="btn filled" id="updRetry">Ещё раз</button><button class="btn text" id="updPage2">Скачать вручную</button></div>`;
+      $('updRetry').onclick = () => installUpdate(info);
+      $('updPage2').onclick = () => Browser.open({ url: info.url });
+    } finally {
+      h.remove();
+    }
+  }
+  async function checkUpdate(force) {
+    const st = $('updState');
+    if (!force) {
+      const last = +store.get('updChecked') || 0;
+      let cached = null;
+      try { cached = JSON.parse(store.get('updInfo') || 'null'); } catch (_) { /* битый кэш */ }
+      if (cached && Date.now() - last < 6 * 3600 * 1000) {
+        if (isNewer(cached.version, APP_VERSION) && store.get('updSkip') !== cached.version) showUpdate(cached);
+        return;
+      }
+    } else { st.className = 'small grow'; st.textContent = 'Проверяю…'; }
+    try {
+      const r = await http('GET', RELEASE_API, { headers: { Accept: 'application/vnd.github+json' } });
+      if (r.status !== 200 || !r.data || !r.data.tag_name) throw new Error(r.status === 403 ? 'GitHub просит подождать, попробуй позже' : `GitHub ответил ${r.status}`);
+      const assets = r.data.assets || [], apk = assets.find(a => /-android\.apk$/.test(a.name));
+      const info = { version: r.data.tag_name.replace(/^v/, ''), url: r.data.html_url, notes: notesList(r.data.body),
+        apk: apk ? apk.browser_download_url : '', apkSize: apk ? apk.size : 0 };
+      store.set('updInfo', JSON.stringify(info)); store.set('updChecked', String(Date.now()));
+      const fresh = isNewer(info.version, APP_VERSION);
+      if (fresh && (force || store.get('updSkip') !== info.version)) showUpdate(info);
+      if (force) { st.className = 'small grow ok'; st.textContent = fresh ? `Есть ${info.version}, кнопка вверху` : 'У тебя последняя версия'; }
+    } catch (e) {
+      if (force) { st.className = 'small grow bad'; st.textContent = String(e.message || e); }
+    }
+  }
+  $('updCheck').onclick = () => { $('upd').hidden = true; checkUpdate(true); };
+  if (typeof APP_VERSION === 'string' && APP_VERSION) setTimeout(() => checkUpdate(false), 2000);
+
   /* ===================== «Поделиться → Universal» (Android) ===================== */
   if (platform === 'android') {
     const ShareIn = C.registerPlugin('ShareIn');

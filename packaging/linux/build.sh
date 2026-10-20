@@ -11,6 +11,7 @@ rm -rf "$ROOT"; mkdir -p "$LIB" "$ROOT/usr/bin" "$ROOT/usr/share/applications" "
 
 # приложение
 cp "$SRC"/*.py "$LIB/"
+printf 'VERSION = "%s"\n' "$V" > "$LIB/version.py"
 cp -r "$SRC/templates" "$LIB/"
 install -m 755 "$HERE/universal.sh" "$ROOT/usr/bin/universal"
 install -m 644 "$HERE/universal.desktop" "$ROOT/usr/share/applications/universal.desktop"

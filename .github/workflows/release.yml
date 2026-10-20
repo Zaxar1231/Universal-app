@@ -23,13 +23,14 @@ jobs:
           V="${{ github.event.inputs.version }}"
           [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
+          printf 'VERSION = "%s"\n' "$V" > version.py     # приложение сверяет её с последним релизом
       - name: Архив
         # только то, что нужно для работы: модули приложения, шаблон, зависимости,
         # скрипты запуска, README и LICENSE (её требует AGPL)
         run: |
           git archive --format=zip --prefix="universal-${{ steps.v.outputs.version }}/" \
-            -o "universal-${{ steps.v.outputs.version }}.zip" HEAD -- \
-            ':(glob)*.py' templates requirements.txt run.bat run.sh README.md LICENSE
+            -o "universal-${{ steps.v.outputs.version }}.zip" --add-file=version.py HEAD -- \
+            ':(glob)*.py' ':(exclude)version.py' templates requirements.txt run.bat run.sh README.md LICENSE
           unzip -l "universal-${{ steps.v.outputs.version }}.zip"
       - name: Описание из CHANGELOG.md
         run: |
@@ -68,6 +69,7 @@ jobs:
           V="${{ github.event.inputs.version }}"
           [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
+          printf 'VERSION = "%s"\n' "$V" > version.py     # приложение сверяет её с последним релизом
       - name: Зависимости
         run: pip install -r packaging/requirements-desktop.txt
       - name: Сборка exe
@@ -108,6 +110,7 @@ jobs:
           V="${{ github.event.inputs.version }}"
           [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
+          printf 'VERSION = "%s"\n' "$V" > version.py     # приложение сверяет её с последним релизом
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -185,6 +188,7 @@ jobs:
           V="${{ github.event.inputs.version }}"
           [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
+          printf 'VERSION = "%s"\n' "$V" > version.py     # приложение сверяет её с последним релизом
       - name: Готовые сборки под Intel
         # у pikepdf с 10.14 и cryptography с 49 нет сборок для macOS x86_64, а собранные из исходников
         # ломаются в .app (cryptography цепляет libssl из Homebrew, а в .app попадает libssl от Python).

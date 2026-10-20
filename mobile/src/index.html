@@ -67,6 +67,8 @@ details.card[open] > summary::after { content: "▴"; }
 #scan .frame { position: relative; width: min(70vw, 300px); aspect-ratio: 1; border: 3px solid #fff; border-radius: 24px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.45); }
 #scan p { position: absolute; left: 24px; right: 24px; top: calc(24px + var(--top)); text-align: center; margin: 0; font-size: .9375rem; }
 #scan button { position: absolute; bottom: calc(32px + var(--bottom)); }
+.upd { background: var(--tertiary-container); color: var(--on-tertiary-container); margin-bottom: 16px; gap: 12px; }
+.upd ul { margin: 0; padding-left: 18px; font-size: .875rem; }
 #snack { position: fixed; left: 16px; right: 16px; bottom: calc(92px + var(--bottom)); z-index: 30; background: var(--on-surface); color: var(--surface);
   border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; font-size: .875rem; box-shadow: 0 3px 8px rgba(0,0,0,.25); }
 #snack span { flex: 1; overflow-wrap: anywhere; }
@@ -81,6 +83,9 @@ details.card[open] > summary::after { content: "▴"; }
 <main class="wrap">
 
   <!-- ===================== скачивание ===================== -->
+  <!-- новая версия приложения (видно на любой вкладке) -->
+  <div class="card stack upd" id="upd" hidden></div>
+
   <div class="page" id="pageDl">
     <div class="card stack">
       <textarea class="ta" id="dUrls" placeholder="Ссылки на видео, по одной на строку (YouTube, TikTok, VK, Instagram…)" autocapitalize="off" spellcheck="false"></textarea>
@@ -140,6 +145,7 @@ details.card[open] > summary::after { content: "▴"; }
     <div class="card stack">
       <h3>О приложении</h3>
       <p class="hint">Universal <span id="ver"></span> · <a href="https://github.com/Zaxar1231/Universal-app" id="gh">исходный код</a> · AGPL-3.0. Скачивай только то, на что у тебя есть права.</p>
+      <div class="row"><button class="btn tonal" id="updCheck">Проверить обновления</button><span class="small grow" id="updState"></span></div>
     </div>
   </div>
 </main>
