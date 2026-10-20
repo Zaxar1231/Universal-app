@@ -212,6 +212,13 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
   margin-bottom: 16px; font-size: .875rem; }
 
 /* --- палитра "Material You": выбор цвета --- */
+.dialog.wn { width: min(640px, 100%); max-height: calc(100vh - 32px); grid-template-rows: auto minmax(0, 1fr) auto; }
+.wn-body { overflow: auto; display: grid; gap: 4px; padding-right: 4px; }
+.wn-body h3 { margin: 4px 0 0; font: 500 1.125rem/1.4 inherit; } .wn-body h3 .muted { font-weight: 400; font-size: .875rem; }
+.wn-body h4 { margin: 12px 0 2px; font: 500 1rem/1.4 inherit; color: var(--md-primary); }
+.wn-body ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; } .wn-body li { line-height: 1.45; }
+.wn-body code { font-family: ui-monospace, monospace; font-size: .9em; background: var(--md-surface-container); padding: 0 4px; border-radius: 4px; }
+.wn-body hr { border: none; border-top: 1px solid var(--md-outline-variant); margin: 12px 0 4px; width: 100%; }
 .sheet { position: fixed; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--md-scrim) 32%, transparent); z-index: 50; padding: 16px; }
 .dialog { background: var(--md-surface-container-high); border-radius: var(--sh-xl); padding: 24px; width: min(360px, 100%); display: grid; gap: 20px; }
 .swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
@@ -473,6 +480,7 @@ ul.files .up { width: 40px; height: 40px; }
           <p class="t-body-l" style="margin:8px 0 0">Один набор инструментов для файлов, видео и документов. Всё работает на этом компьютере: файлы никуда не отправляются, интернет нужен только для скачивания видео и обновлений.</p>
           <div class="acts">
             <button class="btn filled state" id="infoUpd" type="button">Проверить обновления</button>
+            <button class="btn text state" id="infoNews" type="button">Что нового</button>
             <span class="t-body-m" id="infoUpdState"></span>
           </div>
         </div>
@@ -1076,6 +1084,17 @@ ul.files .up { width: 40px; height: 40px; }
   </div>
 </div>
 
+<!-- «Что нового»: один раз после обновления и по кнопке на вкладке «Информация» -->
+<div class="sheet" id="wnSheet" hidden role="dialog" aria-modal="true" aria-labelledby="wnTitle">
+  <div class="dialog wn">
+    <h2 class="t-title-l" id="wnTitle">Что нового</h2>
+    <div class="wn-body" id="wnBody"></div>
+    <div class="row-actions" style="justify-content:flex-end">
+      <button class="btn filled state" id="wnClose">Понятно</button>
+    </div>
+  </div>
+</div>
+
 <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
   <div class="dialog">
     <h2 class="t-title-l" id="sheetTitle">Цвет оформления</h2>
@@ -1381,6 +1400,43 @@ ul.files .up { width: 40px; height: 40px; }
   const key = f => f.name + '|' + f.size + '|' + f.lastModified;
   const extOf = n => (n.split('.').pop() || '').toLowerCase();
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  /* ---------- «Что нового»: раз после обновления (версия запоминается в localStorage) ---------- */
+  function mdLite(md) {                       // заголовки ###, списки, **жирный**, `код`, [ссылки](…)
+    const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    let html = '', list = false;
+    for (const raw of String(md).split('\n')) {
+      const l = raw.trim(), item = l.match(/^[-*] (.*)/);
+      if (!item && list) { html += '</ul>'; list = false; }
+      if (item) { if (!list) { html += '<ul>'; list = true; } html += `<li>${inline(item[1])}</li>`; }
+      else if (/^#{3,4} /.test(l)) html += `<h4>${inline(l.replace(/^#+ /, ''))}</h4>`;
+      else if (l) html += `<p class="t-body-m" style="margin:4px 0">${inline(l)}</p>`;
+    }
+    return html + (list ? '</ul>' : '');
+  }
+  function showNews(d, title) {
+    if (!d.sections.length) return false;
+    $('wnTitle').textContent = title;
+    $('wnBody').innerHTML = d.sections.map((x, i) => (i ? '<hr>' : '') +
+      `<h3>Версия ${esc(x.version)} ${x.date ? `<span class="muted">· ${esc(x.date)}</span>` : ''}</h3>${mdLite(x.md)}`).join('');
+    $('wnSheet').hidden = false; $('wnBody').scrollTop = 0; $('wnClose').focus();
+    return true;
+  }
+  const closeNews = () => { $('wnSheet').hidden = true; };
+  $('wnClose').onclick = closeNews;
+  $('wnSheet').addEventListener('click', e => { if (e.target === $('wnSheet')) closeNews(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !$('wnSheet').hidden) closeNews(); });
+  $('infoNews').onclick = () => fetch('/api/whatsnew').then(r => r.json()).then(d => showNews(d, 'Что нового')).catch(() => {});
+  (function newsAfterUpdate() {
+    let seen = null;
+    try { seen = localStorage.getItem('seenVersion'); } catch (_) { return; }
+    fetch('/api/whatsnew' + (seen ? '?since=' + encodeURIComponent(seen) : '')).then(r => r.json()).then(d => {
+      if (!d.version || d.version === seen || d.version === '0.0.0') return;
+      try { localStorage.setItem('seenVersion', d.version); } catch (_) { /* без памяти покажем ещё раз */ }
+      showNews(d, `Universal обновился до ${d.version}`);
+    }).catch(() => {});
+  })();
   const IMG_RE = /\.(jpe?g|png|webp|tiff?|bmp)$/i;
 
   function accepts(f) {

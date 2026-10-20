@@ -579,6 +579,38 @@
   $('updCheck').onclick = () => { $('upd').hidden = true; checkUpdate(true); };
   if (typeof APP_VERSION === 'string' && APP_VERSION) setTimeout(() => checkUpdate(false), 2000);
 
+  /* ===================== «Что нового» после обновления ===================== */
+  function mdLite(md) {                       // заголовки ###, списки, **жирный**, `код`
+    const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '$1');
+    let html = '', list = false;
+    for (const raw of String(md).split('\n')) {
+      const l = raw.trim(), item = l.match(/^[-*] (.*)/);
+      if (!item && list) { html += '</ul>'; list = false; }
+      if (item) { if (!list) { html += '<ul>'; list = true; } html += `<li>${inline(item[1])}</li>`; }
+      else if (/^#{3,4} /.test(l)) html += `<h4>${inline(l.replace(/^#+ /, ''))}</h4>`;
+      else if (l) html += `<p>${inline(l)}</p>`;
+    }
+    return html + (list ? '</ul>' : '');
+  }
+  function showNews(items, title) {
+    const dlg = $('wn');
+    if (!items.length || !dlg || !dlg.showModal) return;
+    $('wnTitle').textContent = title;
+    $('wnBody').innerHTML = items.map(x => `<h3>Версия ${esc(x.version)}${x.date ? ' · ' + esc(x.date) : ''}</h3>${mdLite(x.md)}`).join('<hr>');
+    $('wnClose').onclick = () => dlg.close();
+    dlg.showModal(); $('wnBody').scrollTop = 0;
+  }
+  if (typeof APP_CHANGES !== 'undefined' && typeof APP_VERSION === 'string' && APP_VERSION) {
+    const seen = store.get('seenVersion');
+    if (seen !== APP_VERSION) {
+      store.set('seenVersion', APP_VERSION);
+      // первый запуск после установки не считаем обновлением, а старые версии оставляли u.updChecked
+      if (seen || store.get('updChecked')) setTimeout(() => showNews(APP_CHANGES.filter(x => !seen || isNewer(x.version, seen)), `Universal обновился до ${APP_VERSION}`), 600);
+    }
+  }
+
+
   /* ===================== «Поделиться → Universal» (Android) ===================== */
   if (platform === 'android') {
     const ShareIn = C.registerPlugin('ShareIn');

@@ -35,6 +35,7 @@ from urllib.parse import quote
 from flask import Flask, Response, jsonify, render_template, request, send_file, abort
 
 import about
+import changelog
 import converters as conv
 import downloader
 import docedit
@@ -1198,6 +1199,13 @@ def ocr_run():
 
 
 # ---------- Информация ----------
+
+@app.route("/api/whatsnew")
+def whatsnew():
+    """Изменения новее версии, которую окно уже показывало (?since=), для «Что нового»."""
+    seen = (request.args.get("since") or "")[:20]
+    return jsonify({"version": updater.VERSION, "sections": changelog.since(seen, updater.VERSION)})
+
 
 @app.route("/api/about")
 def about_info():
