@@ -162,16 +162,58 @@ def _ts(t: float) -> str:
     return f"{h:02}:{m:02}:{s:02},{ms:03}"
 
 
+SR = 16000   # Whisper слушает 16 кГц моно
+
+
+def load_audio(src: Path):
+    """Звук -> numpy float32, 16 кГц, моно. Сами, а не через faster-whisper: его чтение через PyAV
+    ломается на новых версиях PyAV (у av.open больше нет metadata_errors). ffmpeg понимает всё,
+    без него — PyAV напрямую."""
+    import shutil
+    import subprocess
+    import numpy as np
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        r = subprocess.run([ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-i", str(src), "-vn",
+                            "-f", "f32le", "-ac", "1", "-ar", str(SR), "pipe:1"], capture_output=True, timeout=3600)
+        if r.returncode == 0 and r.stdout:
+            return np.frombuffer(r.stdout, np.float32).copy()
+        err = r.stderr.decode("utf-8", "replace").strip().splitlines()
+        if not err or "does not contain any stream" in err[-1] or "matches no streams" in err[-1]:
+            raise SttError("в файле нет звука")
+    try:
+        import av
+        chunks = []
+        with av.open(str(src)) as box:
+            stream = next((s for s in box.streams if s.type == "audio"), None)
+            if stream is None:
+                raise SttError("в файле нет звука")
+            rs = av.AudioResampler(format="flt", layout="mono", rate=SR)
+            for frame in box.decode(stream):
+                for out in rs.resample(frame) or []:
+                    chunks.append(out.to_ndarray().reshape(-1))
+            for out in rs.resample(None) or []:
+                chunks.append(out.to_ndarray().reshape(-1))
+        return np.concatenate(chunks).astype(np.float32) if chunks else np.zeros(0, np.float32)
+    except SttError:
+        raise
+    except Exception as e:
+        raise SttError(f"не получилось прочитать звук ({e.__class__.__name__}: {str(e)[:120]})")
+
+
 def transcribe(src: Path, key: str, lang: str, task: Task | None = None, base: float = 0.0, span: float = 1.0):
     """-> (сегменты [(начало, конец, текст)], язык, длительность)"""
+    audio = load_audio(src)
+    if audio.size < SR // 10:
+        raise SttError("в файле нет звука или он короче 0,1 секунды")
     model = _model(key)
     try:
-        segments, info = model.transcribe(str(src), language=lang or None, beam_size=5,
+        segments, info = model.transcribe(audio, language=lang or None, beam_size=5,
                                           condition_on_previous_text=False)
     except Exception as e:
-        raise SttError(f"не получилось прочитать звук ({e.__class__.__name__})")
+        raise SttError(f"распознавание не удалось ({e.__class__.__name__}: {str(e)[:120]})")
     out = []
-    dur = info.duration or 0
+    dur = info.duration or audio.size / SR
     for seg in segments:            # генератор: распознаётся по мере перебора
         if task:
             task.check_cancel()
