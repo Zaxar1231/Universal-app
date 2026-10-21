@@ -1,0 +1,214 @@
+"""
+Голос в текст: голосовые из Telegram и WhatsApp (OGG/OGA/Opus), MP3, M4A, WAV и звук из видео
+распознаются прямо на компьютере моделью Whisper (faster-whisper, CTranslate2, на процессоре).
+
+Модель скачивается один раз при первом распознавании в <UNIVERSAL_HOME>/whisper/<размер>:
+сначала с huggingface.co, при ошибке с зеркала hf-mirror.com. Дальше всё работает без интернета.
+Результат: текст в интерфейсе, .txt и, по желанию, субтитры .srt с таймкодами.
+"""
+from __future__ import annotations
+
+import json
+import os
+import threading
+import time
+import urllib.request
+from pathlib import Path
+
+import engines
+from tasks import Task
+
+MODELS = {
+    # ключ: (репозиторий, примерный размер, подпись)
+    "fast": ("Systran/faster-whisper-base", 145, "Быстрая"),
+    "normal": ("Systran/faster-whisper-small", 485, "Обычная"),
+    "best": ("mobiuslabsgmbh/faster-whisper-large-v3-turbo", 1620, "Точная"),
+}
+ENDPOINTS = ("https://huggingface.co", "https://hf-mirror.com")
+LANGS = {"": "Определить сам", "ru": "Русский", "uk": "Украинский", "be": "Белорусский", "en": "Английский",
+         "kk": "Казахский", "uz": "Узбекский", "de": "Немецкий", "fr": "Французский", "es": "Испанский",
+         "it": "Итальянский", "pl": "Польский", "tr": "Турецкий", "zh": "Китайский", "ja": "Японский"}
+INPUT_EXT = ("ogg", "oga", "opus", "mp3", "m4a", "aac", "wav", "flac", "wma", "amr", "weba", "webm", "mp4",
+             "mkv", "mov", "avi", "3gp", "m4b", "aiff", "aif", "caf")
+
+
+class SttError(Exception):
+    pass
+
+
+def available() -> bool:
+    try:
+        import faster_whisper  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def model_dir(key: str) -> Path:
+    return engines.root() / "whisper" / key
+
+
+def downloaded(key: str) -> bool:
+    d = model_dir(key)
+    return (d / "model.bin").is_file() and (d / "config.json").is_file()
+
+
+def caps() -> dict:
+    return {"available": available(), "langs": LANGS,
+            "models": [{"key": k, "label": lbl, "mb": mb, "downloaded": downloaded(k)} for k, (_, mb, lbl) in MODELS.items()]}
+
+
+def read_opts(form) -> dict:
+    o = {"model": form.get("model", "normal"), "lang": form.get("lang", ""), "srt": form.get("srt") == "1"}
+    if o["model"] not in MODELS:
+        raise SttError("Неизвестная модель")
+    if o["lang"] not in LANGS:
+        o["lang"] = ""
+    if not available():
+        raise SttError("Не установлен faster-whisper: pip install faster-whisper")
+    return o
+
+
+# --------------------------------------------------------------------- скачать модель
+
+def _get(url: str, timeout: float = 30):
+    req = urllib.request.Request(url, headers={"User-Agent": "Universal"})
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
+def _files(endpoint: str, repo: str) -> list[tuple[str, int]]:
+    with _get(f"{endpoint}/api/models/{repo}?blobs=true") as r:
+        info = json.load(r)
+    out = []
+    for s in info.get("siblings", []):
+        name = s.get("rfilename", "")
+        if name and not name.startswith(".") and not name.lower().endswith((".md", ".gitattributes")):
+            out.append((name, int(s.get("size") or 0)))
+    if not any(n == "model.bin" for n, _ in out):
+        raise SttError("в репозитории модели нет model.bin")
+    return out
+
+
+def ensure_model(key: str, task: Task | None = None) -> Path:
+    """Скачивает модель, если её ещё нет. Прогресс задачи — доля скачанных байт."""
+    d = model_dir(key)
+    if downloaded(key):
+        return d
+    repo, mb, label = MODELS[key]
+    errors = []
+    for ep in ENDPOINTS:
+        try:
+            files = _files(ep, repo)
+            total = sum(s for _, s in files) or mb * 1024 * 1024
+            tmp = d.with_name(d.name + ".part")
+            tmp.mkdir(parents=True, exist_ok=True)
+            got = 0
+            for name, size in files:
+                dst = tmp / name
+                if dst.is_file() and size and dst.stat().st_size == size:
+                    got += size
+                    continue
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                with _get(f"{ep}/{repo}/resolve/main/{name}", 60) as r, open(dst, "wb") as f:
+                    last = 0.0
+                    while True:
+                        if task:
+                            task.check_cancel()
+                        chunk = r.read(1 << 20)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        got += len(chunk)
+                        if task and time.monotonic() - last > 0.3:
+                            last = time.monotonic()
+                            task.update(min(0.99, got / total) * 0.3,
+                                        f"Скачиваю модель «{label}» (один раз): {got >> 20} из {total >> 20} МБ")
+            if d.exists():
+                import shutil
+                shutil.rmtree(d, ignore_errors=True)
+            tmp.rename(d)
+            return d
+        except SttError:
+            raise
+        except Exception as e:  # сеть, 403, обрыв — пробуем зеркало
+            if task and task.cancel_event.is_set():
+                raise
+            errors.append(f"{ep.split('//')[1]}: {e}")
+    raise SttError("Не получилось скачать модель распознавания (" + "; ".join(errors)[:300] +
+                   "). Нужен интернет один раз, дальше работает без него")
+
+
+# --------------------------------------------------------------------- распознать
+
+_models: dict[str, object] = {}
+_lock = threading.Lock()
+
+
+def _model(key: str):
+    with _lock:
+        if key not in _models:
+            from faster_whisper import WhisperModel
+            _models.clear()      # одна модель в памяти: большая занимает больше гигабайта
+            _models[key] = WhisperModel(str(model_dir(key)), device="cpu", compute_type="int8",
+                                        cpu_threads=max(1, (os.cpu_count() or 2) - 1))
+        return _models[key]
+
+
+def _ts(t: float) -> str:
+    ms = int(round(t * 1000))
+    h, ms = divmod(ms, 3600000)
+    m, ms = divmod(ms, 60000)
+    s, ms = divmod(ms, 1000)
+    return f"{h:02}:{m:02}:{s:02},{ms:03}"
+
+
+def transcribe(src: Path, key: str, lang: str, task: Task | None = None, base: float = 0.0, span: float = 1.0):
+    """-> (сегменты [(начало, конец, текст)], язык, длительность)"""
+    model = _model(key)
+    try:
+        segments, info = model.transcribe(str(src), language=lang or None, beam_size=5,
+                                          condition_on_previous_text=False)
+    except Exception as e:
+        raise SttError(f"не получилось прочитать звук ({e.__class__.__name__})")
+    out = []
+    dur = info.duration or 0
+    for seg in segments:            # генератор: распознаётся по мере перебора
+        if task:
+            task.check_cancel()
+            if dur:
+                task.update(base + span * min(1.0, seg.end / dur))
+        text = seg.text.strip()
+        if text:
+            out.append((seg.start, seg.end, text))
+    return out, info.language, dur
+
+
+def run_stt_task(task: Task, items: list[tuple[Path, str]], o: dict) -> None:
+    """items: (сохранённый файл, уникальное имя без расширения) из app.save_uploads."""
+    out_dir, n = task.out_dir, len(items)
+    task.total = n
+    task.update(0, "Готовлю модель распознавания…")
+    ensure_model(o["model"], task)
+    task.update(0.3, "Загружаю модель в память…")
+    _model(o["model"])
+    results = []
+    for i, (src, stem) in enumerate(items):
+        task.check_cancel()
+        name = stem + src.suffix
+        base, span = 0.3 + 0.7 * i / n, 0.7 / n
+        task.update(base, f"Распознаю {i + 1} из {n}: {name}")
+        try:
+            segs, lang, dur = transcribe(src, o["model"], o["lang"], task, base, span)
+        except SttError as e:
+            task.failed.append({"name": name, "error": str(e)})
+            continue
+        text = " ".join(t for _, _, t in segs)
+        (out_dir / f"{stem}.txt").write_text(text + "\n", encoding="utf-8")
+        if o["srt"]:
+            srt = "".join(f"{k}\n{_ts(a)} --> {_ts(b)}\n{t}\n\n" for k, (a, b, t) in enumerate(segs, 1))
+            (out_dir / f"{stem}.srt").write_text(srt, encoding="utf-8")
+        results.append({"name": name, "text": text, "language": LANGS.get(lang, lang), "duration": round(dur, 1)})
+        task.done += 1
+    task.result = {"transcripts": results[:200]}
+    if not task.done and task.failed:
+        raise SttError(task.failed[0]["error"])

@@ -1,7 +1,7 @@
 {
   "name": "universal-mobile",
   "private": true,
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Universal для Android и iOS (Capacitor)",
   "license": "AGPL-3.0-only",
   "scripts": {

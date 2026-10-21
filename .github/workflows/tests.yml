@@ -7,18 +7,26 @@ on:
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    env:
+      STT_REAL: "1"          # настоящее распознавание голосового моделью Whisper
+      UNIVERSAL_HOME: ${{ github.workspace }}/../universal-home
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+      - name: Модель Whisper из кэша
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/../universal-home/whisper
+          key: whisper-base-v1
       - name: Программы
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg imagemagick pandoc poppler-utils tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg imagemagick pandoc poppler-utils tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus espeak-ng
       - name: Зависимости
         run: pip install -r requirements.txt pytest
       - name: Тесты
-        run: python -m pytest -q
+        run: python -m pytest -q -rs -k "not test_stt_real" && python -m pytest -q -s -k test_stt_real
 
   windows:
     # тесты на Windows с движками, которые ставит само приложение (проверяет и ссылки на них)

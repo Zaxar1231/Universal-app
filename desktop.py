@@ -95,6 +95,12 @@ def smoke(url: str) -> int:
             checks["dl_worker"] = os.path.exists(ev) and '"finished"' in open(ev, encoding="utf-8").read()
         # OCRmyPDF попал в сборку и запускается тем же exe (Tesseract может быть ещё не поставлен).
         # В пакетах Linux он необязательная системная зависимость: проверяем, только если стоит
+        # распознавание речи: faster-whisper с CTranslate2 и PyAV попали в сборку и грузятся
+        if getattr(sys, "frozen", False):
+            import ctranslate2  # noqa: F401
+            import faster_whisper  # noqa: F401
+            import faster_whisper.audio  # noqa: F401  (PyAV)
+            checks["stt"] = True
         import ocr
         if getattr(sys, "frozen", False) or ocr.version():
             r = subprocess.run(ocr.command(["--version"]), timeout=180, capture_output=True, text=True, encoding="utf-8", errors="replace")

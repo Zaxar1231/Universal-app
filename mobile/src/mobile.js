@@ -611,10 +611,89 @@
   }
 
 
+
+  /* ===================== голос в текст через компьютер ===================== */
+  // файл уходит на сервер Universal (/api/stt) нативным HTTP как multipart (base64 внутри CapacitorHttp)
+  const b64OfFile = f => new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = () => rej(new Error('файл не прочитался'));
+    r.readAsDataURL(f);
+  });
+  let sttBusy = false;
+  async function sttRun(name, b64, mime, blob) {
+    if (sttBusy) { snack('Уже распознаю, подожди'); return; }
+    const srv = baseUrl(store.get('serverUrl'));
+    if (!srv) { snack('Сначала подключи компьютер на вкладке «Сервер»', 'Открыть', () => go('pageServer')); return; }
+    sttBusy = true;
+    const bar = $('sttJob').querySelector('.bar2'), msg = t => { $('sttMsg').textContent = t; };
+    $('sttJob').hidden = false; $('sttOut').hidden = true; bar.classList.add('ind'); bar.firstChild.style.width = '';
+    msg(`Отправляю «${name}» на ${host(srv)}…`);
+    const auth = serverAuth(), model = qs('input[name=sttm]:checked').value, lang = $('sttLang').value;
+    try {
+      let r;
+      if (native) {
+        const resp = await Http.request({ method: 'POST', url: srv + 'api/stt', headers: auth, dataType: 'formData', connectTimeout: 15000, readTimeout: 300000,
+          data: [{ key: 'model', value: model, type: 'string' }, { key: 'lang', value: lang, type: 'string' }, { key: 'srt', value: '0', type: 'string' },
+                 { key: 'files', value: b64, type: 'base64File', fileName: name, contentType: mime || 'application/octet-stream' }] });
+        let d = resp.data; if (typeof d === 'string') { try { d = JSON.parse(d); } catch (_) { /* не JSON */ } }
+        r = { status: resp.status, data: d };
+      } else {
+        const fd = new FormData(); fd.append('model', model); fd.append('lang', lang); fd.append('files', blob, name);
+        const resp = await fetch(srv + 'api/stt', { method: 'POST', headers: auth, body: fd });
+        r = { status: resp.status, data: await resp.json().catch(() => null) };
+      }
+      if (r.status === 401) throw new Error('компьютер не пустил: неверный пароль (вкладка «Сервер»)');
+      if (r.status === 404) throw new Error('на компьютере старая версия Universal: обнови её до 2.3 или новее');
+      if (r.status >= 400 || !r.data || !r.data.task) throw new Error((r.data && r.data.error) || `компьютер ответил ${r.status}`);
+      let t = r.data;
+      while (!['done', 'error', 'cancelled'].includes(t.status)) {
+        await sleep(1000);
+        const q = await http('GET', `${srv}api/task/${t.task}`, { headers: auth });
+        if (q.status !== 200 || !q.data) throw new Error((q.data && q.data.error) || `компьютер ответил ${q.status}`);
+        t = q.data;
+        if (t.progress != null) { bar.classList.remove('ind'); bar.firstChild.style.width = Math.round(t.progress * 100) + '%'; }
+        msg('Компьютер: ' + (t.message || '…'));
+      }
+      if (t.status === 'error') throw new Error(t.error || 'ошибка на компьютере');
+      const tr = t.result && t.result.transcripts && t.result.transcripts[0];
+      if (!tr) throw new Error(((t.failed || [])[0] || {}).error || 'не получилось распознать');
+      $('sttText').textContent = tr.text || 'Речи не найдено';
+      $('sttOut').hidden = false; $('sttJob').hidden = true;
+      $('sttCopy').onclick = () => Clipboard.write({ string: tr.text }).then(() => snack('Текст скопирован')).catch(() => navigator.clipboard.writeText(tr.text));
+      $('sttShare').onclick = () => (native ? Share.share({ text: tr.text }) : navigator.share ? navigator.share({ text: tr.text }) : null);
+    } catch (e) {
+      msg('Не получилось: ' + (e.message || e)); bar.hidden = false; bar.classList.remove('ind');
+    } finally {
+      sttBusy = false;
+    }
+  }
+  $('sttPick').onchange = async () => {
+    const f = $('sttPick').files[0]; $('sttPick').value = '';
+    if (!f) return;
+    if (f.size > 200 * 1024 * 1024) { snack('Файл больше 200 МБ: открой его на компьютере'); return; }
+    try { await sttRun(f.name, native ? await b64OfFile(f) : '', f.type, f); } catch (e) { snack(e.message || String(e)); }
+  };
+  (() => {
+    let saved = {};
+    try { saved = JSON.parse(store.get('stt') || '{}'); } catch (_) { /* битое */ }
+    if (saved.lang != null) $('sttLang').value = saved.lang;
+    if (saved.model && $('sttm' + ({ fast: 1, normal: 2, best: 3 }[saved.model] || 2))) $('sttm' + { fast: 1, normal: 2, best: 3 }[saved.model]).checked = true;
+    $('stt').addEventListener('change', e => { if (e.target.id !== 'sttPick') store.set('stt', JSON.stringify({ lang: $('sttLang').value, model: qs('input[name=sttm]:checked').value })); });
+    if (platform === 'android') $('sttShareHint').textContent = ' Можно и так: в Telegram зажми голосовое → «Поделиться» → Universal.';
+  })();
+
   /* ===================== «Поделиться → Universal» (Android) ===================== */
   if (platform === 'android') {
     const ShareIn = C.registerPlugin('ShareIn');
-    ShareIn.addListener('shared', ({ text }) => {
+    ShareIn.addListener('shared', async ({ text, file, name, mime }) => {
+      if (file) {                    // голосовое или видео из Telegram/WhatsApp: сразу в текст
+        go('pageTools'); $('stt').scrollIntoView({ block: 'start' });
+        try {
+          const { data } = await Filesystem.readFile({ path: file });
+          await sttRun(name || 'voice.ogg', data, mime);
+        } catch (e) { snack('Не открылся файл: ' + (e.message || e)); }
+        return;
+      }
       if (applyConnect(text)) return;
       go('pageDl');
       if (addUrls(text)) snack('Ссылка добавлена', 'Скачать', start);
