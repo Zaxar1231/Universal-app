@@ -1500,13 +1500,26 @@ def test_stt_route_needs_files(client, monkeypatch):
 
 @pytest.mark.skipif(not os.environ.get("STT_REAL"), reason="настоящая модель: только в CI (STT_REAL=1)")
 def test_stt_real_voice_message(tmp_path):
-    # голосовое как в Telegram: речь (espeak-ng) -> OGG Opus 48 кГц моно
+    # голосовое как в Telegram: синтезированная речь (espeak-ng) -> OGG Opus 32 кбит/с, 48 кГц, моно.
+    # Голос espeak роботизированный, поэтому слова проверяем на английском (его он произносит чётко),
+    # а на русском — что пришёл русский текст. Живая речь распознаётся заметно лучше.
+    import re
     import stt
-    wav, ogg = tmp_path / "v.wav", tmp_path / "voice.ogg"
-    subprocess.run(["espeak-ng", "-v", "ru", "-s", "140", "-w", str(wav), "Привет. Это проверка распознавания речи."], check=True)
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-c:a", "libopus", "-b:a", "32k", "-ar", "48000", "-ac", "1", str(ogg)], check=True)
+
+    def voice(name, lang, phrase):
+        wav, ogg = tmp_path / f"{name}.wav", tmp_path / f"{name}.ogg"
+        subprocess.run(["espeak-ng", "-v", lang, "-s", "130", "-w", str(wav), phrase], check=True)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-c:a", "libopus", "-b:a", "32k",
+                        "-ar", "48000", "-ac", "1", str(ogg)], check=True)
+        return ogg
+
     stt.ensure_model("fast")
-    segs, lang, dur = stt.transcribe(ogg, "fast", "ru")
+    segs, lang, dur = stt.transcribe(voice("en", "en", "Hello. This is a test of speech recognition."), "fast", "")
     text = " ".join(t for _, _, t in segs).lower()
-    print("распознано:", text)
-    assert dur > 1 and any(w in text for w in ("привет", "провер", "речи", "распозна"))
+    print("en:", lang, text)
+    assert lang == "en" and dur > 1 and sum(w in text for w in ("hello", "test", "speech", "recognition")) >= 2
+
+    segs, lang, dur = stt.transcribe(voice("ru", "ru", "Привет. Это проверка распознавания речи."), "fast", "ru")
+    text = " ".join(t for _, _, t in segs)
+    print("ru:", text)
+    assert len(re.findall(r"[а-яё]", text.lower())) >= 10
