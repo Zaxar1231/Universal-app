@@ -35,6 +35,7 @@ from urllib.parse import quote
 from flask import Flask, Response, jsonify, render_template, request, send_file, abort
 
 import about
+import stt
 import changelog
 import converters as conv
 import downloader
@@ -652,7 +653,7 @@ def formats():
                 "platform": sys.platform,
                 "deno": bool(shutil.which("deno")),
                 "ocr": ocr.available(), "ocrmypdf": bool(ocr.version()), "tesseract": bool(ocr.tesseract()),
-                "ocr_info": ocr.status(),
+                "ocr_info": ocr.status(), "stt": stt.caps(),
                 "desktop": bool(os.environ.get("UNIVERSAL_DESKTOP")), "version": updater.VERSION})
     cats = {}
     for name, table in conv.CATEGORIES.items():
@@ -1210,6 +1211,24 @@ def ocr_run():
     return jsonify(task.to_dict())
 
 
+# ---------- Голос в текст (faster-whisper) ----------
+
+@app.route("/api/stt", methods=["POST"])
+def stt_run():
+    try:
+        opts = stt.read_opts(request.form)
+    except stt.SttError as e:
+        return jsonify({"error": str(e)}), 400
+    files = [f for f in request.files.getlist("files") if f.filename]
+    if not files:
+        return jsonify({"error": "Файлы не выбраны"}), 400
+    job_id, job_dir, archive = new_job(request.form.get("archive_name", "") or "text")
+    items = save_uploads(files, job_dir / "in")
+    task = Task(job_id, "stt", job_dir, archive)
+    TASKS.submit(task, lambda t: stt.run_stt_task(t, items, opts))
+    return jsonify(task.to_dict())
+
+
 # ---------- Информация ----------
 
 @app.route("/api/whatsnew")
@@ -1309,7 +1328,7 @@ def engines_status():
     eng.update({"poppler": all(poppler_ok().values()), "ytdlp": downloader.available(),
                 "ytdlp_version": downloader.version(), "qrcode": qrtools.available(),
                 "ocr": ocr.available(), "ocrmypdf": bool(ocr.version()), "tesseract": bool(ocr.tesseract()),
-                "ocr_info": ocr.status(),
+                "ocr_info": ocr.status(), "stt": stt.caps(),
                 "can_install": engine_store.can_install(), "catalog": engine_store.status()})
     return jsonify(eng)
 

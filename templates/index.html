@@ -312,6 +312,10 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
 @media (max-width: 760px) { .pdx-main { grid-template-columns: minmax(0, 1fr); } .pdx-side { position: static; max-height: 220px; }
   .pdx-thumbs { grid-auto-flow: column; justify-content: start; } .pdx-save { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 960px) { .pe { grid-template-columns: minmax(0, 1fr); } .pe-side { position: static; max-height: none; } }
+.stt-out { display: grid; gap: 12px; margin-top: 12px; }
+.stt-item { padding: 12px 16px; border-radius: 16px; background: var(--md-surface-container); display: grid; gap: 6px; }
+.stt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; } .stt-head .btn { margin-left: auto; height: 32px; }
+.stt-text { margin: 0; white-space: pre-wrap; line-height: 1.5; user-select: text; max-height: 360px; overflow: auto; }
 .hashes { overflow-x: auto; display: grid; gap: 8px; }
 .hashes table { border-collapse: collapse; font-size: .8125rem; }
 .hashes th, .hashes td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--md-outline-variant); vertical-align: top; }
@@ -427,6 +431,7 @@ ul.files .up { width: 40px; height: 40px; }
       'photo': 'M480-260q75 0 127.500-52.500T660-440q0-75-52.500-127.500T480-620q-75 0-127.500 52.500T300-440q0 75 52.500 127.500T480-260Zm0-80q-42 0-71-29t-29-71q0-42 29-71t71-29q42 0 71 29t29 71q0 42-29 71t-71 29ZM160-120q-33 0-56.500-23.500T80-200v-480q0-33 23.500-56.500T160-760h126l74-80h240l74 80h126q33 0 56.500 23.500T880-680v480q0 33-23.500 56.500T800-120H160Z',
       'topdf': 'M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.500-23.500T160-160v-640q0-33 23.500-56.500T240-880h320l240 240v480q0 33-23.500 56.500T720-80H240Zm280-520h200L520-800v200Z',
       'pdft': 'M120-120v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80ZM240-280q-33 0-56.500-23.500T160-360v-400q0-33 23.500-56.500T240-840h480q33 0 56.500 23.500T800-760v400q0 33-23.500 56.500T720-280H240Zm0-80h480v-400H240v400Zm80-80h320v-80H320v80Zm0-160h320v-80H320v80Z',
+      'stt': 'M480-400q-50 0-85-35t-35-85v-240q0-50 35-85t85-35q50 0 85 35t35 85v240q0 50-35 85t-85 35Zm0-240Zm-40 520v-123q-104-14-172-93t-68-184h80q0 83 58.500 141.500T480-320q83 0 141.500-58.500T680-520h80q0 105-68 184t-172 93v123h-80Zm40-360q17 0 28.500-11.500T520-520v-240q0-17-11.500-28.500T480-800q-17 0-28.500 11.500T440-760v240q0 17 11.500 28.500T480-480Z',
       'ocr': 'M80-680v-200h200v80H160v120H80Zm0 600v-200h80v120h120v80H80Zm600 0v-80h120v-120h80v200H680Zm120-600v-120H680v-80h200v200h-80ZM240-320h480v-80H240v80Zm0-120h480v-80H240v80Zm0-120h320v-80H240v80Z',
       'photoedit': 'M440-120v-240h80v80h320v80H520v80h-80Zm-320-80v-80h240v80H120Zm160-160v-80H120v-80h160v-80h80v240h-80Zm160-80v-80h400v80H440Zm160-160v-240h80v80h160v80H680v80h-80Zm-480-80v-80h400v80H120Z',
       'pdfedit': 'M160-120v-170l527-526q12-12 27-18t30-6q16 0 30.500 6t25.500 18l56 57q12 11 17.500 25.500T879-704q0 15-5.500 30T856-647L330-120H160Zm80-80h56l393-392-28-29-29-28-392 393v56Z',
@@ -443,7 +448,7 @@ ul.files .up { width: 40px; height: 40px; }
       <span class="t-label-m">{{ label }}</span></label>
     {% endfor %}
     <span class="sep" role="separator"></span>
-    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF'),('pdft','Правка PDF'),('pdfedit','Редактор PDF'),('ocr','Распознать текст')] %}
+    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF'),('pdft','Правка PDF'),('pdfedit','Редактор PDF'),('ocr','Распознать текст'),('stt','Голос в текст')] %}
     <label class="nav"><input type="radio" name="mode" value="{{ key }}">
       <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
       <span class="t-label-m">{{ label }}</span></label>
@@ -833,6 +838,19 @@ ul.files .up { width: 40px; height: 40px; }
             </div>
             <div class="hint" id="fPreview"></div>
           </div>
+        </div>
+
+        <!-- голос в текст (faster-whisper) -->
+        <div id="sttBox" class="sect" hidden>
+          <div class="field">
+            <span class="lbl t-label-l">Модель</span>
+            <div class="chips" id="sttModels"></div>
+            <p class="hint" id="sttModelHint"></p>
+          </div>
+          <label class="tf"><span>Язык речи</span><select id="sttLang"></select></label>
+          <label class="sw"><span class="txt"><span class="t-body-m">Ещё и субтитры .srt</span><span class="hint">Текст с таймкодами: подходит для видео, плееров и YouTube.</span></span>
+            <input type="checkbox" id="sttSrt"><span class="track"></span></label>
+          <p class="hint">Всё распознаётся на этом компьютере, файлы никуда не отправляются. Интернет нужен один раз, чтобы скачать модель.</p>
         </div>
 
         <!-- распознавание текста (OCRmyPDF) -->
@@ -1399,13 +1417,13 @@ ul.files .up { width: 40px; height: 40px; }
     image: { title: 'Картинки', kind: 'uni' }, audio: { title: 'Аудио', kind: 'uni' },
     video: { title: 'Видео', kind: 'uni' }, doc: { title: 'Документы', kind: 'uni' },
     pdf: { title: 'PDF в картинки', kind: 'pdf' }, photo: { title: 'Фото в A4', kind: 'photo' }, topdf: { title: 'Фото в PDF', kind: 'topdf' },
-    pdft: { title: 'PDF-инструменты', kind: 'pdft' }, ocr: { title: 'Распознать текст', kind: 'ocr' }, info: { title: 'Информация', kind: 'info' },
+    pdft: { title: 'PDF-инструменты', kind: 'pdft' }, ocr: { title: 'Распознать текст', kind: 'ocr' }, stt: { title: 'Голос в текст', kind: 'stt' }, info: { title: 'Информация', kind: 'info' },
     photoedit: { title: 'Фоторедактор', kind: 'photoedit' }, docedit: { title: 'Редактор документов', kind: 'docedit' },
     pdfedit: { title: 'Редактор PDF', kind: 'pdfedit' },
     files: { title: 'Архивы и файлы', kind: 'files' },
     edit: { title: 'Редактор видео и аудио', kind: 'edit' }, dl: { title: 'Скачать видео', kind: 'dl' }, qr: { title: 'QR-коды', kind: 'qr' },
   };
-  const isNew = () => ['edit', 'dl', 'qr', 'pdft', 'ocr', 'info', 'photoedit', 'docedit', 'pdfedit', 'files'].includes(MODES[mode()].kind);
+  const isNew = () => ['edit', 'dl', 'qr', 'pdft', 'ocr', 'stt', 'info', 'photoedit', 'docedit', 'pdfedit', 'files'].includes(MODES[mode()].kind);
   const FULL = ['info', 'photoedit', 'docedit', 'pdfedit'];          // режимы на всю ширину, без списка файлов
   const fOp = () => qs('input[name=fop]:checked').value;
   const pOp = () => qs('input[name=pop]:checked').value;
@@ -1454,11 +1472,13 @@ ul.files .up { width: 40px; height: 40px; }
   // сервер сам помнит, какую версию уже показывал (localStorage окна мог теряться при смене порта)
   fetch('/api/whatsnew?auto=1').then(r => r.json()).then(d => showNews(d, `Universal обновился до ${d.version}`)).catch(() => {});
   const IMG_RE = /\.(jpe?g|png|webp|tiff?|bmp)$/i;
+  const STT_RE = /\.(ogg|oga|opus|mp3|m4a|aac|wav|flac|wma|amr|weba|webm|mp4|mkv|mov|avi|3gp|m4b|aiff?|caf)$/i;
 
   function accepts(f) {
     const m = mode();
     if (m === 'pdf' || m === 'pdft') return /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
     if (m === 'ocr') return /\.(pdf|png|jpe?g|tiff?|bmp|webp|gif|jp2)$/i.test(f.name);
+    if (m === 'stt') return STT_RE.test(f.name) || /^(audio|video)\//.test(f.type);
     if (m === 'files') return fOp() !== 'extract' || /\.(zip|7z|tar|tgz|tbz2?|txz|gz|bz2|xz|rar)$/i.test(f.name);
     if (isPhotoish()) return IMG_RE.test(f.name) || f.type.startsWith('image/');
     if (m === 'qr') return qrKind() === 'doc' ? /\.(docx|md|markdown|html?|odt|rtf|doc|epub)$/i.test(f.name) : /\.(txt|csv|docx)$/i.test(f.name);
@@ -1515,6 +1535,7 @@ ul.files .up { width: 40px; height: 40px; }
     if (m === 'pdft') { ok = pOp() === 'merge' ? files.length > 1 : files.length > 0; label = { merge: 'Склеить', split: 'Разделить', extract: 'Вытащить', rotate: 'Повернуть', compress: 'Сжать', protect: 'Защитить', unlock: 'Снять пароль' }[pOp()]; }
     if (m === 'dl') { ok = /https?:\/\//i.test($('urls').value); label = 'Скачать'; }
     if (m === 'ocr') { ok = files.length > 0 && ocrLangs().length > 0; label = 'Распознать'; }
+    if (m === 'stt') { ok = files.length > 0 && !!(caps && caps.engines.stt && caps.engines.stt.available); label = 'Распознать речь'; }
     if (m === 'files') {
       label = { zip: 'Упаковать в ZIP', '7z': 'Упаковать в 7z', extract: 'Распаковать', hash: 'Посчитать суммы', rename: 'Переименовать' }[fOp()];
       if (fOp() === 'hash') ok = ok && qsa('input[name=falg]:checked').length > 0;
@@ -1632,7 +1653,7 @@ ul.files .up { width: 40px; height: 40px; }
   function syncSettings() {
     const m = mode(), k = MODES[m].kind, uni = k === 'uni', topdf = k === 'topdf', photo = k === 'photo' || topdf, pdf = k === 'pdf';
     $('classicBox').hidden = isNew();
-    $('editBox').hidden = k !== 'edit'; $('pdftBox').hidden = k !== 'pdft'; if (k === 'pdft') syncPdft(); $('ocrBox').hidden = k !== 'ocr'; if (k === 'ocr') syncOcr(); $('filesBox').hidden = k !== 'files'; if (k === 'files') syncFiles(); $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
+    $('editBox').hidden = k !== 'edit'; $('pdftBox').hidden = k !== 'pdft'; if (k === 'pdft') syncPdft(); $('ocrBox').hidden = k !== 'ocr'; if (k === 'ocr') syncOcr(); $('sttBox').hidden = k !== 'stt'; if (k === 'stt') syncStt(); $('filesBox').hidden = k !== 'files'; if (k === 'files') syncFiles(); $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
     if (isNew()) { if (k === 'edit') syncEdit(); if (k === 'dl') syncDl(); if (k === 'qr') syncQr(); return; }
     $('uniField').hidden = !uni; $('autoRow').hidden = !(uni && m !== 'doc');
     $('formatsField').hidden = !(pdf || k === 'photo');
@@ -1695,6 +1716,7 @@ ul.files .up { width: 40px; height: 40px; }
     edit: 'Обрезка, склейка, кадрирование, поворот, скорость, громкость, сжатие до нужного размера и GIF. Работает ffmpeg.',
     dl: 'Видео и музыка с YouTube, TikTok, VK, Rutube и ещё ~1800 сайтов. Качается сюда, на этот компьютер.',
     pdft: 'Склеить, разделить, вытащить страницы, повернуть, сжать, поставить или снять пароль.',
+    stt: 'Голосовые из Telegram и WhatsApp, MP3, запись звонка или видео — в текст. Распознаётся на этом компьютере, без интернета.',
     ocr: 'Сканы и фото документов становятся PDF, в котором можно искать и копировать текст. Работают OCRmyPDF и Tesseract.',
     info: 'Что это за приложение, что оно умеет, версия, движки и где лежат данные.',
     photoedit: 'Обрезка, поворот, размер, яркость, контраст, цвета, фильтры, надпись и водяной знак. Всё прямо на компьютере.',
@@ -1706,9 +1728,9 @@ ul.files .up { width: 40px; height: 40px; }
   function applyMode() {
     const m = mode(), k = MODES[m].kind;
     $('title').textContent = MODES[m].title; $('subtitle').textContent = SUBS[m];
-    const acc = { pdf: 'application/pdf,.pdf', pdft: 'application/pdf,.pdf', ocr: 'application/pdf,.pdf,image/*,.tif,.tiff,.jp2', files: '', qr: '.txt,.csv,.docx', dl: '', edit: caps ? caps.categories.edit.inputs.map(e => '.' + e).join(',') : 'audio/*,video/*' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps && caps.categories[m] ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
+    const acc = { pdf: 'application/pdf,.pdf', pdft: 'application/pdf,.pdf', ocr: 'application/pdf,.pdf,image/*,.tif,.tiff,.jp2', stt: 'audio/*,video/*,.ogg,.oga,.opus,.amr,.m4a,.mkv', files: '', qr: '.txt,.csv,.docx', dl: '', edit: caps ? caps.categories.edit.inputs.map(e => '.' + e).join(',') : 'audio/*,video/*' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps && caps.categories[m] ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
     picker.accept = acc; dirPicker.accept = acc;
-    const what = { pdf: 'PDF', image: 'картинки', audio: 'аудиофайлы', video: 'видео', doc: 'документы', pdft: 'PDF', ocr: 'сканы PDF или фото документов', files: 'файлы или папку', edit: 'видео или аудио', qr: 'списки ссылок' }[m] || 'фото';
+    const what = { pdf: 'PDF', image: 'картинки', audio: 'аудиофайлы', video: 'видео', doc: 'документы', pdft: 'PDF', ocr: 'сканы PDF или фото документов', stt: 'голосовые, аудио или видео', files: 'файлы или папку', edit: 'видео или аудио', qr: 'списки ссылок' }[m] || 'фото';
     $('dropTitle').textContent = `Перетащи ${what} сюда`;
     $('dropSub').textContent = k === 'pdf' ? 'Можно сразу сотню. Папку тоже можно перетащить.' : 'или нажми, чтобы выбрать. Папку тоже можно перетащить.';
     const d = { topdf: 200, photo: 300 }[m] || 150; $('dpi').value = d; $('dpiVal').textContent = d + ' DPI';
@@ -1739,6 +1761,12 @@ ul.files .up { width: 40px; height: 40px; }
       } else if (need && !caps.engines[need[0]]) { pb.hidden = false; pb.textContent = `${need[1]} не найден в PATH. Установи его и перезапусти сервер, иначе этот режим не заработает.`; }
       else if (m === 'pdf' && !POPPLER_OK) { pb.hidden = false; pb.textContent = 'Poppler не найден в PATH. Установи poppler-utils и перезапусти сервер, иначе конвертация PDF не заработает.'; }
       if (m === 'dl' && pb.hidden && caps.engines.ffmpeg && caps.engines.ytdlp && !caps.engines.deno) offerDeno();
+      if (m === 'stt' && !(caps.engines.stt && caps.engines.stt.available)) {
+        pb.className = 'banner'; pb.hidden = false;
+        pb.innerHTML = caps.engines.desktop && caps.engines.platform === 'linux'
+          ? 'Для распознавания речи нужен пакет faster-whisper: <code>pip install --user faster-whisper</code>, потом перезапусти приложение.'
+          : 'Не установлен faster-whisper: <code>pip install faster-whisper</code> и перезапусти сервер.';
+      }
       if (m === 'ocr' && !caps.engines.ocrmypdf) {
         pb.className = 'banner'; pb.hidden = false;
         pb.innerHTML = caps.engines.desktop && caps.engines.platform === 'linux'
@@ -1829,6 +1857,11 @@ ul.files .up { width: 40px; height: 40px; }
       fd.append('algos', qsa('input[name=falg]:checked').map(i => i.value).join(','));
       fd.append('template', $('fTpl').value); fd.append('start', $('fStart').value); fd.append('digits', $('fDigits').value);
       fd.append('case', qs('input[name=fcase]:checked').value); fd.append('find', $('fFind').value); fd.append('replace', $('fRepl').value);
+    }
+    else if (k === 'stt') {
+      url = '/api/stt';
+      fd.append('model', qs('input[name=sttm]:checked').value); fd.append('lang', $('sttLang').value);
+      fd.append('srt', $('sttSrt').checked ? '1' : '0');
     }
     else if (k === 'ocr') {
       url = '/api/ocr';
@@ -1946,6 +1979,14 @@ ul.files .up { width: 40px; height: 40px; }
         '</table><button class="btn text state" id="hashCopy" type="button">Скопировать суммы</button></div>';
       setTimeout(() => { const b = $('hashCopy'); if (b) b.onclick = () => navigator.clipboard.writeText(res.hashes.map(h => res.algos.map(a => `${h[a]}  ${h.name}`).join('\n')).join('\n')).then(() => { b.textContent = 'Скопировано'; }); });
     } else if (res.message && d.files) html = html.replace('</span>', ` ${esc(res.message)}.</span>`);
+    if (res.transcripts && res.transcripts.length) {
+      html += '<div class="stt-out">' + res.transcripts.map((t, i) => `<div class="stt-item"><div class="stt-head"><b>${esc(t.name)}</b>` +
+        `<span class="muted">${esc(t.language || '')}${t.duration ? ' · ' + fmtDur(t.duration) : ''}</span>` +
+        `<button class="btn text state stt-copy" type="button" data-i="${i}">Скопировать</button></div>` +
+        `<p class="stt-text">${t.text ? esc(t.text) : '<span class="muted">Речи не найдено</span>'}</p></div>`).join('') + '</div>';
+      setTimeout(() => qsa('.stt-copy').forEach(b => { b.onclick = () => navigator.clipboard.writeText(res.transcripts[+b.dataset.i].text).then(() => { b.textContent = 'Скопировано'; }); }));
+      if (caps && caps.engines.stt) caps.engines.stt.models.forEach(x => { if (x.key === lastSttModel) x.downloaded = true; });
+    }
     const errs = (d.failed || []).map(f => `<li><b>${esc(f.name)}</b>: ${esc(f.error)}</li>`);
     if (d.status === 'error' && !errs.length) errs.push(`<li>${esc(d.error)}</li>`);
     if (errs.length) html += `<ul class="errs">${errs.join('')}</ul>`;
@@ -2027,6 +2068,30 @@ ul.files .up { width: 40px; height: 40px; }
     unlock: 'Нужен текущий пароль: взломать PDF без него нельзя.',
   };
   /* ---------- распознавание текста ---------- */
+  /* ---------- голос в текст ---------- */
+  let lastSttModel = '';
+  const fmtDur = s => { s = Math.round(s); const m = Math.floor(s / 60); return m ? `${m} мин ${s % 60} с` : `${s} с`; };
+  const STT_HINTS = { fast: 'Быстро и легко, но чаще ошибается в словах. Для чёткой речи.', normal: 'Хороший баланс: голосовые и записи разговоров распознаёт уверенно.',
+    best: 'Точнее всех, справляется с шумом и невнятной речью. Медленнее, нужен компьютер помощнее (≈ 2 ГБ памяти).' };
+  function syncStt() {
+    const c = caps && caps.engines.stt;
+    if (!c) return;
+    if (!$('sttModels').children.length) {
+      let saved = ''; try { saved = localStorage.getItem('sttModel') || ''; } catch (_) {}
+      const cur = c.models.some(x => x.key === saved) ? saved : 'normal';
+      $('sttModels').innerHTML = c.models.map(x => `<input type="radio" name="sttm" id="sttm-${x.key}" value="${x.key}" ${x.key === cur ? 'checked' : ''}><label for="sttm-${x.key}">${esc(x.label)}</label>`).join('');
+      let lang = ''; try { lang = localStorage.getItem('sttLang') || ''; } catch (_) {}
+      $('sttLang').innerHTML = Object.entries(c.langs).map(([k, v]) => `<option value="${k}" ${k === lang ? 'selected' : ''}>${esc(v)}</option>`).join('');
+    }
+    const key = qs('input[name=sttm]:checked').value, x = c.models.find(y => y.key === key);
+    lastSttModel = key;
+    $('sttModelHint').textContent = STT_HINTS[key] + (x.downloaded ? ' Модель уже скачана.' : ` При первом запуске скачается ≈ ${x.mb >= 1000 ? (x.mb / 1024).toFixed(1).replace('.', ',') + ' ГБ' : x.mb + ' МБ'}.`);
+  }
+  $('sttBox').addEventListener('change', () => {
+    try { localStorage.setItem('sttModel', qs('input[name=sttm]:checked').value); localStorage.setItem('sttLang', $('sttLang').value); } catch (_) {}
+    syncStt();
+  });
+
   const ocrLangs = () => [...document.querySelectorAll('input[name=ocrl]:checked')].map(i => i.value);
   const OCR_MODE_HINTS = {
     skip: 'Страницы, где текст уже есть, останутся как были. Подходит для большинства файлов.',

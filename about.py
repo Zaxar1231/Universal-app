@@ -20,6 +20,7 @@ import converters
 import downloader
 import engines
 import ocr
+import stt
 import updater
 
 # имя для интерфейса, как найти программу, ключ для версии, регулярка версии
@@ -33,6 +34,14 @@ TOOLS = [
     ("Tesseract", lambda: shutil.which("tesseract"), ["--version"], r"tesseract v?(\S+)", "распознавание текста"),
     ("deno", lambda: shutil.which("deno"), ["--version"], r"deno (\S+)", "быстрое скачивание с YouTube"),
 ]
+
+def _pkg_version(name: str) -> str:
+    try:
+        from importlib.metadata import version
+        return version(name)
+    except Exception:
+        return ""
+
 
 _cache: dict | None = None
 _lock = threading.Lock()
@@ -65,6 +74,8 @@ def info(refresh: bool = False) -> dict:
                  "version": downloader.version(), "path": ""},
                 {"name": "OCRmyPDF", "for": "распознавание текста", "installed": bool(ocr.version()),
                  "version": ocr.version(), "path": ""},
+                {"name": "faster-whisper", "for": "голос в текст", "installed": stt.available(),
+                 "version": _pkg_version("faster-whisper"), "path": ""},
             ]
             _cache = {"tools": tools}
         d = dict(_cache)

@@ -77,6 +77,7 @@ dialog.wn h2 { margin: 0; font-size: 1.375rem; font-weight: 400; } dialog.wn .ro
 .wn-body h3 { margin: 4px 0; font-size: 1rem; } .wn-body h4 { margin: 12px 0 4px; color: var(--primary); font-size: .9375rem; }
 .wn-body ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; } .wn-body p { margin: 4px 0; }
 .wn-body code { font-family: ui-monospace, monospace; font-size: .9em; }
+.stt-text { margin: 0; white-space: pre-wrap; line-height: 1.5; user-select: text; -webkit-user-select: text; background: var(--c-low); padding: 12px; border-radius: 12px; max-height: 50vh; overflow: auto; }
 .upd { background: var(--tertiary-container); color: var(--on-tertiary-container); margin-bottom: 16px; gap: 12px; }
 .upd ul { margin: 0; padding-left: 18px; font-size: .875rem; }
 #nerdBody h4 { margin: 12px 0 4px; font-size: .875rem; font-weight: 500; color: var(--primary); }
@@ -132,6 +133,28 @@ nav.navbar button { font-size: .6875rem; min-width: 0; }
 
   <!-- ===================== инструменты с сайта ===================== -->
   <div class="page" id="pageTools" hidden>
+    <!-- голос в текст: распознаёт компьютер с Universal (faster-whisper), текст приходит сюда -->
+    <div class="card stack" id="stt">
+      <h3>Голос в текст</h3>
+      <p class="hint">Голосовое из Telegram или WhatsApp, запись звонка, MP3 или видео превратится в текст. Распознаёт твой компьютер с Universal, без интернета и чужих серверов.<span id="sttShareHint"></span></p>
+      <div>
+        <label class="tf"><span>Язык</span><select id="sttLang">
+          <option value="">Определить сам</option><option value="ru">Русский</option><option value="uk">Украинский</option><option value="en">Английский</option>
+          <option value="be">Белорусский</option><option value="kk">Казахский</option><option value="de">Немецкий</option></select></label>
+      </div>
+      <div class="seg">
+        <input type="radio" name="sttm" id="sttm1" value="fast"><label for="sttm1">Быстро</label>
+        <input type="radio" name="sttm" id="sttm2" value="normal" checked><label for="sttm2">Обычно</label>
+        <input type="radio" name="sttm" id="sttm3" value="best"><label for="sttm3">Точно</label>
+      </div>
+      <label class="btn filled lg" for="sttPick">Выбрать голосовое или запись</label>
+      <input type="file" id="sttPick" accept="audio/*,video/*,.ogg,.oga,.opus,.m4a,.amr" hidden>
+      <div id="sttJob" hidden><div class="bar2 ind"><i></i></div><p class="small muted" id="sttMsg"></p></div>
+      <div id="sttOut" hidden>
+        <p class="stt-text" id="sttText"></p>
+        <div class="row"><button class="btn tonal sm" id="sttCopy">Скопировать</button><button class="btn text sm" id="sttShare">Поделиться</button></div>
+      </div>
+    </div>
     <section id="try"><!--SITE_TOOLS--></section>
   </div>
 

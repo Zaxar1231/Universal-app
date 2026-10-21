@@ -1434,3 +1434,92 @@ def test_ffprobe_utf8_output(monkeypatch):
     import converters as conv
     assert 'encoding="utf-8"' in inspect.getsource(editor.probe)
     assert 'encoding="utf-8"' in inspect.getsource(conv._run)
+
+
+# ---------- голос в текст ----------
+
+def test_stt_task_writes_txt_and_srt(tmp_path, monkeypatch):
+    import stt
+    from tasks import Task
+    monkeypatch.setattr(stt, "available", lambda: True)
+    monkeypatch.setattr(stt, "ensure_model", lambda key, task=None: tmp_path)
+    monkeypatch.setattr(stt, "_model", lambda key: None)
+    monkeypatch.setattr(stt, "transcribe", lambda src, key, lang, task=None, base=0, span=1:
+                        ([(0.0, 1.5, "Привет"), (1.5, 3.25, "это проверка")], "ru", 3.25))
+    job = tmp_path / "job"
+    (job / "out").mkdir(parents=True)
+    src = tmp_path / "voice.ogg"
+    src.write_bytes(b"x")
+    task = Task("abc", "stt", job, "text")
+    stt.run_stt_task(task, [(src, "voice")], stt.read_opts({"model": "fast", "lang": "ru", "srt": "1"}))
+    assert (job / "out" / "voice.txt").read_text(encoding="utf-8").strip() == "Привет это проверка"
+    srt = (job / "out" / "voice.srt").read_text(encoding="utf-8")
+    assert "00:00:01,500 --> 00:00:03,250" in srt and srt.startswith("1\n")
+    assert task.result["transcripts"][0] == {"name": "voice.ogg", "text": "Привет это проверка", "language": "Русский", "duration": 3.2}
+
+
+def test_stt_model_download_with_mirror_fallback(tmp_path, monkeypatch):
+    import http.server
+    import threading
+    import stt
+    files = {"config.json": b"{}", "model.bin": b"M" * 3000, "tokenizer.json": b"{}"}
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path.startswith("/api/models/"):
+                body = json.dumps({"siblings": [{"rfilename": k, "size": len(v)} for k, v in files.items()] +
+                                  [{"rfilename": ".gitattributes"}, {"rfilename": "README.md"}]}).encode()
+            else:
+                body = files.get(self.path.rsplit("/", 1)[-1])
+            if body is None:
+                self.send_response(404); self.end_headers(); return
+            self.send_response(200); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path))
+    monkeypatch.setattr(stt, "ENDPOINTS", ("http://127.0.0.1:1", f"http://127.0.0.1:{srv.server_port}"))   # первый недоступен
+    try:
+        d = stt.ensure_model("fast")
+    finally:
+        srv.shutdown()
+    assert stt.downloaded("fast") and (d / "model.bin").stat().st_size == 3000
+    assert not (d / "README.md").exists()
+
+
+def test_stt_route_needs_files(client, monkeypatch):
+    import stt
+    monkeypatch.setattr(stt, "available", lambda: True)
+    assert client.post("/api/stt", data={"model": "fast"}).status_code == 400
+    assert client.post("/api/stt", data={"model": "huge"}).get_json()["error"] == "Неизвестная модель"
+    assert "stt" in client.get("/api/formats").get_json()["engines"]
+
+
+@pytest.mark.skipif(not os.environ.get("STT_REAL"), reason="настоящая модель: только в CI (STT_REAL=1)")
+def test_stt_real_voice_message(tmp_path):
+    # голосовое как в Telegram: синтезированная речь (espeak-ng) -> OGG Opus 32 кбит/с, 48 кГц, моно.
+    # Голос espeak роботизированный, поэтому слова проверяем на английском (его он произносит чётко),
+    # а на русском — что пришёл русский текст. Живая речь распознаётся заметно лучше.
+    import re
+    import stt
+
+    def voice(name, lang, phrase):
+        wav, ogg = tmp_path / f"{name}.wav", tmp_path / f"{name}.ogg"
+        subprocess.run(["espeak-ng", "-v", lang, "-s", "130", "-w", str(wav), phrase], check=True)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-c:a", "libopus", "-b:a", "32k",
+                        "-ar", "48000", "-ac", "1", str(ogg)], check=True)
+        return ogg
+
+    stt.ensure_model("fast")
+    segs, lang, dur = stt.transcribe(voice("en", "en", "Hello. This is a test of speech recognition."), "fast", "")
+    text = " ".join(t for _, _, t in segs).lower()
+    print("en:", lang, text)
+    assert lang == "en" and dur > 1 and sum(w in text for w in ("hello", "test", "speech", "recognition")) >= 2
+
+    segs, lang, dur = stt.transcribe(voice("ru", "ru", "Привет. Это проверка распознавания речи."), "fast", "ru")
+    text = " ".join(t for _, _, t in segs)
+    print("ru:", text)
+    assert len(re.findall(r"[а-яё]", text.lower())) >= 10
