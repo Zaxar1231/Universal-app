@@ -60,8 +60,9 @@ dependencies {
     implementation "io.github.junkfood02.youtubedl-android:library:0.18.1"
     implementation "io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1"
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.24"
-    // полная версия на телефоне: OCR (Tesseract) и голос в текст (Vosk)
-    implementation "com.github.adaptech-cz.Tesseract4Android:tesseract4android:4.9.0"
+    // полная версия на телефоне: OCR (Tesseract) и голос в текст (Vosk).
+    // 4.8.0, а не 4.9.0: сборка 4.9.0 на JitPack сломана («No build artifacts found»), раннерам отдаётся 404
+    implementation "com.github.adaptech-cz.Tesseract4Android:tesseract4android:4.8.0"
     implementation "com.alphacephei:vosk-android:0.3.75"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
