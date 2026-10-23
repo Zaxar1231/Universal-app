@@ -28,9 +28,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Программы для проверки
+        # man-db на раннерах перестраивает справку после каждого пакета: без этого шаг шёл 40 минут
         run: |
+          sudo rm -f /var/lib/man-db/auto-update
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg espeak-ng fonts-dejavu-core >/dev/null
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg espeak-ng fonts-dejavu-core >/dev/null
           pip install -q pillow
       - name: Веб-часть и сервер для телефона
         working-directory: mobile
@@ -40,6 +42,15 @@ jobs:
         env:
           CHAQUOPY_BUILD_PYTHON: ${{ steps.py.outputs.python-path }}
         run: ./gradlew assembleDebug --no-daemon -Pabis=x86_64 -PversionName=0.0.0-e2e
+      - name: Эмулятор и образ Android (с повторами, загрузка от Google иногда обрывается)
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          for pkg in emulator "system-images;android-34;google_apis;x86_64"; do
+            for i in 1 2 3 4; do
+              "$SDK" --install "$pkg" --channel=0 >/dev/null && break
+              echo "повтор $i: $pkg"; sleep $((i * 10))
+            done
+          done
       - name: KVM для эмулятора
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
