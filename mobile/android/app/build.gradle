@@ -1,4 +1,5 @@
 apply plugin: 'com.android.application'
+apply plugin: 'com.chaquo.python'
 
 android {
     namespace = "io.github.zaxar1231.universal"
@@ -11,8 +12,9 @@ android {
         versionCode((project.findProperty('versionCode') ?: '1') as Integer)
         versionName(project.findProperty('versionName') ?: '1.0')
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        // yt-dlp на телефоне (youtubedl-android): Python и ffmpeg собраны под эти процессоры
-        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' }
+        // 64-битные телефоны (arm64-v8a): встроенный Python 3.12 (Chaquopy) 32-битные не поддерживает
+        // для эмулятора в CI: -Pabis=x86_64
+        ndk { abiFilters(*((project.findProperty('abis') ?: 'arm64-v8a').split(','))) }
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -58,6 +60,10 @@ dependencies {
     implementation "io.github.junkfood02.youtubedl-android:library:0.18.1"
     implementation "io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1"
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.24"
+    // полная версия на телефоне: OCR (Tesseract) и голос в текст (Vosk).
+    // 4.8.0, а не 4.9.0: сборка 4.9.0 на JitPack сломана («No build artifacts found»), раннерам отдаётся 404
+    implementation "com.github.adaptech-cz.Tesseract4Android:tesseract4android:4.8.0"
+    implementation "com.alphacephei:vosk-android:0.3.75"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
@@ -73,4 +79,24 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+// Полная версия Universal на телефоне: тот же сервер, что на компьютере (app.py и модули рядом),
+// работает на встроенном Python. Код сервера кладёт в src/main/python/universal_srv скрипт mobile/build-www.mjs.
+chaquopy {
+    defaultConfig {
+        version = "3.12"
+        def bp = System.getenv('CHAQUOPY_BUILD_PYTHON')
+        if (bp) buildPython(bp)
+        pip {
+            install "flask"
+            install "pillow"
+            install "qrcode"
+            install "pypdf"
+            install "yt-dlp"
+            install "-r", "../../../requirements-android.txt"   // встроенный конвертер документов (pydocs)
+        }
+        // код и файлы сервера (шаблоны, static) распаковываются в обычные файлы: Flask читает их с диска
+        extractPackages("universal_srv")
+    }
 }

@@ -1,0 +1,76 @@
+name: Android полная версия
+
+# Полная версия Universal на телефоне (встроенный Python) проверяется на настоящем Android:
+# x86_64-сборка ставится в эмулятор, там гоняются все режимы (mobile/e2e/e2e.py) и снимается интерфейс.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ["mobile/**", "*.py", "templates/**", "static/**", "CHANGELOG.md", ".github/workflows/android-e2e.yml"]
+
+jobs:
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - uses: actions/setup-python@v5
+        id: py
+        with:
+          python-version: "3.12"
+      - name: Программы для проверки
+        # без apt: на раннерах apt-get с ffmpeg шёл 30–40 минут; ffmpeg — статическая сборка из PyPI
+        run: |
+          pip install -q pillow imageio-ffmpeg
+          mkdir -p "$HOME/bin" && ln -sf "$(python -c 'import imageio_ffmpeg as f; print(f.get_ffmpeg_exe())')" "$HOME/bin/ffmpeg"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Веб-часть и сервер для телефона
+        working-directory: mobile
+        run: npm ci && node build-www.mjs && npx cap sync android
+      - name: Сборка APK для эмулятора (x86_64)
+        working-directory: mobile/android
+        env:
+          CHAQUOPY_BUILD_PYTHON: ${{ steps.py.outputs.python-path }}
+        run: ./gradlew assembleDebug --no-daemon -Pabis=x86_64 -PversionName=0.0.0-e2e
+      - name: Эмулятор и образ Android (с повторами, загрузка от Google иногда обрывается)
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          for pkg in emulator "system-images;android-34;google_apis;x86_64"; do
+            for i in 1 2 3 4; do
+              "$SDK" --install "$pkg" --channel=0 >/dev/null && break
+              echo "повтор $i: $pkg"; sleep $((i * 10))
+            done
+          done
+      - name: KVM для эмулятора
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Эмулятор и проверка
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          ram-size: 4096M
+          disk-size: 8000M
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: E2E_OUT=$PWD/e2e-out bash mobile/e2e/run.sh mobile/android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Итог
+        if: always()
+        run: cat e2e-out/summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "нет итога" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-e2e
+          path: e2e-out/

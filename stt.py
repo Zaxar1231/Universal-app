@@ -36,7 +36,18 @@ class SttError(Exception):
     pass
 
 
+def _android() -> bool:
+    """Телефон (встроенный Python): Whisper там не собирается, распознаёт Vosk (android_stt)."""
+    return bool(os.environ.get("UNIVERSAL_ANDROID"))
+
+
 def available() -> bool:
+    if _android():
+        try:
+            import android_stt  # noqa: F401
+            return True
+        except Exception:
+            return False
     try:
         import faster_whisper  # noqa: F401
         return True
@@ -54,6 +65,11 @@ def downloaded(key: str) -> bool:
 
 
 def caps() -> dict:
+    if _android() and available():
+        import android_stt as a
+        return {"available": True, "android": True, "langs": a.LANGS,
+                "models": [{"key": "normal", "label": "Встроенная (Vosk)", "mb": a.MODELS["ru"][1],
+                            "downloaded": a.downloaded("ru")}]}
     return {"available": available(), "langs": LANGS,
             "models": [{"key": k, "label": lbl, "mb": mb, "downloaded": downloaded(k)} for k, (_, mb, lbl) in MODELS.items()]}
 
@@ -230,9 +246,21 @@ def run_stt_task(task: Task, items: list[tuple[Path, str]], o: dict) -> None:
     out_dir, n = task.out_dir, len(items)
     task.total = n
     task.update(0, "Готовлю модель распознавания…")
-    ensure_model(o["model"], task)
-    task.update(0.3, "Загружаю модель в память…")
-    _model(o["model"])
+    if _android():
+        import android_stt
+        lang = o["lang"] if o["lang"] in android_stt.LANGS else "ru"
+        try:
+            android_stt.ensure_model(lang, task)
+        except android_stt.SttError as e:
+            raise SttError(str(e))
+        recognize = lambda src, task, base, span: android_stt.transcribe(src, lang, task, base, span)  # noqa: E731
+        langs = android_stt.LANGS
+    else:
+        ensure_model(o["model"], task)
+        task.update(0.3, "Загружаю модель в память…")
+        _model(o["model"])
+        recognize = lambda src, task, base, span: transcribe(src, o["model"], o["lang"], task, base, span)  # noqa: E731
+        langs = LANGS
     results = []
     for i, (src, stem) in enumerate(items):
         task.check_cancel()
@@ -240,16 +268,20 @@ def run_stt_task(task: Task, items: list[tuple[Path, str]], o: dict) -> None:
         base, span = 0.3 + 0.7 * i / n, 0.7 / n
         task.update(base, f"Распознаю {i + 1} из {n}: {name}")
         try:
-            segs, lang, dur = transcribe(src, o["model"], o["lang"], task, base, span)
-        except SttError as e:
-            task.failed.append({"name": name, "error": str(e)})
+            segs, lang, dur = recognize(src, task, base, span)
+        except Exception as e:
+            if task.cancel_event.is_set():
+                raise
+            # SttError свой или из android_stt — текст для человека; прочее — с именем исключения
+            msg = str(e) if e.__class__.__name__ == "SttError" else f"{e.__class__.__name__}: {str(e)[:150]}"
+            task.failed.append({"name": name, "error": msg})
             continue
         text = " ".join(t for _, _, t in segs)
         (out_dir / f"{stem}.txt").write_text(text + "\n", encoding="utf-8")
         if o["srt"]:
             srt = "".join(f"{k}\n{_ts(a)} --> {_ts(b)}\n{t}\n\n" for k, (a, b, t) in enumerate(segs, 1))
             (out_dir / f"{stem}.srt").write_text(srt, encoding="utf-8")
-        results.append({"name": name, "text": text, "language": LANGS.get(lang, lang), "duration": round(dur, 1)})
+        results.append({"name": name, "text": text, "language": langs.get(lang, lang), "duration": round(dur, 1)})
         task.done += 1
     task.result = {"transcripts": results[:200]}
     if not task.done and task.failed:

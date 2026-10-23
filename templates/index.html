@@ -1,4 +1,4 @@
-<!doctype html>
+{% set device = 'телефоне' if android else 'компьютере' %}<!doctype html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -169,6 +169,8 @@ ul.files .size { color: var(--md-on-surface-variant); font-size: .75rem; font-va
   font: 600 .6875rem/1 inherit; cursor: pointer; padding: 0; vertical-align: middle; display: inline-grid; place-items: center; }
 .help-btn:hover { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
 [hidden] + .help-pop { display: none; }
+/* полная версия внутри приложения для Android: то, что имеет смысл только на компьютере */
+.android #phoneBtn, .android #infoPhone, .android #infoUpd, .android #infoOpen { display: none !important; }
 .help-pop { padding: 8px 12px; border-radius: 12px; background: var(--md-surface-container); }
 .chip-group { flex-basis: 100%; margin: 8px 0 -2px; }
 .chips.scroll { max-height: 172px; overflow: auto; padding: 2px 2px 20px; scrollbar-width: thin;
@@ -499,7 +501,7 @@ ul.files .up { width: 40px; height: 40px; }
         <span id="infoIcon" hidden></span>
         <div>
           <h2 class="t-headline" style="margin:0">Universal <span id="infoVer"></span></h2>
-          <p class="t-body-l" style="margin:8px 0 0">Один набор инструментов для файлов, видео и документов. Всё работает на этом компьютере: файлы никуда не отправляются, интернет нужен только для скачивания видео и обновлений.</p>
+          <p class="t-body-l" style="margin:8px 0 0">Один набор инструментов для файлов, видео и документов. Всё работает на этом {{ device }}: файлы никуда не отправляются, интернет нужен только для скачивания видео и обновлений.</p>
           <div class="acts">
             <button class="btn filled state" id="infoUpd" type="button">Проверить обновления</button>
             <button class="btn text state" id="infoNews" type="button">Что нового</button>
@@ -851,7 +853,7 @@ ul.files .up { width: 40px; height: 40px; }
           <label class="tf"><span>Язык речи</span><select id="sttLang"></select></label>
           <label class="sw"><span class="txt"><span class="t-body-m">Ещё и субтитры .srt</span><span class="hint">Текст с таймкодами: подходит для видео, плееров и YouTube.</span></span>
             <input type="checkbox" id="sttSrt"><span class="track"></span></label>
-          <p class="hint">Всё распознаётся на этом компьютере, файлы никуда не отправляются. Интернет нужен один раз, чтобы скачать модель.</p>
+          <p class="hint">Всё распознаётся на этом {{ device }}, файлы никуда не отправляются. Интернет нужен один раз, чтобы скачать модель.</p>
         </div>
 
         <!-- распознавание текста (OCRmyPDF) -->
@@ -1151,6 +1153,47 @@ ul.files .up { width: 40px; height: 40px; }
   </div>
 </div>
 
+{% if android %}
+<script>
+/* Полная версия внутри приложения для Android: WebView сам ничего не скачивает, поэтому
+   ссылки на готовые файлы и сохранение из редакторов (blob:) передаём приложению-оболочке,
+   а оно кладёт файл в «Документы/Universal» (mobile/src/mobile.js, сообщение universal-save). */
+(() => {
+  const inShell = window.parent !== window;
+  document.documentElement.classList.add('android');
+  if (!inShell) return;
+  let seq = 0;
+  const nameFrom = (h, fallback) => {
+    const m = /filename\*=UTF-8''([^;]+)/i.exec(h || '') || /filename="?([^";]+)"?/i.exec(h || '');
+    return m ? decodeURIComponent(m[1]) : fallback;
+  };
+  async function save(a) {
+    const href = a.href, id = ++seq;
+    let name = a.getAttribute('download') || '';
+    if (href.startsWith('blob:') || href.startsWith('data:')) {
+      const blob = await (await fetch(href)).blob();
+      const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(blob); });
+      window.parent.postMessage({ type: 'universal-save', id, name: name || 'file', b64 }, '*');
+      return;
+    }
+    if (!name) {
+      try { name = nameFrom((await fetch(href, { method: 'HEAD' })).headers.get('Content-Disposition'), ''); } catch (_) { /* имя из адреса */ }
+      if (!name) name = decodeURIComponent(new URL(href).pathname.split('/').pop() || 'file');
+    }
+    window.parent.postMessage({ type: 'universal-save', id, name, url: href }, '*');
+  }
+  document.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('a[href]');
+    if (!a) return;
+    const h = a.getAttribute('href') || '';
+    if (a.hasAttribute('download') || /^\/api\/(download|file)\//.test(h) || /^(blob|data):/.test(h)) {
+      e.preventDefault(); e.stopPropagation();
+      save(a).catch(err => alert('Не сохранилось: ' + (err.message || err)));
+    }
+  }, true);
+})();
+</script>
+{% endif %}
 <script src="{{ url_for('static', filename='hints.js') }}"></script>
 <script>
 
@@ -1715,14 +1758,14 @@ ul.files .up { width: 40px; height: 40px; }
     photo: 'Готовые фото приводятся к листу A4 с нужным разрешением.',
     topdf: 'Фото раскладываются на листах A4: по одному на страницу или сеткой.',
     edit: 'Обрезка, склейка, кадрирование, поворот, скорость, громкость, сжатие до нужного размера и GIF. Работает ffmpeg.',
-    dl: 'Видео и музыка с YouTube, TikTok, VK, Rutube и ещё ~1800 сайтов. Качается сюда, на этот компьютер.',
+    dl: 'Видео и музыка с YouTube, TikTok, VK, Rutube и ещё ~1800 сайтов. Качается сюда, на этот {{ 'телефон' if android else 'компьютер' }}.',
     pdft: 'Склеить, разделить, вытащить страницы, повернуть, сжать, поставить или снять пароль.',
-    stt: 'Голосовые из Telegram и WhatsApp, MP3, запись звонка или видео — в текст. Распознаётся на этом компьютере, без интернета.',
+    stt: 'Голосовые из Telegram и WhatsApp, MP3, запись звонка или видео — в текст. Распознаётся на этом {{ device }}, без интернета.',
     ocr: 'Сканы и фото документов становятся PDF, в котором можно искать и копировать текст. Работают OCRmyPDF и Tesseract.',
     info: 'Что это за приложение, что оно умеет, версия, движки и где лежат данные.',
-    photoedit: 'Обрезка, поворот, размер, яркость, контраст, цвета, фильтры, надпись и водяной знак. Всё прямо на компьютере.',
+    photoedit: 'Обрезка, поворот, размер, яркость, контраст, цвета, фильтры, надпись и водяной знак. Всё прямо на {{ device }}.',
     docedit: 'Открыть DOCX, DOC, ODT, RTF, HTML, Markdown или TXT, поправить как в Word и сохранить в DOCX, ODT, PDF и другие форматы.',
-    pdfedit: 'Добавить текст и подпись, замазать, выделить маркером, вставить картинку, переставить, повернуть и удалить страницы. Всё прямо на компьютере.',
+    pdfedit: 'Добавить текст и подпись, замазать, выделить маркером, вставить картинку, переставить, повернуть и удалить страницы. Всё прямо на {{ device }}.',
     files: 'Упаковать в ZIP или 7z с паролем, распаковать архив с папками, посчитать контрольные суммы, переименовать пачкой.',
     qr: 'Один код для ссылки, Wi‑Fi или контакта, сотни кодов разом из списка или QR вместо ссылок прямо в документе.',
   };

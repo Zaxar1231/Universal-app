@@ -24,7 +24,7 @@ jobs:
       - name: Программы
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg imagemagick pandoc poppler-utils tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus espeak-ng
       - name: Зависимости
-        run: pip install -r requirements.txt pytest
+        run: pip install -r requirements.txt -r requirements-android.txt pytest
       - name: Тесты
         run: python -m pytest -q -rs -k "not test_stt_real" && python -m pytest -q -s -k test_stt_real
 
@@ -42,7 +42,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Зависимости
-        run: pip install -r packaging/requirements-desktop.txt pytest
+        run: pip install -r packaging/requirements-desktop.txt -r requirements-android.txt pytest
       - name: Движки через engines.py
         shell: bash
         run: |

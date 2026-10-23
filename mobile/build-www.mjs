@@ -1,7 +1,7 @@
 // Собирает www/ для Capacitor: свой каркас приложения (src/) плюс браузерные
 // инструменты с сайта (site/index.html), чтобы QR, картинки и PDF жили в одном месте.
 // Запуск: node build-www.mjs (ничего ставить не нужно), затем npx cap sync.
-import { readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync, cpSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -52,3 +52,17 @@ copyFileSync(join(root, 'site/img/icon-192.png'), join(out, 'img/icon-192.png'))
 copyFileSync(join(here, 'node_modules/@capacitor/core/dist/capacitor.js'), join(out, 'vendor/capacitor.js'));
 copyFileSync(join(here, 'node_modules/jsqr/dist/jsQR.js'), join(out, 'vendor/jsQR.js'));   // QR-код подключения к серверу
 console.log(`www/ готов: версия ${version}`);
+
+// Полная версия на Android: сервер Universal (модули *.py, шаблоны, static) как Python-пакет universal_srv
+// для встроенного Python (Chaquopy). version.py с номером этой сборки.
+const srv = join(here, 'android/app/src/main/python/universal_srv');
+rmSync(srv, { recursive: true, force: true });
+mkdirSync(srv, { recursive: true });
+for (const f of readdirSync(root)) if (f.endsWith('.py')) copyFileSync(join(root, f), join(srv, f));
+cpSync(join(root, 'templates'), join(srv, 'templates'), { recursive: true });
+cpSync(join(root, 'static'), join(srv, 'static'), { recursive: true });
+copyFileSync(join(root, 'CHANGELOG.md'), join(srv, 'CHANGELOG.md'));
+writeFileSync(join(srv, '__init__.py'), '"""Сервер Universal для встроенного Python на Android (собирается build-www.mjs)."""\n');
+writeFileSync(join(srv, 'version.py'), `VERSION = ${JSON.stringify(version)}\nCOMMIT = ""\nBUILT = ""\n`);
+if (!existsSync(join(srv, 'app.py'))) throw new Error('universal_srv: нет app.py');
+console.log('universal_srv/ готов для Android');

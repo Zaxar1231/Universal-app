@@ -8,7 +8,7 @@ name: Автомерж
 # поэтому сайт на GitHub Pages обновляется отдельным вызовом.
 on:
   workflow_run:
-    workflows: ["Тесты", "Телефоны"]
+    workflows: ["Тесты", "Телефоны", "Android полная версия"]
     types: [completed]
 
 permissions:

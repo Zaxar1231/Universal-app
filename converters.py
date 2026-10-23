@@ -13,6 +13,7 @@ VERT гоняет ffmpeg / ImageMagick / pandoc в браузере через W
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -105,6 +106,11 @@ def _ordered(names, category: str) -> list[str]:
 def targets_for(category: str) -> dict:
     """Форматы для конвертации: свои (native) и из другой категории (cross), уже по порядку."""
     native = [f for f, (_, w) in CATEGORIES[category].items() if w]
+    if category == "image" and not _magick() and _has_pil():
+        native = [f for f in native if f in pillow_targets()]      # без ImageMagick пишет Pillow
+    if category == "doc" and not _which("pandoc") and os.environ.get("UNIVERSAL_ANDROID"):
+        import pydocs
+        native = [f for f in native if f in pydocs.WRITE]          # на телефоне — встроенный конвертер
     cross = []
     for other in CROSS.get(category, []):
         cross += [f for f, (_, w) in CATEGORIES[other].items() if w and f not in native]
@@ -131,12 +137,23 @@ def _magick() -> str | None:
     return _which("magick", "convert")
 
 
+def _has_pil() -> bool:
+    try:
+        import PIL  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def engines() -> dict:
+    # на телефоне (встроенный Python) ImageMagick и pandoc заменяют Pillow и встроенный конвертер документов
+    android = bool(os.environ.get("UNIVERSAL_ANDROID"))
     return {
         "ffmpeg": bool(_which("ffmpeg")),
-        "imagemagick": bool(_magick()),
-        "pandoc": bool(_which("pandoc")),
+        "imagemagick": bool(_magick()) or (android and _has_pil()),
+        "pandoc": bool(_which("pandoc")) or android,
         "libreoffice": bool(_which("soffice", "libreoffice")),
+        "builtin": android,
     }
 
 
@@ -433,13 +450,120 @@ def _pillow_encode(src: Path, out: Path, to: str, quality: int, keep_metadata: b
         return False
 
 
+# Без ImageMagick (телефон: встроенный Python) картинки конвертирует Pillow. Что он умеет писать:
+PILLOW_WRITE = {"png": "PNG", "jpg": "JPEG", "jpeg": "JPEG", "jfif": "JPEG", "jpe": "JPEG", "webp": "WEBP",
+                "gif": "GIF", "bmp": "BMP", "tiff": "TIFF", "tif": "TIFF", "ico": "ICO", "pdf": "PDF",
+                "ppm": "PPM", "pgm": "PPM", "pbm": "PPM", "pnm": "PPM"}
+
+
+def _pil_saves(fmt: str) -> bool:
+    try:
+        from PIL import Image, features
+        Image.init()
+        return fmt in Image.SAVE and (fmt != "WEBP" or features.check("webp"))
+    except Exception:
+        return False
+
+
+def pillow_targets() -> set[str]:
+    out = set(PILLOW_WRITE)
+    if not _pil_saves("WEBP") and not os.environ.get("UNIVERSAL_ANDROID"):
+        out -= {"webp"}
+    try:
+        from PIL import features
+        if features.check("avif"):
+            out.add("avif")
+    except Exception:
+        pass
+    try:
+        import pillow_heif  # noqa: F401
+        out.add("heic")
+    except ImportError:
+        pass
+    return out
+
+
+def _pillow_open(src: Path):
+    """Картинка для Pillow; PDF на телефоне рисует Android (PdfRenderer), первая страница."""
+    from PIL import Image
+    if src.suffix.lower() == ".pdf" and os.environ.get("UNIVERSAL_ANDROID"):
+        import android_pdf
+        return Image.open(android_pdf.render_page(src, 0, 150))
+    if src.suffix.lower() in (".heic", ".heif"):
+        try:
+            import pillow_heif
+            pillow_heif.register_heif_opener()
+        except ImportError:
+            raise ConvertError("HEIC здесь не открывается: нет pillow-heif")
+    return Image.open(src)
+
+
+def convert_image_pillow(src: Path, out: Path, to: str, quality: int, keep_metadata: bool, resize: int) -> Path:
+    from PIL import Image, ImageOps, UnidentifiedImageError
+    if to in PILLOW_ENCODE:
+        if _pillow_encode(src, out, to, quality, keep_metadata, resize):
+            return out
+        raise ConvertError(f"Здесь нельзя создать .{to}")
+    fmt = PILLOW_WRITE.get(to)
+    if not fmt:
+        raise ConvertError(f"Здесь нельзя создать .{to}: нет ImageMagick")
+    try:
+        im = _pillow_open(src)
+    except UnidentifiedImageError:
+        raise ConvertError(f"Формат .{src.suffix.lstrip('.')} здесь не открывается")
+    with im:
+        im.seek(0)
+        exif = im.info.get("exif") if keep_metadata else None
+        im = ImageOps.exif_transpose(im)
+        if resize:
+            im.thumbnail((resize, resize))
+        alpha = im.mode in ("RGBA", "LA", "PA") or (im.mode == "P" and "transparency" in im.info)
+        if fmt in ("JPEG", "BMP", "PDF") or (fmt == "PPM" and to in ("ppm", "pnm")):
+            if alpha:   # прозрачность в форматы без альфа-канала заливаем белым
+                bg = Image.new("RGB", im.size, "white")
+                bg.paste(im.convert("RGBA"), mask=im.convert("RGBA").split()[-1])
+                im = bg
+            im = im.convert("RGB")
+        elif to == "pgm":
+            im = im.convert("L")
+        elif to == "pbm":
+            im = im.convert("1")
+        elif fmt == "GIF":
+            im = im.convert("RGBA" if alpha else "RGB").convert("P", palette=Image.ADAPTIVE)
+        elif fmt == "ICO":
+            im.thumbnail((256, 256))
+        elif im.mode not in ("RGB", "RGBA", "L", "LA", "P"):
+            im = im.convert("RGBA" if alpha else "RGB")
+        kw = {}
+        if fmt in ("JPEG", "WEBP"):
+            kw["quality"] = max(1, min(100, quality))
+            if exif:
+                kw["exif"] = exif
+        if fmt == "PDF":
+            kw["resolution"] = 150
+        if fmt == "WEBP" and not _pil_saves("WEBP") and os.environ.get("UNIVERSAL_ANDROID"):
+            import android_pdf   # в Pillow для телефона нет libwebp, WebP кодирует сам Android
+            android_pdf.save_webp(im, out, kw["quality"])
+        else:
+            im.save(out, format=fmt, **kw)
+    if not out.exists() or out.stat().st_size == 0:
+        out.unlink(missing_ok=True)
+        raise ConvertError("картинка не сохранилась")
+    return out
+
+
 def convert_image(src: Path, dst_dir: Path, stem: str, to: str, *,
                   quality: int = 90, keep_metadata: bool = True,
                   density: int = 150, resize: int = 0) -> Path:
     exe = _magick()
-    if not exe:
-        raise ConvertError("ImageMagick не найден в PATH")
     to = to.lower()
+    if not exe:
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            raise ConvertError("ImageMagick не найден в PATH")
+        out_ext = {"jpeg": "jpg", "tiff": "tif"}.get(to, to)
+        return convert_image_pillow(src, dst_dir / f"{stem}.{out_ext}", to, quality, keep_metadata, resize)
     if not IMAGE.get(to, (0, 0))[1]:
         raise ConvertError(f"Формат {to} нельзя создавать")
     out_ext = {"jpeg": "jpg", "tiff": "tif"}.get(to, to)
@@ -506,6 +630,12 @@ def convert_document(src: Path, dst_dir: Path, stem: str, to: str) -> Path:
     if not DOC.get(to, (0, 0))[1]:
         raise ConvertError(f"Формат {to} нельзя создавать")
     out = dst_dir / f"{stem}.{to}"
+    if not _which("pandoc") and os.environ.get("UNIVERSAL_ANDROID"):
+        import pydocs                       # телефон: встроенный конвертер вместо pandoc
+        try:
+            return pydocs.convert(src, out, to)
+        except pydocs.DocError as e:
+            raise ConvertError(str(e))
 
     # .doc pandoc не читает: сначала LibreOffice превращает его в docx
     tmp_docx = None

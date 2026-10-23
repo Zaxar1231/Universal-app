@@ -1565,3 +1565,70 @@ def test_setup_endpoint(client, monkeypatch):
     d = client.post("/api/setup").get_json()
     assert d["task"] is None and isinstance(d["missing"], list)
     assert client.get("/api/ping").status_code == 204 and webapp.app.config["LAST_PING"] > 0
+
+
+# ---------- телефон: встроенный Python без ImageMagick, pandoc и poppler ----------
+
+@pytest.fixture
+def android(monkeypatch):
+    import converters
+    monkeypatch.setenv("UNIVERSAL_ANDROID", "1")
+    real = converters._which
+    monkeypatch.setattr(converters, "_which", lambda *n: None if set(n) & {"magick", "convert", "pandoc", "soffice", "libreoffice"} else real(*n))
+    return converters
+
+
+def test_android_images_via_pillow(android, tmp_path):
+    from PIL import Image
+    src = tmp_path / "a.png"
+    Image.new("RGBA", (64, 40), (255, 0, 0, 128)).save(src)
+    for to in ("jpg", "webp", "gif", "bmp", "ico", "tiff", "pdf", "pgm"):
+        out = android.convert_image(src, tmp_path, f"a_{to}", to, quality=80)
+        assert out.exists() and out.stat().st_size > 0, to
+    assert Image.open(tmp_path / "a_jpg.jpg").mode == "RGB"
+    assert android.engines()["imagemagick"] and android.engines()["builtin"]
+    outs = android.targets_for("image")["native"]
+    assert "png" in outs and "psd" not in outs and "eps" not in outs
+    with pytest.raises(android.ConvertError):
+        android.convert_image(src, tmp_path, "x", "psd")
+
+
+def test_android_documents_builtin(android, tmp_path):
+    src = tmp_path / "t.md"
+    src.write_text("# Заголовок\n\nТекст **жирный**\n\n- раз\n- два\n", encoding="utf-8")
+    docx = android.convert_document(src, tmp_path, "t", "docx")
+    back = android.convert_document(docx, tmp_path, "back", "md")
+    text = back.read_text(encoding="utf-8")
+    assert "# Заголовок" in text and "**жирный**" in text and "- раз" in text
+    assert set(android.targets_for("doc")["native"]) <= {"html", "md", "txt", "docx"}
+    import pydocs
+    pdf = pydocs.write("<h1>Привет</h1><p>мир <code>код</code></p>", "pdf", tmp_path / "t.pdf")
+    assert pdf.read_bytes()[:4] == b"%PDF"
+
+
+def test_android_docedit_builtin(android, client):
+    import docedit
+    assert docedit.caps()["builtin"]
+    r = client.post("/api/doc/save", data={"html": "<h1>Привет</h1><p>Текст</p>", "format": "docx", "name": "d"})
+    assert r.status_code == 200, r.get_json()
+    r = client.post("/api/doc/save", data={"html": "<p>x</p>", "format": "odt", "name": "d"})
+    assert r.status_code == 400
+
+
+def test_android_download_in_process(monkeypatch, tmp_path):
+    import downloader
+    from tasks import Task
+    monkeypatch.setenv("UNIVERSAL_ANDROID", "1")
+    calls = []
+
+    def fake(urls, o, out, cookie, emit):
+        emit({"progress": 0.5, "message": "Качаю"})
+        (out / "v.mp4").write_bytes(b"x")
+        emit({"done": True})
+        calls.append(urls)
+    monkeypatch.setattr(downloader, "_download_all", fake)
+    monkeypatch.setattr(downloader, "yt_dlp", object())
+    (tmp_path / "out").mkdir()
+    t = Task("d", "dl", tmp_path, "dl")
+    downloader.run_download_task(t, ["https://example.com/v"], {}, None)
+    assert calls and t.done == 1 and (tmp_path / "out" / "v.mp4").exists()

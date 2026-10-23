@@ -11,10 +11,10 @@ on:
         required: true
   workflow_dispatch:
   pull_request:
-    paths: ["mobile/**", "site/**", ".github/workflows/mobile.yml"]
+    paths: ["mobile/**", "site/**", "*.py", "templates/**", "static/**", ".github/workflows/mobile.yml"]
   push:
     branches: [main]
-    paths: ["mobile/**", "site/**", ".github/workflows/mobile.yml"]
+    paths: ["mobile/**", "site/**", "*.py", "templates/**", "static/**", ".github/workflows/mobile.yml"]
 
 permissions:
   contents: write
@@ -39,6 +39,10 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: gradle
+      - uses: actions/setup-python@v5          # Chaquopy собирает Python-пакеты для телефона этим Python
+        id: py
+        with:
+          python-version: "3.12"
       - name: Версия
         id: v
         run: |
@@ -65,6 +69,8 @@ jobs:
           echo "UNIVERSAL_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS || 'universal' }}" >> "$GITHUB_ENV"
       - name: Сборка APK
         working-directory: mobile/android
+        env:
+          CHAQUOPY_BUILD_PYTHON: ${{ steps.py.outputs.python-path }}
         run: |
           ./gradlew assembleRelease --no-daemon -PversionName=${{ steps.v.outputs.version }} -PversionCode=${{ steps.v.outputs.code }}
           cp app/build/outputs/apk/release/app-release.apk "../Universal-${{ steps.v.outputs.version }}-android.apk"
