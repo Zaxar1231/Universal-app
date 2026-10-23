@@ -36,11 +36,15 @@ CATALOG = {
         "title": "ffmpeg", "size": "≈ 190 МБ", "exe": ["ffmpeg.exe", "ffprobe.exe"],
         "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
         "for": "аудио, видео, редактор, скачивание",
+        # macOS: статические сборки Martin Riedl, ffmpeg и ffprobe отдельными архивами
+        "mac": {"size": "≈ 80 МБ", "urls": ["https://ffmpeg.martin-riedl.de/redirect/latest/macos/{riedl}/release/ffmpeg.zip",
+                                           "https://ffmpeg.martin-riedl.de/redirect/latest/macos/{riedl}/release/ffprobe.zip"]},
     },
     "pandoc": {
         "title": "pandoc", "size": "≈ 40 МБ", "exe": ["pandoc.exe"],
         "repo": "jgm/pandoc", "asset": r"windows-x86_64\.zip$",
         "for": "документы",
+        "mac": {"asset": r"{arch}-macOS\.zip$"},
     },
     "poppler": {
         "title": "poppler", "size": "≈ 20 МБ", "exe": ["pdftoppm.exe", "pdftocairo.exe"],
@@ -82,11 +86,52 @@ def _deno_asset() -> str:
     return f"deno-{arch}-{target}.zip"
 
 
+# что ставить само при первом запуске настольной версии, по порядку нужности
+AUTO = ("ffmpeg", "pandoc", "imagemagick", "poppler", "deno", "tesseract")
+# macOS: чего нет в виде готовых архивов, ставим Homebrew (если он есть)
+BREW = {"imagemagick": ["imagemagick"], "poppler": ["poppler"], "tesseract": ["tesseract", "tesseract-lang"],
+        "ffmpeg": ["ffmpeg"], "pandoc": ["pandoc"], "deno": ["deno"]}
+
+
+def _arch() -> str:
+    import platform
+    return "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "x86_64"
+
+
+def _spec(name: str) -> dict:
+    """Описание движка для этой системы: на macOS поверх общего — ключ "mac"."""
+    spec = dict(CATALOG[name])
+    mac = spec.pop("mac", None)
+    if sys.platform == "darwin" and mac:
+        if "urls" in mac or "asset" in mac:
+            spec.pop("url", None)        # у Windows-сборки прямая ссылка, на macOS — своя
+        spec.update(mac)
+    return spec
+
+
 def _exe_names(name: str) -> list[str]:
     names = CATALOG[name]["exe"]
-    if name == "deno" and sys.platform != "win32":  # deno есть и для Linux/macOS, там без .exe
+    # без .exe: deno для Linux/macOS и сборки для macOS (на Linux качаем только deno и yt-dlp)
+    if (name == "deno" and sys.platform != "win32") or sys.platform == "darwin":
         names = [n[:-4] if n.endswith(".exe") else n for n in names]
     return names
+
+
+def available(name: str) -> bool:
+    """Движок уже есть: скачан нами или стоит в системе (в PATH)."""
+    d = _load_paths().get(name)
+    if d and Path(d).exists():
+        return True
+    if name == "ytdlp":
+        return True                  # встроен в приложение
+    if name == "imagemagick" and sys.platform != "win32" and shutil.which("convert"):
+        return True                  # ImageMagick 6 в Linux: convert вместо magick
+    names = [n[:-4] if n.endswith(".exe") and sys.platform != "win32" else n for n in _exe_names(name)]
+    return all(shutil.which(exe) for exe in names)
+
+
+def missing() -> list[str]:
+    return [n for n in AUTO if not available(n)]
 
 
 def root() -> Path:
@@ -123,11 +168,15 @@ def activate() -> None:
 
 
 def can_install(name: str = "") -> bool:
-    """Бинарные движки качаем только на Windows: на Linux они приходят зависимостями
-    пакета, на macOS ставятся через Homebrew. Свежий yt-dlp годится везде."""
+    """Скачиваем сами: на Windows всё; на macOS ffmpeg, pandoc и deno (остальное — Homebrew);
+    на Linux движки приходят зависимостями пакета. Свежий yt-dlp и deno годятся везде."""
     if name in ("ytdlp", "deno"):
         return True
-    return sys.platform == "win32" or bool(os.environ.get("UNIVERSAL_ENGINES_ANYOS"))
+    if sys.platform == "win32" or os.environ.get("UNIVERSAL_ENGINES_ANYOS"):
+        return True
+    if sys.platform == "darwin":
+        return not name or "mac" in CATALOG.get(name, {})
+    return False
 
 
 def status() -> dict:
@@ -188,6 +237,9 @@ def _assets_from_html(repo: str) -> list[tuple[str, str]]:
 def _resolve_url(spec: dict) -> str:
     if "url" in spec:
         return spec["url"].replace("{asset}", _deno_asset())
+    spec = dict(spec)
+    if isinstance(spec.get("asset"), str):
+        spec["asset"] = spec["asset"].replace("{arch}", _arch())
     errors, listed = [], False
     sources = [_assets_from_api, _assets_from_html]
     if spec.get("any_release"):
@@ -212,6 +264,17 @@ def _resolve_url(spec: dict) -> str:
 
 
 def _download(url: str, dest: Path, task: Task | None, base: float, span: float) -> None:
+    for attempt in range(3):         # сервера сборок иногда отвечают 404/обрывом, со второго раза отдают
+        try:
+            return _download_once(url, dest, task, base, span)
+        except EngineError:
+            if attempt == 2 or (task and task.cancel_event.is_set()):
+                raise
+            import time
+            time.sleep(2 + attempt * 3)
+
+
+def _download_once(url: str, dest: Path, task: Task | None, base: float, span: float) -> None:
     req = urllib.request.Request(url, headers=UA)
     try:
         with urllib.request.urlopen(req, timeout=60) as r, dest.open("wb") as f:
@@ -342,12 +405,14 @@ def install(name: str, task: Task | None = None) -> str:
     """Скачивает и распаковывает движок. Возвращает папку, которая уйдёт в PATH."""
     if name not in CATALOG:
         raise EngineError("Неизвестный движок")
-    spec = CATALOG[name]
+    spec = _spec(name)
     edir = engines_dir()
     if task:
         task.total = 1
         task.update(0, f"Ищу последнюю версию {spec['title']}…")
-    url = _resolve_url(spec)
+    riedl = "arm64" if _arch() == "arm64" else "amd64"
+    urls = [u.replace("{riedl}", riedl) for u in spec["urls"]] if "urls" in spec else [_resolve_url(spec)]
+    url = urls[0]
     # ignore_cleanup_errors: Windows держит файл открытым, и ошибка уборки скрыла бы настоящую
     with tempfile.TemporaryDirectory(dir=edir, ignore_cleanup_errors=True) as tmp:
         tmp = Path(tmp)
@@ -355,7 +420,12 @@ def install(name: str, task: Task | None = None) -> str:
         if name == "ytdlp":
             fname = "yt-dlp.zip"
         archive = tmp / fname
-        _download(url, archive, task, 0, 0.9)
+        _download(url, archive, task, 0, 0.9 / len(urls))
+        extra = []
+        for i, u in enumerate(urls[1:], 1):          # macOS ffmpeg: ffprobe отдельным архивом
+            a = tmp / f"part{i}.zip"
+            _download(u, a, task, 0.9 * i / len(urls), 0.9 / len(urls))
+            extra.append(a)
         if task:
             task.update(0.92, "Распаковываю…")
         if name == "ytdlp":
@@ -370,6 +440,8 @@ def install(name: str, task: Task | None = None) -> str:
                 _extract_nsis(archive, unpacked)
             else:
                 _extract(archive, unpacked)
+            for a in extra:
+                _extract(a, unpacked)
             first = _exe_names(name)[0]
             found = next((p for p in unpacked.rglob(first) if p.is_file()), None)
             if not found:
@@ -420,3 +492,58 @@ if __name__ == "__main__":
         print("PATH ok:", {n: bool(shutil.which(CATALOG[n]["exe"][0])) for n in sys.argv[2:] if n != "ytdlp"})
     else:
         print(json.dumps(status(), ensure_ascii=False, indent=1))
+
+
+# --------------------------------------------------------------------- автоустановка
+
+class _Part:
+    """Задача одного движка внутри общей: прогресс i-го из n кладётся в общую полоску."""
+    def __init__(self, outer: Task, i: int, n: int, title: str):
+        self.outer, self.i, self.n, self.title = outer, i, n, title
+        self.cancel_event = outer.cancel_event
+        self.total = self.done = 0
+
+    def update(self, progress=None, message=None):
+        p = (self.i + (progress or 0)) / self.n
+        self.outer.update(p, f"{self.title} ({self.i + 1} из {self.n})" + (f": {message}" if message else ""))
+
+    def check_cancel(self):
+        self.outer.check_cancel()
+
+
+def _brew() -> str | None:
+    return shutil.which("brew") or next((p for p in ("/opt/homebrew/bin/brew", "/usr/local/bin/brew") if os.path.exists(p)), None)
+
+
+def setup_plan() -> list[str]:
+    """Чего не хватает и что мы можем поставить сами на этой системе."""
+    brew = sys.platform == "darwin" and _brew()
+    return [n for n in missing() if can_install(n) or (brew and n in BREW)]
+
+
+def auto_setup(task: Task) -> None:
+    """Первый запуск: докачать все недостающие движки по очереди. Ошибки собираются, а не обрывают остальное."""
+    import subprocess
+    plan = setup_plan()
+    task.total = len(plan)
+    for i, name in enumerate(plan):
+        task.check_cancel()
+        title = CATALOG[name]["title"]
+        part = _Part(task, i, len(plan), title)
+        try:
+            if can_install(name):
+                install(name, part)
+            else:
+                part.update(0, "ставлю через Homebrew…")
+                r = subprocess.run([_brew(), "install", *BREW[name]], capture_output=True, text=True,
+                                   encoding="utf-8", errors="replace", timeout=3600,
+                                   env={**os.environ, "HOMEBREW_NO_AUTO_UPDATE": "1"})
+                if r.returncode != 0:
+                    raise EngineError((r.stderr or r.stdout).strip().splitlines()[-1][:200] if (r.stderr or r.stdout).strip() else "brew не справился")
+            task.done += 1
+        except Exception as e:
+            if task.cancel_event.is_set():
+                raise
+            task.failed.append({"name": title, "error": str(e)})
+    task.update(1, "Готово" if not task.failed else "Готово, но не всё скачалось")
+    task.result = {"installed": task.done, "missing": missing()}

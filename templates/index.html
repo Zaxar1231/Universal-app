@@ -483,6 +483,7 @@ ul.files .up { width: 40px; height: 40px; }
     </header>
 
     <div class="banner offer" id="updateBanner" hidden></div>
+    <div class="banner offer setup" id="setupBar" hidden></div>
     <div class="banner" id="engineBanner" hidden></div>
 
     <!-- редактор документов (static/docedit.js) -->
@@ -1754,7 +1755,9 @@ ul.files .up { width: 40px; height: 40px; }
       const need = { image: ['imagemagick', 'ImageMagick'], audio: ['ffmpeg', 'ffmpeg'], video: ['ffmpeg', 'ffmpeg'], doc: ['pandoc', 'pandoc'],
         edit: ['ffmpeg', 'ffmpeg'], pdft: ['pypdf', 'Пакет pypdf (pip install pypdf)'], ocr: ['tesseract', 'Tesseract OCR'], dl: ['ytdlp', 'yt-dlp (pip install yt-dlp)'], qr: ['qrcode', 'Пакет qrcode (pip install qrcode)'] }[m];
       const ff = ['audio', 'video', 'edit', 'dl'].includes(m) && !caps.engines.ffmpeg;
-      if (caps.engines.can_install && (ff || (need && INSTALLABLE[need[0]] && !caps.engines[need[0]]) || (m === 'pdf' && !POPPLER_OK))) {
+      const want = ff ? 'ffmpeg' : m === 'pdf' ? 'poppler' : need && need[0];
+      const canGet = (caps.engines.installable || []).includes(want);   // на macOS сами качаем не всё
+      if (caps.engines.can_install && canGet && (ff || (need && INSTALLABLE[need[0]] && !caps.engines[need[0]]) || (m === 'pdf' && !POPPLER_OK))) {
         offerEngine(ff ? 'ffmpeg' : m === 'pdf' ? 'poppler' : need[0]);
       } else if (caps.engines.desktop && (ff || (need && INSTALLABLE[need[0]] && !caps.engines[need[0]]) || (m === 'pdf' && !POPPLER_OK))) {
         systemEngineHint(ff ? 'ffmpeg' : m === 'pdf' ? 'poppler' : need[0]);
@@ -2385,6 +2388,34 @@ ul.files .up { width: 40px; height: 40px; }
 
   /* ---------- старт ---------- */
   fetch('/api/formats').then(r => r.json()).then(d => { caps = d; applyMode(); }).catch(() => { applyMode(); });
+
+  /* ---------- первый запуск: недостающие движки ставятся сами, здесь только прогресс ---------- */
+  function watchSetup(d) {
+    const bar = $('setupBar'), t = d && d.task;
+    if (!t) { bar.hidden = true; return; }
+    if (['queued', 'running'].includes(t.status)) {
+      const p = Math.round((t.progress || 0) * 100);
+      bar.hidden = false;
+      bar.innerHTML = `<span class="t-body-m"><b>Готовлю приложение:</b> скачиваю программы, которые нужны для работы (один раз). ${esc(t.message || '')} · ${p}%</span>` +
+        `<div class="progress"><i style="width:${p}%"></i></div><span class="hint">Можно пользоваться тем, что уже готово. Интернет нужен только сейчас.</span>`;
+      setTimeout(() => fetch('/api/setup').then(r => r.json()).then(watchSetup).catch(() => setTimeout(() => watchSetup(d), 3000)), 1000);
+      return;
+    }
+    fetch('/api/formats').then(r => r.json()).then(x => { caps = x; applyMode(); }).catch(() => {});
+    const failed = t.failed || [];
+    if (!failed.length) {
+      bar.hidden = false; bar.innerHTML = '<span class="t-body-m"><b>Всё готово:</b> программы скачаны, приложение работает полностью.</span>';
+      setTimeout(() => { bar.hidden = true; }, 6000);
+      return;
+    }
+    bar.hidden = false;
+    bar.innerHTML = `<span class="t-body-m"><b>Не всё скачалось:</b> ${failed.map(f => `${esc(f.name)} (${esc(f.error)})`).join('; ')}. ` +
+      'Проверь интернет и нажми «Повторить». Остальное уже работает.</span><button class="btn filled state" id="setupRetry">Повторить</button>';
+    $('setupRetry').onclick = () => fetch('/api/setup', { method: 'POST' }).then(r => r.json()).then(watchSetup);
+  }
+  fetch('/api/setup').then(r => r.json()).then(watchSetup).catch(() => {});
+  // пульс: если окно не открылось и приложение работает во вкладке браузера, оно закроется вместе с ней
+  setInterval(() => fetch('/api/ping').catch(() => {}), 20000); fetch('/api/ping').catch(() => {});
   applyMode();
 })();
 
