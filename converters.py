@@ -456,8 +456,19 @@ PILLOW_WRITE = {"png": "PNG", "jpg": "JPEG", "jpeg": "JPEG", "jfif": "JPEG", "jp
                 "ppm": "PPM", "pgm": "PPM", "pbm": "PPM", "pnm": "PPM"}
 
 
+def _pil_saves(fmt: str) -> bool:
+    try:
+        from PIL import Image, features
+        Image.init()
+        return fmt in Image.SAVE and (fmt != "WEBP" or features.check("webp"))
+    except Exception:
+        return False
+
+
 def pillow_targets() -> set[str]:
     out = set(PILLOW_WRITE)
+    if not _pil_saves("WEBP") and not os.environ.get("UNIVERSAL_ANDROID"):
+        out -= {"webp"}
     try:
         from PIL import features
         if features.check("avif"):
@@ -530,7 +541,11 @@ def convert_image_pillow(src: Path, out: Path, to: str, quality: int, keep_metad
                 kw["exif"] = exif
         if fmt == "PDF":
             kw["resolution"] = 150
-        im.save(out, format=fmt, **kw)
+        if fmt == "WEBP" and not _pil_saves("WEBP") and os.environ.get("UNIVERSAL_ANDROID"):
+            import android_pdf   # в Pillow для телефона нет libwebp, WebP кодирует сам Android
+            android_pdf.save_webp(im, out, kw["quality"])
+        else:
+            im.save(out, format=fmt, **kw)
     if not out.exists() or out.stat().st_size == 0:
         out.unlink(missing_ok=True)
         raise ConvertError("картинка не сохранилась")

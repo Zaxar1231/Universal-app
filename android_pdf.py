@@ -1,13 +1,15 @@
 """
 PDF в картинки на телефоне без poppler: страницы рисует сам Android (android.graphics.pdf.PdfRenderer)
-через мост Java встроенного Python (Chaquopy). Импортируется только на Android.
+через мост Java встроенного Python (Chaquopy). Здесь же WebP: в Pillow для телефона нет libwebp,
+кодирует Android (Bitmap.compress). Импортируется только на Android.
 """
 from __future__ import annotations
 
+import io
 import tempfile
 from pathlib import Path
 
-from java import jclass  # type: ignore  (есть только во встроенном Python на Android)
+from java import jarray, jbyte, jclass, jint  # type: ignore  (есть только во встроенном Python на Android)
 
 File = jclass("java.io.File")
 FileOutputStream = jclass("java.io.FileOutputStream")
@@ -18,6 +20,7 @@ Bitmap = jclass("android.graphics.Bitmap")
 Config = jclass("android.graphics.Bitmap$Config")
 CompressFormat = jclass("android.graphics.Bitmap$CompressFormat")
 Color = jclass("android.graphics.Color")
+BitmapFactory = jclass("android.graphics.BitmapFactory")
 
 MAX_SIDE = 7000        # больше Android-битмап может не влезть в память
 
@@ -54,7 +57,7 @@ def _render(d: _Doc, index: int, dpi: int, out: Path) -> Path:
             s = MAX_SIDE / max(w, h)
             w, h = max(1, int(w * s)), max(1, int(h * s))
         bmp = Bitmap.createBitmap(w, h, Config.ARGB_8888)
-        bmp.eraseColor(Color.WHITE)
+        bmp.eraseColor(jint(Color.WHITE))   # без jint Chaquopy не выбирает между eraseColor(int) и (long)
         page.render(bmp, None, None, Page.RENDER_MODE_FOR_PRINT)
     finally:
         page.close()
@@ -77,3 +80,23 @@ def render_pages(path: Path, pages: list[int], dpi: int, out_for) -> list[Path]:
     """out_for(i) -> путь PNG для страницы i (с нуля)."""
     with _Doc(path) as d:
         return [_render(d, i, dpi, out_for(i)) for i in pages]
+
+
+def save_webp(im, out: Path, quality: int) -> Path:
+    """Картинку Pillow -> WebP силами Android (с потерями; при качестве 100 — без потерь, если умеет)."""
+    buf = io.BytesIO()
+    im.save(buf, "PNG")
+    data = buf.getvalue()
+    bmp = BitmapFactory.decodeByteArray(jarray(jbyte)(data), 0, len(data))
+    if bmp is None:
+        raise RuntimeError("Android не открыл картинку для WebP")
+    names = ("WEBP_LOSSLESS", "WEBP") if quality >= 100 else ("WEBP_LOSSY", "WEBP")
+    fmt = next(getattr(CompressFormat, n) for n in names if hasattr(CompressFormat, n))
+    fos = FileOutputStream(str(out))
+    try:
+        if not bmp.compress(fmt, max(0, min(100, int(quality))), fos):
+            raise RuntimeError("Android не сохранил WebP")
+    finally:
+        fos.close()
+        bmp.recycle()
+    return out

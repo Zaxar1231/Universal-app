@@ -28,15 +28,14 @@ jobs:
         with:
           python-version: "3.12"
       - name: Программы для проверки
-        # man-db на раннерах перестраивает справку после каждого пакета: без этого шаг шёл 40 минут
+        # без apt: на раннерах apt-get с ffmpeg шёл 30–40 минут; ffmpeg — статическая сборка из PyPI
         run: |
-          sudo rm -f /var/lib/man-db/auto-update
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends ffmpeg espeak-ng fonts-dejavu-core >/dev/null
-          pip install -q pillow
+          pip install -q pillow imageio-ffmpeg
+          mkdir -p "$HOME/bin" && ln -sf "$(python -c 'import imageio_ffmpeg as f; print(f.get_ffmpeg_exe())')" "$HOME/bin/ffmpeg"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: Веб-часть и сервер для телефона
         working-directory: mobile
-        run: npm ci && node build-www.mjs && npx cap sync android && npm i --no-save playwright-core@1.56.1
+        run: npm ci && node build-www.mjs && npx cap sync android
       - name: Сборка APK для эмулятора (x86_64)
         working-directory: mobile/android
         env:

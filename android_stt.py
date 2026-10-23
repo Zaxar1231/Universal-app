@@ -13,7 +13,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-from java import jclass  # type: ignore
+from java import jarray, jbyte, jclass  # type: ignore
 
 import engines
 from tasks import Task
@@ -140,7 +140,7 @@ def transcribe(src: Path, lang: str, task: Task | None = None, base: float = 0.0
                 task.check_cancel()
                 if dur:
                     task.update(base + span * min(1.0, got / (dur * SR * 2)))
-            if rec.acceptWaveForm(chunk, len(chunk)):
+            if rec.acceptWaveForm(jarray(jbyte)(chunk), len(chunk)):   # явный byte[]: есть ещё short[] и float[]
                 s = _segment(json.loads(rec.getResult()))
                 if s:
                     segs.append(s)

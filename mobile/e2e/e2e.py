@@ -4,7 +4,7 @@
 Сервер работает внутри приложения (встроенный Python), порт проброшен на компьютер
 (adb forward tcp:47700). Каждый режим гоняется по-настоящему: загрузка файла, задача,
 скачивание результата и проверка, что внутри то, что нужно.
-Файлы для проверки делает этот же скрипт (Pillow, wave, espeak-ng на компьютере CI).
+Файлы для проверки делает этот же скрипт (Pillow, wave, ffmpeg на компьютере CI); речь — образец из vosk-api.
 """
 from __future__ import annotations
 
@@ -120,7 +120,7 @@ def png(w=320, h=200, text=None) -> bytes:
         try:
             font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 48)
         except OSError:
-            font = ImageFont.load_default()
+            font = ImageFont.load_default(size=48)
         d.text((20, h // 2 - 30), text, fill="black", font=font)
     else:
         d.rectangle((40, 40, w - 40, h - 40), fill=(220, 40, 40))
@@ -147,10 +147,15 @@ def tone_wav(sec=3.0, sr=44100) -> bytes:
     return b.getvalue()
 
 
-def speech_wav(text, voice="en") -> bytes:
-    p = OUT / "speech.wav"
-    subprocess.run(["espeak-ng", "-v", voice, "-s", "130", "-w", str(p), text], check=True)
-    return p.read_bytes()
+SPEECH_URL = "https://raw.githubusercontent.com/alphacep/vosk-api/master/python/example/test.wav"
+
+
+def speech_wav() -> bytes:
+    """Английская речь (цифры: «one zero zero zero one, nine oh two one oh, zero one eight zero three»)."""
+    with urllib.request.urlopen(SPEECH_URL, timeout=60) as r:
+        data = r.read()
+    (OUT / "speech.wav").write_bytes(data)
+    return data
 
 
 def video_mp4() -> bytes:
@@ -295,10 +300,10 @@ def _():
 @check("голос в текст (Vosk на телефоне)")
 def _():
     t = run_task("api/stt", {"lang": "en", "model": "normal"},
-                 [("files", ("voice.wav", speech_wav("Hello. This is a test of speech recognition.")))], timeout=900)
+                 [("files", ("voice.wav", speech_wav()))], timeout=900)
     tr = t["result"]["transcripts"][0]
-    text = tr["text"].lower()
-    assert sum(w in text for w in ("hello", "test", "speech", "recognition")) >= 2, text
+    words = tr["text"].lower().split()
+    assert sum(w in words for w in ("one", "zero", "nine", "two", "eight", "three")) >= 3, tr["text"]
     return f"распознано: {tr['text']!r}"
 
 
