@@ -12,9 +12,9 @@ android {
         versionCode((project.findProperty('versionCode') ?: '1') as Integer)
         versionName(project.findProperty('versionName') ?: '1.0')
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        // yt-dlp на телефоне (youtubedl-android): Python и ffmpeg собраны под эти процессоры
+        // 64-битные телефоны (arm64-v8a): встроенный Python 3.12 (Chaquopy) 32-битные не поддерживает
         // для эмулятора в CI: -Pabis=x86_64
-        ndk { abiFilters(*((project.findProperty('abis') ?: 'arm64-v8a,armeabi-v7a').split(','))) }
+        ndk { abiFilters(*((project.findProperty('abis') ?: 'arm64-v8a').split(','))) }
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
