@@ -79,7 +79,11 @@
     if (!caps) {
       fetch('/api/doc/caps').then(r => r.json()).then(c => {
         caps = c;
-        if (!c.libreoffice) {
+        if (c.builtin) {         // телефон: встроенный конвертер — DOCX, PDF, Markdown, TXT, HTML
+          ['odt', 'rtf'].forEach(f => { $('docFmt').querySelector(`option[value=${f}]`).disabled = true; });
+          $('docPick').accept = '.docx,.html,.htm,.md,.markdown,.txt,.epub';
+          state('Работает встроенный конвертер: открывает DOCX, Markdown, HTML, TXT и EPUB, сохраняет в DOCX, PDF, Markdown, TXT и HTML. Сложное оформление может упроститься.');
+        } else if (!c.libreoffice) {
           $('docFmt').querySelector('option[value=pdf]').disabled = true;
           state(c.pandoc ? 'Без LibreOffice: PDF недоступен, а при открытии документов могут потеряться шрифты и цвета. Поставь LibreOffice для полной совместимости.'
             : 'Нет ни LibreOffice, ни pandoc: открывать и сохранять можно только HTML и TXT.', !c.pandoc);

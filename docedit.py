@@ -40,9 +40,20 @@ class DocError(Exception):
     pass
 
 
+def _builtin() -> bool:
+    """Нет ни LibreOffice, ни pandoc (телефон): работает встроенный конвертер pydocs."""
+    if conv._which("soffice", "libreoffice") or conv._which("pandoc"):
+        return False
+    try:
+        import pydocs
+        return pydocs.available()
+    except ImportError:
+        return False
+
+
 def caps() -> dict:
     return {"libreoffice": bool(conv._which("soffice", "libreoffice")), "pandoc": bool(conv._which("pandoc")),
-            "open": list(OPEN_EXT), "save": list(SAVE_FMT)}
+            "builtin": _builtin(), "open": list(OPEN_EXT), "save": list(SAVE_FMT)}
 
 
 def _soffice() -> str | None:
@@ -115,6 +126,11 @@ def open_doc(src: Path) -> dict:
             return {"html": "".join(f"<p>{htmllib.escape(l) or '<br>'}</p>" for l in text.splitlines()), "engine": "текст"}
         if ext in ("html", "htm"):
             return {"html": _body(src.read_bytes().decode("utf-8", "replace")), "engine": "HTML"}
+        if _builtin():
+            import pydocs
+            if ext not in pydocs.READ:
+                raise DocError(f"на телефоне .{ext} не открывается: сохрани его в DOCX на компьютере")
+            return {"html": pydocs.read_html(src), "engine": "встроенный конвертер"}
         if ext in ("md", "markdown"):
             media = tmp / "media"
             out = _pandoc(["-f", "gfm", "-t", "html5", f"--extract-media={media}", str(src)])
@@ -147,6 +163,11 @@ def save_doc(body: str, fmt: str, out_dir: Path, stem: str) -> Path:
     if fmt == "html":
         out.write_text(page, encoding="utf-8")
         return out
+    if _builtin():
+        import pydocs
+        if fmt not in ("docx", "pdf", "md", "txt"):
+            raise DocError(f"на телефоне .{fmt} не сохраняется: выбери DOCX, PDF, Markdown или TXT")
+        return pydocs.write(_body(body), fmt, out, stem)
     with tempfile.TemporaryDirectory(dir=out_dir) as tmp:
         tmp = Path(tmp)
         src = tmp / f"{stem}.html"

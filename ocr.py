@@ -12,6 +12,7 @@ Ghostscript не нужен: с OCRmyPDF 17.13 PDF/A собирается вст
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -46,7 +47,14 @@ class OcrError(Exception):
     pass
 
 
+def _android() -> bool:
+    """Телефон (встроенный Python): вместо OCRmyPDF — Tesseract для Android (android_ocr)."""
+    return bool(os.environ.get("UNIVERSAL_ANDROID"))
+
+
 def version() -> str:
+    if _android():
+        return "Tesseract для Android"
     try:
         return metadata.version("ocrmypdf")
     except metadata.PackageNotFoundError:
@@ -76,12 +84,30 @@ def languages() -> list[str]:
 
 
 def status() -> dict:
+    if _android():
+        ok = available()
+        return {"ocrmypdf": ok, "version": version() if ok else "", "tesseract": ok, "ghostscript": False,
+                "languages": list(ANDROID_LANGS), "names": LANG_NAMES, "android": True}
     v = version()
     return {"ocrmypdf": bool(v), "version": v, "tesseract": bool(tesseract()), "ghostscript": bool(_ghostscript()),
             "languages": languages(), "names": LANG_NAMES}
 
 
+# языки, которые телефон скачивает сам (tessdata_fast), см. android_ocr.LANGS
+ANDROID_LANGS = ("rus", "eng", "ukr", "bel", "kaz", "deu", "fra", "spa", "ita", "pol", "tur", "chi_sim", "jpn")
+_android_ok: bool | None = None
+
+
 def available() -> bool:
+    global _android_ok
+    if _android():
+        if _android_ok is None:            # библиотека Tesseract для Android загрузилась?
+            try:
+                import android_ocr  # noqa: F401
+                _android_ok = True
+            except Exception:
+                _android_ok = False
+        return _android_ok
     return bool(version()) and bool(tesseract())
 
 
@@ -160,6 +186,12 @@ def _run(task: Task, args: list[str]) -> tuple[int, list[str]]:
 
 
 def run_ocr_task(task: Task, items: list[tuple[Path, str]], o: dict) -> None:
+    if _android():
+        import android_ocr
+        try:
+            return android_ocr.run_ocr_task(task, items, o)
+        except android_ocr.OcrError as e:
+            raise OcrError(str(e))
     if not version():
         raise OcrError("Не установлен OCRmyPDF: pip install ocrmypdf")
     if not tesseract():

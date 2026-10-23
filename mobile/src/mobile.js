@@ -53,6 +53,7 @@
     window.scrollTo(0, 0);
     if (page === 'pageFiles') listFiles();
     if (page === 'pageInfo') loadInfo();
+    try { syncFull(); } catch (_) { /* полная версия ещё не объявлена (самый первый go) */ }
   }
   document.querySelectorAll('nav.navbar button').forEach(b => { b.onclick = () => go(b.dataset.page); });
 
@@ -729,6 +730,47 @@
     $('stt').addEventListener('change', e => { if (e.target.id !== 'sttPick') store.set('stt', JSON.stringify({ lang: $('sttLang').value, model: qs('input[name=sttm]:checked').value })); });
     if (platform === 'android') $('sttShareHint').textContent = ' Можно и так: в Telegram зажми голосовое → «Поделиться» → Universal.';
   })();
+
+  /* ===================== полная версия прямо на телефоне (Android) ===================== */
+  // встроенный Python запускает тот же сервер Universal, что на компьютере (PyServerPlugin, android_main.py),
+  // а вкладка «Инструменты» показывает его интерфейс. Готовые файлы страница передаёт сюда (postMessage),
+  // и они сохраняются в «Документы/Universal», как всё остальное.
+  const PyServer = platform === 'android' ? C.registerPlugin('PyServer') : null;
+  let fullUrl = '', fullOrigin = '';
+  function syncFull() { document.body.classList.toggle('full-on', !!fullUrl && !$('pageTools').hidden); }
+  function startFull() {
+    $('fullState').hidden = false;
+    $('fullState').innerHTML = '<b>Запускаю полную версию…</b><p class="hint">Все инструменты Universal работают прямо на телефоне. Первый запуск после установки — до минуты.</p><div class="bar2 ind"><i></i></div>';
+    PyServer.start().then(({ url }) => {
+      fullUrl = url; fullOrigin = new URL(url).origin;
+      const f = $('fullFrame'); f.src = url; f.hidden = false; $('fullState').hidden = true;
+      syncFull();
+    }).catch(e => {
+      $('fullState').innerHTML = `<b>Полная версия не запустилась</b><p class="hint">${esc(e.message || e)}</p><button class="btn tonal" id="fullRetry">Ещё раз</button>`;
+      $('fullRetry').onclick = startFull;
+    });
+  }
+  if (PyServer) {
+    $('full').hidden = false; $('stt').hidden = true; $('try').hidden = true;   // всё это есть в полной версии
+    TITLES.pageTools = 'Universal';
+    startFull();
+  }
+  window.addEventListener('message', async ev => {
+    const m = ev.data || {};
+    if (!fullOrigin || ev.origin !== fullOrigin || m.type !== 'universal-save') return;
+    const reply = ok => ev.source && ev.source.postMessage({ type: 'universal-saved', id: m.id, ok }, ev.origin);
+    try {
+      await ensureFolder();
+      const path = await freePath(cleanName(m.name, 'file'));
+      if (m.url) await Filesystem.downloadFile({ url: new URL(m.url, fullUrl).href, path, directory: DIR, recursive: true, readTimeout: 600000 });
+      else await Filesystem.writeFile({ path, data: m.b64, directory: DIR, recursive: true });
+      const st = await Filesystem.stat({ path, directory: DIR }), name = path.slice(FOLDER.length + 1);
+      snack(`Сохранено в ${WHERE}: ${name}`, 'Поделиться', () => shareFile(st.uri, name));
+      reply(true);
+    } catch (e) {
+      snack('Не сохранилось: ' + (e.message || e)); reply(false);
+    }
+  });
 
   /* ===================== «Поделиться → Universal» (Android) ===================== */
   if (platform === 'android') {

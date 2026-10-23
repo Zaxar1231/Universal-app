@@ -479,6 +479,8 @@ def run_download_task(task: Task, urls: list[str], o: dict, cookiefile: Path | N
         raise DownloadFail("yt-dlp не установлен: pip install yt-dlp")
     out = task.out_dir
     task.total = len(urls)
+    if os.environ.get("UNIVERSAL_ANDROID"):
+        return _run_inprocess(task, urls, o, cookiefile)
     events = task.job_dir / "dl_events.jsonl"
     args = task.job_dir / "dl_args.json"
     args.write_text(json.dumps({"urls": urls, "opts": o, "out": str(out), "events": str(events),
@@ -515,6 +517,32 @@ def run_download_task(task: Task, urls: list[str], o: dict, cookiefile: Path | N
     if not finished and not task.cancel_event.is_set():
         tail = (task.job_dir / "dl_worker.log").read_text(encoding="utf-8", errors="replace").strip().splitlines()[-3:]
         task.failed.append({"name": "загрузчик", "error": "Процесс скачивания упал: " + " / ".join(tail)[-300:]})
+    _cleanup(out, cookiefile)
+    if not task.done and task.failed:
+        raise DownloadFail(task.failed[0]["error"])
+
+
+def _run_inprocess(task: Task, urls: list[str], o: dict, cookiefile: Path | None) -> None:
+    """Android (встроенный Python): отдельный процесс Python там не запустить, качаем в этом же.
+    «Отмена» срабатывает на ближайшем событии прогресса yt-dlp."""
+    out = task.out_dir
+
+    def emit(ev):
+        if task.cancel_event.is_set():
+            raise Cancelled()
+        if "progress" in ev or "message" in ev:
+            task.update(ev.get("progress"), ev.get("message"))
+        if "done" in ev:
+            task.done += 1
+        if "failed" in ev:
+            task.failed.append({"name": ev["failed"], "error": ev["error"]})
+    try:
+        _download_all(urls, o, out, cookiefile, emit)
+    except Exception as e:
+        if task.cancel_event.is_set() or isinstance(e, Cancelled):
+            _cleanup(out, cookiefile)
+            raise Cancelled()
+        raise
     _cleanup(out, cookiefile)
     if not task.done and task.failed:
         raise DownloadFail(task.failed[0]["error"])

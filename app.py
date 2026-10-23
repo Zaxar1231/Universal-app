@@ -170,6 +170,8 @@ def remember_archive_name(job_dir: Path, raw: str) -> str:
 
 
 def poppler_ok() -> dict:
+    if os.environ.get("UNIVERSAL_ANDROID"):
+        return {"pdftoppm": True, "pdftocairo": True}      # на телефоне PDF рисует Android (android_pdf)
     return {t: bool(shutil.which(t)) for t in ("pdftoppm", "pdftocairo")}
 
 
@@ -226,6 +228,36 @@ def convert_one(pdf: Path, out_dir: Path, fmt: str, dpi: int, quality: int,
                 a4: bool = False, a4_mode: str = "contain", a4_orient: str = "auto") -> dict:
     spec = FORMATS[fmt]
     target = out_dir / stem
+    if os.environ.get("UNIVERSAL_ANDROID") and not shutil.which(spec["tool"]):
+        # телефон: poppler нет, страницы рисует Android (PdfRenderer), формат делает Pillow
+        if fmt not in PIL_FORMAT or Image is None:
+            return {"name": stem, "ok": False, "error": f"На телефоне PDF можно сохранить в JPG, PNG, TIFF или WebP, а не {fmt.upper()}"}
+        try:
+            import android_pdf
+            n = android_pdf.page_count(pdf)
+            pages = list(range(n)) if all_pages else [0]
+            width = len(str(n))
+            name = (lambda i: f"{stem}-{str(i + 1).zfill(width)}") if all_pages else (lambda i: stem)
+            produced = []
+            for png in android_pdf.render_pages(pdf, pages, dpi, lambda i: out_dir / f".{name(i)}.render.png"):
+                final = out_dir / (png.name[1:].replace(".render.png", "") + "." + spec["ext"])
+                with Image.open(png) as im:
+                    im = im.convert("L") if gray else im.convert("RGB")
+                    kw = {"quality": quality} if fmt in ("jpg", "webp") else {}
+                    if fmt in ("jpg", "png", "tiff"):
+                        kw["dpi"] = (dpi, dpi)
+                    im.save(final, PIL_FORMAT[fmt], **kw)
+                png.unlink(missing_ok=True)
+                produced.append(final)
+        except Exception as e:
+            return {"name": stem, "ok": False, "error": str(e)[:200]}
+        if a4 and Image is not None:
+            for p in produced:
+                try:
+                    fit_to_a4(p, fmt, dpi, quality, a4_mode, a4_orient, gray)
+                except Exception as e:
+                    return {"name": stem, "ok": False, "error": f"A4: {e}"}
+        return {"name": stem, "ok": True, "files": [p.name for p in produced]}
     cmd = [spec["tool"], spec["flag"]]
     if spec["dpi"]:
         cmd += ["-r", str(dpi)]
@@ -291,7 +323,8 @@ def convert_one(pdf: Path, out_dir: Path, fmt: str, dpi: int, quality: int,
 
 @app.route("/")
 def index():
-    return render_template("index.html", formats=list(FORMATS.keys()), poppler=poppler_ok())
+    return render_template("index.html", formats=list(FORMATS.keys()), poppler=poppler_ok(),
+                           android=bool(os.environ.get("UNIVERSAL_ANDROID")))
 
 
 @app.route("/api/status")
@@ -1312,6 +1345,8 @@ def about_open():
 @app.route("/api/update")
 def update_check():
     _local_only()
+    if os.environ.get("UNIVERSAL_ANDROID"):
+        abort(403)            # на телефоне приложение обновляется само (APK), не через этот сервер
     try:
         return jsonify(updater.check(force=request.args.get("force") == "1"))
     except updater.UpdateError as e:

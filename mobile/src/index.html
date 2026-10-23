@@ -77,6 +77,11 @@ dialog.wn h2 { margin: 0; font-size: 1.375rem; font-weight: 400; } dialog.wn .ro
 .wn-body h3 { margin: 4px 0; font-size: 1rem; } .wn-body h4 { margin: 12px 0 4px; color: var(--primary); font-size: .9375rem; }
 .wn-body ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; } .wn-body p { margin: 4px 0; }
 .wn-body code { font-family: ui-monospace, monospace; font-size: .9em; }
+/* полная версия во вкладке «Инструменты» (Android): на весь экран между шапкой и нижним меню */
+body.full-on { padding-bottom: 0; overflow: hidden; }
+body.full-on main.wrap { padding: 0; max-width: none; }
+#fullFrame { position: fixed; left: 0; right: 0; top: calc(56px + var(--top)); bottom: calc(80px + var(--bottom)); width: 100%;
+  height: calc(100dvh - 136px - var(--top) - var(--bottom)); border: 0; background: var(--surface); }
 .stt-text { margin: 0; white-space: pre-wrap; line-height: 1.5; user-select: text; -webkit-user-select: text; background: var(--c-low); padding: 12px; border-radius: 12px; max-height: 50vh; overflow: auto; }
 .upd { background: var(--tertiary-container); color: var(--on-tertiary-container); margin-bottom: 16px; gap: 12px; }
 .upd ul { margin: 0; padding-left: 18px; font-size: .875rem; }
@@ -137,6 +142,13 @@ nav.navbar button { font-size: .6875rem; min-width: 0; }
 
   <!-- ===================== инструменты с сайта ===================== -->
   <div class="page" id="pageTools" hidden>
+    <!-- Android: полная версия Universal на самом телефоне (встроенный Python, см. PyServerPlugin) -->
+    <div id="full" hidden>
+      <div class="card stack" id="fullState"><b>Запускаю полную версию…</b>
+        <p class="hint">Все инструменты Universal работают прямо на телефоне. Первый запуск после установки — до минуты.</p>
+        <div class="bar2 ind"><i></i></div></div>
+      <iframe id="fullFrame" title="Universal" hidden allow="clipboard-read; clipboard-write"></iframe>
+    </div>
     <!-- голос в текст: распознаёт компьютер с Universal (faster-whisper), текст приходит сюда -->
     <div class="card stack" id="stt">
       <h3>Голос в текст</h3>

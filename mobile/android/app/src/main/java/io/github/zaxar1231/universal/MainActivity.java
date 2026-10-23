@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ShareInPlugin.class);
         registerPlugin(ApkInstallPlugin.class);
         registerPlugin(YtdlPlugin.class);
+        registerPlugin(PyServerPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
