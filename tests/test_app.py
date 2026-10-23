@@ -1523,3 +1523,45 @@ def test_stt_real_voice_message(tmp_path):
     text = " ".join(t for _, _, t in segs)
     print("ru:", text)
     assert len(re.findall(r"[а-яё]", text.lower())) >= 10
+
+
+# ---------- первый запуск: движки ставятся сами ----------
+
+def test_auto_setup_installs_missing_and_collects_errors(monkeypatch, tmp_path):
+    import engines
+    from tasks import Task
+    monkeypatch.setattr(engines, "setup_plan", lambda: ["ffmpeg", "pandoc", "poppler"])
+    monkeypatch.setattr(engines, "can_install", lambda name="": True)
+    monkeypatch.setattr(engines, "missing", lambda: ["poppler"])
+    done = []
+
+    def fake_install(name, task=None):
+        task.update(0.5, "Скачиваю")
+        if name == "poppler":
+            raise engines.EngineError("нет интернета")
+        done.append(name)
+    monkeypatch.setattr(engines, "install", fake_install)
+    (tmp_path / "out").mkdir()
+    t = Task("s", "setup", tmp_path, "setup")
+    engines.auto_setup(t)
+    assert done == ["ffmpeg", "pandoc"] and t.done == 2
+    assert t.failed == [{"name": "poppler", "error": "нет интернета"}] and t.result["missing"] == ["poppler"]
+
+
+def test_engine_spec_for_macos(monkeypatch):
+    import engines
+    monkeypatch.setattr(engines.sys, "platform", "darwin")
+    ff, pd = engines._spec("ffmpeg"), engines._spec("pandoc")
+    assert "url" not in ff and len(ff["urls"]) == 2 and pd["asset"] == r"{arch}-macOS\.zip$"
+    assert engines._exe_names("ffmpeg") == ["ffmpeg", "ffprobe"]
+    assert engines.can_install("ffmpeg") and engines.can_install("pandoc") and not engines.can_install("poppler")
+
+
+def test_setup_endpoint(client, monkeypatch):
+    import engines
+    assert client.get("/api/setup").get_json() == {"task": None, "missing": []}    # не настольная версия
+    monkeypatch.setenv("UNIVERSAL_DESKTOP", "1")
+    monkeypatch.setattr(engines, "setup_plan", lambda: [])
+    d = client.post("/api/setup").get_json()
+    assert d["task"] is None and isinstance(d["missing"], list)
+    assert client.get("/api/ping").status_code == 204 and webapp.app.config["LAST_PING"] > 0

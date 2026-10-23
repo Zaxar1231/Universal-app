@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 import zipfile
@@ -650,6 +651,7 @@ def formats():
     eng.update({"ytdlp": downloader.available(), "ytdlp_version": downloader.version(),
                 "qrcode": qrtools.available(), "pypdf": pdftools.available(),
                 "poppler": all(poppler_ok().values()), "can_install": engine_store.can_install(),
+                "installable": [n for n in engine_store.CATALOG if engine_store.can_install(n)],
                 "platform": sys.platform,
                 "deno": bool(shutil.which("deno")),
                 "ocr": ocr.available(), "ocrmypdf": bool(ocr.version()), "tesseract": bool(ocr.tesseract()),
@@ -1084,6 +1086,46 @@ def qr_bulk():
     shutil.rmtree(job_dir / "in", ignore_errors=True)
     return jsonify({"job": job_id, "archive": archive, "total": len(links), "done": ok,
                     "failed": failed, "files": ok + 1})
+
+
+# ---------- Первый запуск: недостающие движки ставятся сами ----------
+
+SETUP: dict = {"task": None}
+_setup_lock = threading.Lock()
+
+
+def start_setup() -> dict | None:
+    """Запустить фоновую докачку недостающих движков (если есть что ставить и она ещё не идёт)."""
+    with _setup_lock:
+        t = SETUP["task"]
+        if t and t.status in ("queued", "running"):
+            return t.to_dict()
+        if not engine_store.setup_plan():
+            SETUP["task"] = None          # ставить нечего: старая неудачная попытка больше не нужна
+            return None
+        job_id, job_dir, archive = new_job("setup")
+        task = Task(job_id, "setup", job_dir, archive)
+        SETUP["task"] = task
+        TASKS.submit(task, engine_store.auto_setup)
+        return task.to_dict()
+
+
+@app.route("/api/setup", methods=["GET", "POST"])
+def setup_status():
+    if not os.environ.get("UNIVERSAL_DESKTOP"):
+        return jsonify({"task": None, "missing": []})
+    _local_only()
+    if request.method == "POST":
+        start_setup()
+    t = SETUP["task"]
+    return jsonify({"task": t.to_dict() if t else None, "missing": engine_store.missing()})
+
+
+@app.route("/api/ping")
+def ping():
+    """Пульс открытой страницы: в режиме «в браузере» приложение закрывается, когда вкладку закрыли."""
+    app.config["LAST_PING"] = time.time()
+    return "", 204
 
 
 @app.route("/api/engines/install/<name>", methods=["POST"])

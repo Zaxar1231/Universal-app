@@ -199,7 +199,11 @@ jobs:
       - name: Сборка .app
         env:
           UNIVERSAL_VERSION: ${{ steps.v.outputs.version }}
-        run: pyinstaller packaging/universal.spec --noconfirm
+        run: |
+          pyinstaller packaging/universal.spec --noconfirm
+          # цельная подпись всего .app (ad-hoc): без неё macOS на Apple Silicon пишет «приложение повреждено»
+          codesign --force --deep --sign - dist/Universal.app
+          codesign --verify --deep dist/Universal.app
       - name: Самопроверка
         run: |
           export UNIVERSAL_HOME="$RUNNER_TEMP/universal-smoke"
@@ -210,6 +214,7 @@ jobs:
         run: |
           V="${{ steps.v.outputs.version }}"
           mkdir dmg && cp -R dist/Universal.app dmg/ && ln -s /Applications dmg/Applications
+          cp packaging/macos-first-run.txt "dmg/Если не открывается.txt"
           hdiutil create -volname "Universal $V" -srcfolder dmg -ov -format UDZO "Universal-$V-macos-${{ matrix.arch }}.dmg"
       - name: В релиз
         env:

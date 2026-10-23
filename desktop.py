@@ -1,7 +1,7 @@
 """
 Universal как обычное Windows-приложение: своё окно (WebView2), без консоли и браузера.
 
-Внутри тот же Flask-сервер, что и в веб-версии, только на случайном порту
+Внутри тот же Flask-сервер, что и в веб-версии, только на постоянном порту
 127.0.0.1 и без пароля. Задания хранятся в %LOCALAPPDATA%\\Universal\\jobs,
 скачанные движки в %LOCALAPPDATA%\\Universal\\engines.
 
@@ -56,6 +56,84 @@ def _listen(app):
             continue
     port = _free_port()
     return make_server("127.0.0.1", port, app, threaded=True), port
+
+
+WEBVIEW2_ID = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+WEBVIEW2_SETUP = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+
+
+def _webview2_version() -> str:
+    """Версия WebView2 Runtime из реестра ('' — нет). Без него pywebview откатывается на Internet
+    Explorer (MSHTML), и современный интерфейс в нём не работает: окно пустое или сломанное."""
+    import winreg
+    keys = [(winreg.HKEY_LOCAL_MACHINE, rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_ID}"),
+            (winreg.HKEY_LOCAL_MACHINE, rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_ID}"),
+            (winreg.HKEY_CURRENT_USER, rf"Software\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_ID}")]
+    for hive, key in keys:
+        try:
+            with winreg.OpenKey(hive, key) as k:
+                v = winreg.QueryValueEx(k, "pv")[0]
+                if v and v != "0.0.0.0":
+                    return v
+        except OSError:
+            continue
+    return ""
+
+
+def _notice(text: str, title: str = "Universal") -> None:
+    """Сообщение пользователю без окна приложения (оно ещё не открыто или не откроется)."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, text, title, 0x40 | 0x40000)   # значок «i», поверх всех окон
+        elif sys.platform == "darwin":
+            subprocess.run(["osascript", "-e", f'display dialog {json_str(text)} with title {json_str(title)} buttons {{"OK"}}'],
+                           timeout=600)
+        else:
+            print(text, file=sys.stderr)
+    except Exception:
+        pass
+
+
+def json_str(s: str) -> str:
+    import json
+    return json.dumps(s, ensure_ascii=False)
+
+
+def _ensure_webview2() -> bool:
+    """Нет WebView2 — тихо ставим его (официальный установщик Microsoft, права администратора не нужны)."""
+    if _webview2_version():
+        return True
+    threading.Thread(target=_notice, args=("Universal докачивает компонент Microsoft WebView2, без него окно не откроется. "
+                                           "Это займёт минуту-две, окно приложения появится само.",), daemon=True).start()
+    try:
+        import tempfile
+        exe = os.path.join(tempfile.gettempdir(), "MicrosoftEdgeWebview2Setup.exe")
+        with urllib.request.urlopen(urllib.request.Request(WEBVIEW2_SETUP, headers={"User-Agent": "Universal"}), timeout=60) as r, \
+                open(exe, "wb") as f:
+            f.write(r.read())
+        subprocess.run([exe, "/silent", "/install"], timeout=600)
+    except Exception as e:
+        print("WebView2 не поставился:", e, file=sys.stderr)
+    return bool(_webview2_version())
+
+
+def _browser_mode(url: str, why: str, webapp) -> None:
+    """Запасной путь: окно не открывается — работаем в обычном браузере. Приложение живёт,
+    пока открыта вкладка (страница шлёт /api/ping), и закрывается через пару минут после неё."""
+    import webbrowser
+    print("Открываю в браузере:", why, file=sys.stderr)
+    webbrowser.open(url)
+    _notice(f"Окно приложения не открылось ({why}), поэтому Universal открыт в браузере. "
+            "Пока вкладка открыта, всё работает как обычно. Закроешь вкладку — приложение закроется само.")
+    started = time.time()
+    while True:
+        time.sleep(15)
+        last = webapp.app.config.get("LAST_PING")
+        if last is None and time.time() - started > 600:
+            break                     # вкладку так и не открыли
+        if last is not None and time.time() - last > 120:
+            break
 
 
 def _wait(url: str, timeout: float = 20) -> None:
@@ -163,20 +241,56 @@ def main() -> None:
     if "--smoke" not in sys.argv:
         import phoneserver
         phoneserver.autostart(webapp.app)     # «Сервер для телефона» был включён — включаем снова
+        webapp.start_setup()                  # первый запуск: недостающие движки докачиваются сами
     if "--smoke" in sys.argv:
         code = smoke(url)
         server.shutdown()
         sys.exit(code)
 
-    import webview  # type: ignore
-
-    webview.settings["ALLOW_DOWNLOADS"] = True
-    webview.create_window("Universal", url, width=1280, height=860, min_size=(420, 600),
-                          background_color="#F4FBFA", text_select=True)
-    # private_mode=False: localStorage (цвет оформления) переживает перезапуск
-    webview.start(private_mode=False, storage_path=str(home / "webview"))
+    if "--browser" in sys.argv:
+        _browser_mode(url, "запуск с --browser", webapp)
+        server.shutdown()
+        return
+    if sys.platform == "win32" and not _ensure_webview2():
+        _browser_mode(url, "нет Microsoft WebView2", webapp)
+        server.shutdown()
+        return
+    try:
+        import webview  # type: ignore
+        webview.settings["ALLOW_DOWNLOADS"] = True
+        webview.create_window("Universal", url, width=1280, height=860, min_size=(420, 600),
+                              background_color="#F4FBFA", text_select=True)
+        # private_mode=False: localStorage (цвет оформления) переживает перезапуск;
+        # edgechromium: никогда не откатываться на Internet Explorer
+        gui = "edgechromium" if sys.platform == "win32" else None
+        webview.start(gui=gui, private_mode=False, storage_path=str(home / "webview"))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        _browser_mode(url, f"{e.__class__.__name__}: {str(e)[:150]}", webapp)
     server.shutdown()
 
 
+def _crash(e: BaseException) -> None:
+    """Приложение упало при запуске: показать причину и где лог, а не молча исчезнуть."""
+    import traceback
+    log = engines.root() / "universal.log"
+    try:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with open(log, "a", encoding="utf-8") as f:
+            traceback.print_exc(file=f)
+    except OSError:
+        pass
+    _notice(f"Universal не запустился: {e.__class__.__name__}: {str(e)[:300]}\n\n"
+            f"Подробности в файле {log}. Пришли его разработчику: "
+            "https://github.com/Zaxar1231/Universal-app/issues", "Universal — ошибка")
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (SystemExit, KeyboardInterrupt):
+        raise
+    except BaseException as e:
+        _crash(e)
+        sys.exit(1)

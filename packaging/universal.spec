@@ -9,11 +9,21 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, co
 ROOT = SPECPATH + "/.."
 VERSION = os.environ.get("UNIVERSAL_VERSION", "0.0.0")
 
+# Windows: библиотеки Visual C++ кладём рядом с exe (так разрешает Microsoft): на чистой Windows
+# без «Visual C++ Redistributable» иначе не грузятся CTranslate2 (распознавание речи) и другие модули
+VC_RUNTIME = []
+if sys.platform == "win32":
+    _sys32 = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32")
+    for _dll in ("msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "vcruntime140.dll", "vcruntime140_1.dll",
+                 "vcomp140.dll", "concrt140.dll"):
+        if os.path.exists(os.path.join(_sys32, _dll)):
+            VC_RUNTIME.append((os.path.join(_sys32, _dll), "."))
+
 a = Analysis(
     [ROOT + "/desktop.py"],
     pathex=[ROOT],
     # CTranslate2 (движок Whisper) держит свои библиотеки рядом с модулем
-    binaries=collect_dynamic_libs("ctranslate2"),
+    binaries=collect_dynamic_libs("ctranslate2") + VC_RUNTIME,
     # yt_dlp_ejs: JS-скрипты, которыми deno решает задачки YouTube
     # ocrmypdf: шрифты и данные для текстового слоя, а версию он читает из метаданных пакета
     datas=[(ROOT + "/templates", "templates"), (ROOT + "/static", "static"), (ROOT + "/CHANGELOG.md", ".")] + collect_data_files("yt_dlp_ejs")
