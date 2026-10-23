@@ -58,6 +58,7 @@ await until('полной версии во вкладке «Инструмен�
   return run(`!!document.querySelector('#rail')`, ctx);
 }, 120000);
 await sleep(1500);
+if (await run(`!document.getElementById('wnSheet')?.hidden`, ctx)) console.log('лишнее окно «Что нового» в полной версии');
 await shot('ui-2-full');
 
 const modes = [['Видео', 'video'], ['Голос в текст', 'stt'], ['Редактор PDF', 'pdfedit'], ['Документы', 'docs']];

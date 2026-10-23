@@ -1310,7 +1310,8 @@ def stt_run():
 def whatsnew():
     """Изменения новее версии, которую окно уже показывало (?since=), для «Что нового»."""
     if request.args.get("auto") == "1":       # один раз после обновления: сервер помнит показанную версию
-        if updater.VERSION == "0.0.0" or request.environ.get(phoneserver.MARK):
+        # телефон: окно показывает сама оболочка приложения, второе из полной версии ни к чему
+        if updater.VERSION == "0.0.0" or request.environ.get(phoneserver.MARK) or os.environ.get("UNIVERSAL_ANDROID"):
             return jsonify({"version": updater.VERSION, "sections": []})
         return jsonify({"version": updater.VERSION, "sections": changelog.after_update(updater.VERSION)})
     seen = (request.args.get("since") or "")[:20]
