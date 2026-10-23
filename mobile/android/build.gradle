@@ -23,7 +23,12 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        maven { url 'https://jitpack.io' }     // Tesseract4Android (распознавание текста на телефоне)
+        // Tesseract4Android (распознавание текста на телефоне). В его Gradle-метаданных на JitPack
+        // другое имя модуля, и Gradle «не находит» библиотеку — берём описание из POM
+        maven {
+            url 'https://jitpack.io'
+            metadataSources { mavenPom(); artifact() }
+        }
     }
 }
 
