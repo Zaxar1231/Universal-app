@@ -93,13 +93,7 @@ chaquopy {
             install "qrcode"
             install "pypdf"
             install "yt-dlp"
-            install "lxml"
-            install "python-docx"
-            install "mammoth"
-            install "markdown"
-            install "markdownify"
-            install "beautifulsoup4"
-            install "fpdf2"
+            install "-r", "../../../requirements-android.txt"   // встроенный конвертер документов (pydocs)
         }
         // код и файлы сервера (шаблоны, static) распаковываются в обычные файлы: Flask читает их с диска
         extractPackages("universal_srv")
