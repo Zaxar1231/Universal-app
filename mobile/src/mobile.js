@@ -241,6 +241,49 @@
     return { files, errors };
   }
 
+  /* ===================== скачивание прямо на телефоне (Android) ===================== */
+  // yt-dlp + Python + ffmpeg внутри приложения (плагин Ytdl, библиотека youtubedl-android, как в YTDLnis)
+  const Ytdl = platform === 'android' ? C.registerPlugin('Ytdl') : null;
+  let ytdlInit = null;
+  function ytdlReady() {
+    if (!ytdlInit) ytdlInit = Ytdl.init().catch(e => { ytdlInit = null; throw e; });
+    return ytdlInit;
+  }
+  const fmtEta = s => (s > 0 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : '');
+  async function viaPhone(urls, o, job, stop) {
+    await ensureFolder();
+    job.msg('Готовлю yt-dlp (первый раз до полуминуты)…');
+    await ytdlReady();
+    const files = [], errors = [];
+    for (let i = 0; i < urls.length; i++) {
+      if (stop()) break;
+      const id = `dl${Date.now()}_${i}`, pre = urls.length > 1 ? `${i + 1} из ${urls.length}: ` : '';
+      job.progress(null); job.msg(pre + 'Ищу видео…');
+      const h = await Ytdl.addListener('progress', ev => {
+        if (ev.id !== id) return;
+        const p = ev.progress;
+        if (p > 0) { job.progress(p / 100); job.msg(`${pre}Скачиваю: ${Math.round(p)}%` + (ev.eta > 0 ? ` · осталось ${fmtEta(ev.eta)}` : '')); }
+        else if (/Merger|ExtractAudio|ffmpeg|Fixup/.test(ev.line || '')) { job.progress(null); job.msg(pre + 'Собираю файл…'); }
+      });
+      const watch = setInterval(() => { if (stop()) Ytdl.cancel({ id }).catch(() => {}); }, 500);
+      try {
+        const r = await Ytdl.download({ id, url: urls[i], mode: o.mode, quality: o.quality, audio: o.audio });
+        const got = (r.files || []).map(f => ({ name: f.name, uri: f.path, size: f.size }));
+        if (got.length) files.push(...got); else errors.push(`${urls[i]}: файл не появился`);
+      } catch (e) {
+        errors.push(e.code === 'CANCELLED' || stop() ? 'Остановлено' : `${urls[i]}: ${e.message || e}`);
+      } finally {
+        clearInterval(watch); h.remove();
+      }
+    }
+    return { files, errors };
+  }
+  // сайты меняются часто: раз в сутки тихо подтягиваем свежий yt-dlp
+  if (Ytdl && Date.now() - (+store.get('ytdlUpd') || 0) > 24 * 3600 * 1000) {
+    setTimeout(() => ytdlReady().then(() => Ytdl.update()).then(() => store.set('ytdlUpd', String(Date.now()))).catch(() => {}), 8000);
+  }
+  const where = () => (Ytdl ? qs('input[name=dw]:checked').value : 'server');
+
   /* ===================== кнопка «Скачать» ===================== */
   const URL_RE = /https?:\/\/[^\s<>"']+/gi;
   const opts = () => ({ mode: qs('input[name=dm]:checked').value, quality: $('dQ').value, audio: $('dA').value });
@@ -249,9 +292,13 @@
     const o = opts();
     $('dQRow').hidden = o.mode === 'audio'; $('dARow').hidden = o.mode !== 'audio';
     const srv = host(baseUrl(store.get('serverUrl')));
-    $('dViaHint').textContent = srv
-      ? `Качает yt-dlp на твоём сервере ${srv} (с его VPN и настройками), потом файл сам приезжает на телефон.`
-      : 'Качает yt-dlp на твоём сервере Universal: укажи его адрес на вкладке «Сервер».';
+    $('dWhere').hidden = !Ytdl;
+    $('dViaHint').textContent = where() === 'phone'
+      ? `Качает yt-dlp прямо на телефоне, компьютер не нужен. Файлы — в ${WHERE}.`
+      : srv
+        ? `Качает yt-dlp на твоём сервере ${srv} (с его VPN и настройками), потом файл сам приезжает на телефон.`
+        : 'Качает yt-dlp на твоём сервере Universal: укажи его адрес на вкладке «Сервер».';
+    if (Ytdl) store.set('dl.where', where());
     $('dGo').textContent = running ? (stopAsked ? 'Останавливаю…' : 'Остановить') : 'Скачать';
     $('dGo').disabled = running && stopAsked;
     for (const k of ['mode', 'quality', 'audio']) store.set('dl.' + k, o[k]);
@@ -264,7 +311,7 @@
     running = true; stopAsked = false; syncDl();
     try {
       const job = jobRow(urls.length === 1 ? urls[0] : `Ссылок: ${urls.length}`);
-      try { const { files, errors } = await viaServer(urls, o, job, stop); job.finish(files, errors); }
+      try { const { files, errors } = await (where() === 'phone' ? viaPhone : viaServer)(urls, o, job, stop); job.finish(files, errors); }
       catch (e) { job.finish([], [String(e.message || e)]); }
       $('dUrls').value = '';
     } finally {
@@ -286,10 +333,11 @@
     $('dUrls').value = (cur ? cur + '\n' : '') + found.join('\n');
     return found.length;
   }
-  document.querySelectorAll('input[name=dm]').forEach(r => r.addEventListener('change', syncDl));
+  document.querySelectorAll('input[name=dm], input[name=dw]').forEach(r => r.addEventListener('change', syncDl));
   ['dQ', 'dA'].forEach(id => $(id).addEventListener('change', syncDl));
   {
     const m = store.get('dl.mode'); if (m) { const r = qs(`input[name=dm][value="${m}"]`); if (r) r.checked = true; }
+    const w = store.get('dl.where'); if (w) { const r = qs(`input[name=dw][value="${w}"]`); if (r) r.checked = true; }
     for (const [k, id] of [['quality', 'dQ'], ['audio', 'dA']]) {
       const v = store.get('dl.' + k); if (v && [...$(id).options].some(op => op.value === v)) $(id).value = v;
     }
