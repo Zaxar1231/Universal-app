@@ -19,6 +19,7 @@ import time
 import urllib.request
 
 import engines
+import net
 
 if sys.platform == "win32":
     # без этого каждый вызов ffmpeg/pandoc мигает чёрным окном консоли
@@ -109,7 +110,7 @@ def _ensure_webview2() -> bool:
     try:
         import tempfile
         exe = os.path.join(tempfile.gettempdir(), "MicrosoftEdgeWebview2Setup.exe")
-        with urllib.request.urlopen(urllib.request.Request(WEBVIEW2_SETUP, headers={"User-Agent": "Universal"}), timeout=60) as r, \
+        with net.urlopen(urllib.request.Request(WEBVIEW2_SETUP, headers={"User-Agent": "Universal"}), timeout=60) as r, \
                 open(exe, "wb") as f:
             f.write(r.read())
         subprocess.run([exe, "/silent", "/install"], timeout=600)

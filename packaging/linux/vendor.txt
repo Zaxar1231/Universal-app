@@ -15,3 +15,5 @@ pywebview
 proxy_tools
 bottle
 typing_extensions
+truststore
+certifi

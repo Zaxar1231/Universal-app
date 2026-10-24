@@ -16,6 +16,7 @@ from pathlib import Path
 from java import jarray, jbyte, jclass  # type: ignore
 
 import engines
+import net
 from tasks import Task
 
 Model = jclass("org.vosk.Model")
@@ -54,7 +55,7 @@ def ensure_model(lang: str, task: Task | None = None) -> Path:
     zpath = d.parent / f"{name}.zip.part"
     try:
         req = urllib.request.Request(URL.format(name=name), headers={"User-Agent": "Universal"})
-        with urllib.request.urlopen(req, timeout=60) as r, open(zpath, "wb") as f:
+        with net.urlopen(req, timeout=60) as r, open(zpath, "wb") as f:
             total = int(r.headers.get("Content-Length") or mb * 1048576)
             got = 0
             while True:
