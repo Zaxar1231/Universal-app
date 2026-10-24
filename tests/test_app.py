@@ -152,7 +152,9 @@ def test_extract_audio(media, tmp_path):
 @needs_ffmpeg
 def test_fast_trim_copy(media, tmp_path):
     out = editor.edit_file(media / "a.mp4", tmp_path, "r", opts(start="2", fast="1", out="same"))
-    assert out.suffix == ".mp4" and float(streams(out)["format"]["duration"]) < 5
+    # без перекодирования режется по ключевому кадру (каждую секунду): свежий ffmpeg берёт кадр строго
+    # до точки (1 с, выходит 5 с), ffmpeg 6.x — на ней (2 с, выходит 4 с). Исходник 6 с.
+    assert out.suffix == ".mp4" and 3.5 < float(streams(out)["format"]["duration"]) < 5.5
 
 
 @needs_ffmpeg
