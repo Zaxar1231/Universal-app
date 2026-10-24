@@ -1632,3 +1632,81 @@ def test_android_download_in_process(monkeypatch, tmp_path):
     t = Task("d", "dl", tmp_path, "dl")
     downloader.run_download_task(t, ["https://example.com/v"], {}, None)
     assert calls and t.done == 1 and (tmp_path / "out" / "v.mp4").exists()
+
+
+def _https_server(tmp_path):
+    """Локальный HTTPS с самоподписанным сертификатом: (адрес, путь к сертификату, остановка)."""
+    import datetime
+    import http.server
+    import ssl
+    import threading
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+    import ipaddress
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+            .serial_number(x509.random_serial_number()).not_valid_before(now - datetime.timedelta(days=1))
+            .not_valid_after(now + datetime.timedelta(days=1))
+            .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]), False)
+            .add_extension(x509.BasicConstraints(ca=True, path_length=None), True)
+            .sign(key, hashes.SHA256()))
+    crt, pem = tmp_path / "c.pem", tmp_path / "k.pem"
+    crt.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    pem.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                      serialization.NoEncryption()))
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"ok")
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    sctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    sctx.load_cert_chain(crt, pem)
+    srv.socket = sctx.wrap_socket(srv.socket, server_side=True)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return f"https://127.0.0.1:{srv.server_port}/", crt, srv.shutdown
+
+
+def test_net_falls_back_to_next_cert_check(tmp_path, monkeypatch):
+    """Системная проверка не знает сертификат (старый Windows) -> следующий способ; проверка не отключается."""
+    import ssl
+    import net
+    url, crt, stop = _https_server(tmp_path)
+    try:
+        trusting = ssl.create_default_context()
+        trusting.load_verify_locations(crt)
+        monkeypatch.setattr(net, "_contexts", [("system", ssl.create_default_context()), ("bundled", trusting)])
+        monkeypatch.setattr(net, "_good", 0)
+        with net.urlopen(url, timeout=10) as r:
+            assert r.read() == b"ok"
+        assert net._good == 1          # дальше сразу рабочим способом
+
+        monkeypatch.setattr(net, "_contexts", [("system", ssl.create_default_context())])
+        monkeypatch.setattr(net, "_good", 0)
+        with pytest.raises(net.CertError) as e:
+            net.urlopen(url, timeout=10)
+        assert "сертификат" in net.reason(e.value) and "антивирус" in net.reason(e.value)
+    finally:
+        stop()
+
+
+def test_engine_download_error_names_the_reason(tmp_path, monkeypatch):
+    import urllib.error
+    import engines
+    import net
+
+    def boom(*a, **k):
+        raise urllib.error.URLError(ConnectionRefusedError(111, "Connection refused"))
+    monkeypatch.setattr(net, "urlopen", boom)
+    with pytest.raises(engines.EngineError) as e:
+        engines._download_once("https://example.invalid/x.zip", tmp_path / "x.zip", None, 0, 1)
+    assert "Connection refused" in str(e.value)

@@ -16,6 +16,7 @@ import urllib.request
 from pathlib import Path
 
 import engines
+import net
 from tasks import Task
 
 MODELS = {
@@ -89,7 +90,7 @@ def read_opts(form) -> dict:
 
 def _get(url: str, timeout: float = 30):
     req = urllib.request.Request(url, headers={"User-Agent": "Universal"})
-    return urllib.request.urlopen(req, timeout=timeout)
+    return net.urlopen(req, timeout=timeout)
 
 
 def _files(endpoint: str, repo: str) -> list[tuple[str, int]]:

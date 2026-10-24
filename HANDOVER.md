@@ -496,3 +496,9 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - Мост Java (Chaquopy): перегрузки с примитивами надо указывать явно — `eraseColor(jint(...))`, `acceptWaveForm(jarray(jbyte)(data), n)`, иначе TypeError «ambiguous».
 - Проверка: `.github/workflows/android-e2e.yml` («Android полная версия») собирает x86_64-APK, ставит в эмулятор API 34 и гоняет `mobile/e2e/e2e.py` (17 режимов с настоящими файлами через `adb forward tcp:47700`) и `mobile/e2e/ui.mjs` (снимки через CDP WebView: Playwright к WebView не подключается). На раннере без apt: ffmpeg из `imageio-ffmpeg`, речь — `test.wav` из vosk-api. Итог в Summary, файлы и снимки в артефакте `android-e2e`.
 - Локально без KVM эмулятор не запустить, но APK собирается: Android SDK (cmdline-tools, platform 36, build-tools 35), `sdk.dir` в `mobile/android/local.properties`, `CHAQUOPY_BUILD_PYTHON=python3.12 ./gradlew assembleDebug -Pabis=x86_64`.
+
+### 13.19 HTTPS на любом компьютере (v2.6.1)
+- Все загрузки из интернета (`engines._get`, `engines._download_once`, `stt._get`, WebView2 в `desktop.py`, модели на Android) идут через `net.urlopen`. Способы проверки по очереди: `truststore` (проверка ОС: Windows сам докачивает корневые сертификаты, проходят антивирусы с подменой HTTPS), затем стандартный контекст + `certifi`. Сработавший запоминается (`net._good`). Проверка сертификатов не отключается; если не прошёл ни один способ — `net.CertError` с подсказкой.
+- `truststore` и `certifi` — в `requirements.txt` и `packaging/linux/vendor.txt`. yt-dlp ходит в сеть сам (certifi), его это не касается.
+- Тест: локальный HTTPS с самоподписанным сертификатом (`test_net_falls_back_to_next_cert_check`).
+

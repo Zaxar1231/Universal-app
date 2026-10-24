@@ -16,6 +16,7 @@ from java import jclass  # type: ignore
 
 import android_pdf
 import engines
+import net
 from tasks import Task
 
 TessBaseAPI = jclass("com.googlecode.tesseract.android.TessBaseAPI")
@@ -55,7 +56,7 @@ def ensure_lang(lang: str, task: Task | None = None) -> None:
                 task.update(None, f"Скачиваю язык {lang} для распознавания (один раз)…")
             req = urllib.request.Request(tpl.format(lang=lang), headers={"User-Agent": "Universal"})
             tmp = dst.with_suffix(".part")
-            with urllib.request.urlopen(req, timeout=60) as r, open(tmp, "wb") as f:
+            with net.urlopen(req, timeout=60) as r, open(tmp, "wb") as f:
                 shutil.copyfileobj(r, f, 1 << 20)
             tmp.replace(dst)
             if have(lang):

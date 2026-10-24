@@ -24,6 +24,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+import net
 from tasks import Task
 
 GITHUB_API = "https://api.github.com/repos/{repo}/releases/latest"
@@ -198,7 +199,7 @@ def _get(url: str, timeout: int = 30):
     token = os.environ.get("GITHUB_TOKEN")
     if token and url.startswith(GITHUB_API.split("/repos/")[0]):
         headers["Authorization"] = f"Bearer {token}"
-    return urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout)
+    return net.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout)
 
 
 def _assets_from_api(repo: str) -> list[tuple[str, str]]:
@@ -277,7 +278,7 @@ def _download(url: str, dest: Path, task: Task | None, base: float, span: float)
 def _download_once(url: str, dest: Path, task: Task | None, base: float, span: float) -> None:
     req = urllib.request.Request(url, headers=UA)
     try:
-        with urllib.request.urlopen(req, timeout=60) as r, dest.open("wb") as f:
+        with net.urlopen(req, timeout=60) as r, dest.open("wb") as f:
             total = int(r.headers.get("Content-Length") or 0)
             got = 0
             while True:
@@ -296,7 +297,7 @@ def _download_once(url: str, dest: Path, task: Task | None, base: float, span: f
     except Exception as e:
         if task and task.cancel_event.is_set():
             raise
-        raise EngineError(f"Загрузка прервалась ({e.__class__.__name__}). Попробуй ещё раз")
+        raise EngineError(f"Загрузка прервалась ({net.reason(e)}). Попробуй ещё раз")
 
 
 SEVEN_ZIP_URL = "https://www.7-zip.org/a/7zr.exe"   # официальный консольный 7-Zip, только формат 7z
