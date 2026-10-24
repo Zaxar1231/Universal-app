@@ -45,7 +45,7 @@ def media(tmp_path_factory):
     if not shutil.which("ffmpeg"):
         return d
     ff("-f", "lavfi", "-i", "testsrc2=s=640x360:r=30:d=6", "-f", "lavfi", "-i", "sine=f=440:d=6",
-       "-c:v", "libx264", "-g", "30", "-c:a", "aac", "-shortest", str(d / "a.mp4"))
+       "-c:v", "libx264", "-g", "30", "-sc_threshold", "0", "-c:a", "aac", "-shortest", str(d / "a.mp4"))
     ff("-f", "lavfi", "-i", "testsrc=s=320x240:r=25:d=4", "-c:v", "libx264", str(d / "silent.mp4"))
     ff("-f", "lavfi", "-i", "sine=f=330:d=5", str(d / "tone.mp3"))
     return d
