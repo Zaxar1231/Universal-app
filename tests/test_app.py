@@ -1838,3 +1838,29 @@ def test_download_keeps_part_when_cancelled(tmp_path, range_server):
     net.download(url, tmp_path / "f.bin")                # следующий запуск продолжает с того же места
     assert (tmp_path / "f.bin").read_bytes() == state["data"]
     assert state["ranges"][-1] == f"bytes={size}-"
+
+
+def test_engine_install_survives_locked_archive(engine_env, monkeypatch):
+    """Windows держит архив после распаковки (7-Zip, антивирус): установка не падает, архив уберётся потом."""
+    import pathlib
+    engines, srv_dir, base = engine_env
+    with zipfile.ZipFile(srv_dir / "ff.zip", "w") as z:
+        z.writestr("b/ffmpeg.exe", "x")
+        z.writestr("b/ffprobe.exe", "x")
+    monkeypatch.setitem(engines.CATALOG, "ffmpeg", {**engines.CATALOG["ffmpeg"], "url": base + "/ff.zip"})
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    real_unlink = pathlib.Path.unlink
+
+    def locked(self, *a, **k):
+        if self.parent.name == "downloads" and self.suffix == ".zip":
+            raise PermissionError(32, "The process cannot access the file because it is being used by another process")
+        return real_unlink(self, *a, **k)
+    monkeypatch.setattr(pathlib.Path, "unlink", locked)
+    d = engines.install("ffmpeg")
+    assert "ffmpeg" not in engines.missing()
+    leftover = list((engines.engines_dir() / "downloads").glob("ffmpeg-*"))
+    assert leftover                                   # остался: файл «занят»
+
+    monkeypatch.setattr(pathlib.Path, "unlink", real_unlink)
+    assert engines.install("ffmpeg") == d             # повторно — без загрузки, остатки убраны
+    assert not list((engines.engines_dir() / "downloads").glob("ffmpeg-*"))

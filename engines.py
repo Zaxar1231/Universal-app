@@ -140,6 +140,16 @@ def _find_installed(name: str) -> str | None:
     return None
 
 
+def _discard(files) -> None:
+    """Удалить скачанные архивы. Windows может ещё держать файл (7-Zip, антивирус) — тогда не страшно:
+    уберём при следующей установке, а сама установка из-за этого не падает."""
+    for f in files:
+        try:
+            Path(f).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def _register(name: str, d: str) -> None:
     paths = _load_paths()
     if paths.get(name) != d:
@@ -447,6 +457,7 @@ def install(name: str, task: Task | None = None) -> str:
     have = _find_installed(name)
     if have and name != "ytdlp":            # уже распакован (например, не докачались только словари)
         _register(name, have)
+        _discard((edir / "downloads").glob(f"{name}-*"))    # движок на месте: старые архивы и куски не нужны
         if spec.get("langs"):
             _tessdata(Path(have), spec["langs"], task)
         if task:
@@ -492,8 +503,7 @@ def install(name: str, task: Task | None = None) -> str:
                 for a in extra:
                     _extract(a, unpacked)
             except Exception:
-                for a in downloaded:                 # битый архив: в следующий раз скачать заново
-                    a.unlink(missing_ok=True)
+                _discard(downloaded)                 # битый архив: в следующий раз скачать заново
                 raise
             first = _exe_names(name)[0]
             found = next((p for p in unpacked.rglob(first) if p.is_file()), None)
@@ -512,8 +522,7 @@ def install(name: str, task: Task | None = None) -> str:
                     p = Path(result) / exe
                     if p.exists():
                         p.chmod(0o755)
-        for a in downloaded:
-            a.unlink(missing_ok=True)
+        _discard(downloaded)
     # запоминаем сразу: если дальше не докачаются словари, сам движок качать снова не придётся
     _register(name, result)
     if spec.get("langs"):
