@@ -502,3 +502,8 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - `truststore` и `certifi` — в `requirements.txt` и `packaging/linux/vendor.txt`. yt-dlp ходит в сеть сам (certifi), его это не касается.
 - Тест: локальный HTTPS с самоподписанным сертификатом (`test_net_falls_back_to_next_cert_check`).
 
+### 13.20 Без повторных загрузок (v2.6.2)
+- `engines._save_paths`: paths.json пишется через `.tmp` + `os.replace`. `_find_installed(name)` ищет уже распакованный движок в `engines/<имя>` по exe из CATALOG; `available()` при пустом/битом paths.json находит его и перезаписывает (`_register`). `install()` при найденном движке не качает, а только регистрирует и докачивает словари.
+- Tesseract: путь регистрируется до `_tessdata`; `available("tesseract")` требует все `langs` в `tessdata` (`_langs_ok`), поэтому недокачанные словари ставятся при следующем запуске без повторной загрузки движка.
+- `net.download(url, dest, ...)`: докачка. `dest.part` + `dest.part.json` (url, ETag, Last-Modified), запрос `Range` + `If-Range` (сменился файл — сервер отдаёт 200, начинаем с нуля; слабый ETag не используется), 416 — уже скачано. Отмена и обрыв оставляют `.part`. Архивы движков лежат в `engines/downloads` до успешной установки, битый архив удаляется. Модели Whisper (`stt.ensure_model`) тоже через `net.download`. Проверено вживую на релизе deno: 206, zip цел.
+

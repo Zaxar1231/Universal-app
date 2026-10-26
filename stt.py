@@ -126,20 +126,18 @@ def ensure_model(key: str, task: Task | None = None) -> Path:
                     got += size
                     continue
                 dst.parent.mkdir(parents=True, exist_ok=True)
-                with _get(f"{ep}/{repo}/resolve/main/{name}", 60) as r, open(dst, "wb") as f:
-                    last = 0.0
-                    while True:
-                        if task:
-                            task.check_cancel()
-                        chunk = r.read(1 << 20)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        got += len(chunk)
-                        if task and time.monotonic() - last > 0.3:
-                            last = time.monotonic()
-                            task.update(min(0.99, got / total) * 0.3,
-                                        f"Скачиваю модель «{label}» (один раз): {got >> 20} из {total >> 20} МБ")
+                done_before, last = got, [0.0]
+
+                def progress(n: int, _size: int, done_before=done_before, last=last) -> None:
+                    if task and time.monotonic() - last[0] > 0.3:
+                        last[0] = time.monotonic()
+                        now = done_before + n
+                        task.update(min(0.99, now / total) * 0.3,
+                                    f"Скачиваю модель «{label}» (один раз): {now >> 20} из {total >> 20} МБ")
+                # с докачкой: закрыли приложение посреди 1,6 ГБ — продолжим с того же места
+                net.download(f"{ep}/{repo}/resolve/main/{name}", dst, headers={"User-Agent": "Universal"},
+                             progress=progress, check_cancel=task.check_cancel if task else None)
+                got += dst.stat().st_size
             if d.exists():
                 import shutil
                 shutil.rmtree(d, ignore_errors=True)

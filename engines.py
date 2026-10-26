@@ -118,11 +118,56 @@ def _exe_names(name: str) -> list[str]:
     return names
 
 
+def _langs_ok(name: str, d: str) -> bool:
+    """У нашего Tesseract должны быть и словари: без русского он почти бесполезен."""
+    langs = CATALOG[name].get("langs")
+    return not langs or all((Path(d) / "tessdata" / f"{l}.traineddata").is_file() for l in langs)
+
+
+def _find_installed(name: str) -> str | None:
+    """Уже распакованный нами движок в engines/<имя>: на случай, если paths.json потерялся или испорчен
+    (приложение закрыли во время записи) — иначе при каждом запуске всё качалось бы заново."""
+    if name == "ytdlp":
+        f = engines_dir() / "yt-dlp.zip"
+        return str(f) if zipfile.is_zipfile(f) else None
+    base = engines_dir() / name
+    if not base.is_dir():
+        return None
+    names = _exe_names(name)
+    for exe in base.rglob(names[0]):
+        if exe.is_file() and all((exe.parent / n).is_file() for n in names[1:]):
+            return str(exe.parent)
+    return None
+
+
+def _discard(files) -> None:
+    """Удалить скачанные архивы. Windows может ещё держать файл (7-Zip, антивирус) — тогда не страшно:
+    уберём при следующей установке, а сама установка из-за этого не падает."""
+    for f in files:
+        try:
+            Path(f).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _register(name: str, d: str) -> None:
+    paths = _load_paths()
+    if paths.get(name) != d:
+        paths[name] = d
+        _save_paths(paths)
+    if name != "ytdlp" and d not in os.environ.get("PATH", "").split(os.pathsep):
+        os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
+
+
 def available(name: str) -> bool:
     """Движок уже есть: скачан нами или стоит в системе (в PATH)."""
     d = _load_paths().get(name)
+    if not (d and Path(d).exists()):
+        d = _find_installed(name)
+        if d:
+            _register(name, d)
     if d and Path(d).exists():
-        return True
+        return _langs_ok(name, d)
     if name == "ytdlp":
         return True                  # встроен в приложение
     if name == "imagemagick" and sys.platform != "win32" and shutil.which("convert"):
@@ -152,9 +197,18 @@ def _paths_file() -> Path:
 
 def _load_paths() -> dict:
     try:
-        return json.loads(_paths_file().read_text(encoding="utf-8"))
+        d = json.loads(_paths_file().read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
     except (OSError, ValueError):
         return {}
+
+
+def _save_paths(paths: dict) -> None:
+    """Через временный файл: если приложение закроют посреди записи, старый paths.json останется целым."""
+    f = _paths_file()
+    tmp = f.with_name(f.name + ".tmp")
+    tmp.write_text(json.dumps(paths, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(tmp, f)
 
 
 def activate() -> None:
@@ -276,22 +330,12 @@ def _download(url: str, dest: Path, task: Task | None, base: float, span: float)
 
 
 def _download_once(url: str, dest: Path, task: Task | None, base: float, span: float) -> None:
-    req = urllib.request.Request(url, headers=UA)
+    def progress(got: int, total: int) -> None:
+        if task:
+            mb = f"{got / 1048576:.0f}" + (f" из {total / 1048576:.0f}" if total else "")
+            task.update(base + span * (got / total if total else 0), f"Скачиваю: {mb} МБ")
     try:
-        with net.urlopen(req, timeout=60) as r, dest.open("wb") as f:
-            total = int(r.headers.get("Content-Length") or 0)
-            got = 0
-            while True:
-                if task:
-                    task.check_cancel()
-                chunk = r.read(1 << 20)
-                if not chunk:
-                    break
-                f.write(chunk)
-                got += len(chunk)
-                if task:
-                    mb = f"{got / 1048576:.0f}" + (f" из {total / 1048576:.0f}" if total else "")
-                    task.update(base + span * (got / total if total else 0), f"Скачиваю: {mb} МБ")
+        net.download(url, dest, headers=UA, progress=progress, check_cancel=task.check_cancel if task else None)
     except EngineError:
         raise
     except Exception as e:
@@ -410,6 +454,16 @@ def install(name: str, task: Task | None = None) -> str:
     edir = engines_dir()
     if task:
         task.total = 1
+    have = _find_installed(name)
+    if have and name != "ytdlp":            # уже распакован (например, не докачались только словари)
+        _register(name, have)
+        _discard((edir / "downloads").glob(f"{name}-*"))    # движок на месте: старые архивы и куски не нужны
+        if spec.get("langs"):
+            _tessdata(Path(have), spec["langs"], task)
+        if task:
+            task.done = 1
+        return have
+    if task:
         task.update(0, f"Ищу последнюю версию {spec['title']}…")
     riedl = "arm64" if _arch() == "arm64" else "amd64"
     urls = [u.replace("{riedl}", riedl) for u in spec["urls"]] if "urls" in spec else [_resolve_url(spec)]
@@ -420,13 +474,17 @@ def install(name: str, task: Task | None = None) -> str:
         fname = url.rsplit("/", 1)[-1]
         if name == "ytdlp":
             fname = "yt-dlp.zip"
-        archive = tmp / fname
+        # архивы качаются в engines/downloads с докачкой: закрыли приложение — продолжим с того же места
+        cache = edir / "downloads"
+        cache.mkdir(exist_ok=True)
+        archive = cache / f"{name}-{fname}"
         _download(url, archive, task, 0, 0.9 / len(urls))
         extra = []
         for i, u in enumerate(urls[1:], 1):          # macOS ffmpeg: ffprobe отдельным архивом
-            a = tmp / f"part{i}.zip"
+            a = cache / f"{name}-part{i}.zip"
             _download(u, a, task, 0.9 * i / len(urls), 0.9 / len(urls))
             extra.append(a)
+        downloaded = [archive, *extra]
         if task:
             task.update(0.92, "Распаковываю…")
         if name == "ytdlp":
@@ -437,12 +495,16 @@ def install(name: str, task: Task | None = None) -> str:
             result = str(final)
         else:
             unpacked = tmp / "x"
-            if spec.get("nsis"):
-                _extract_nsis(archive, unpacked)
-            else:
-                _extract(archive, unpacked)
-            for a in extra:
-                _extract(a, unpacked)
+            try:
+                if spec.get("nsis"):
+                    _extract_nsis(archive, unpacked)
+                else:
+                    _extract(archive, unpacked)
+                for a in extra:
+                    _extract(a, unpacked)
+            except Exception:
+                _discard(downloaded)                 # битый архив: в следующий раз скачать заново
+                raise
             first = _exe_names(name)[0]
             found = next((p for p in unpacked.rglob(first) if p.is_file()), None)
             if not found:
@@ -455,18 +517,16 @@ def install(name: str, task: Task | None = None) -> str:
             for exe in _exe_names(name)[1:]:
                 if not (Path(result) / exe).exists():
                     raise EngineError(f"В архиве нет {exe}")
-            if spec.get("langs"):
-                _tessdata(Path(result), spec["langs"], task)
             if sys.platform != "win32":              # zip не хранит права на запуск
                 for exe in _exe_names(name):
                     p = Path(result) / exe
                     if p.exists():
                         p.chmod(0o755)
-    paths = _load_paths()
-    paths[name] = result
-    _paths_file().write_text(json.dumps(paths, ensure_ascii=False, indent=1), encoding="utf-8")
-    if name != "ytdlp":
-        os.environ["PATH"] = result + os.pathsep + os.environ.get("PATH", "")
+        _discard(downloaded)
+    # запоминаем сразу: если дальше не докачаются словари, сам движок качать снова не придётся
+    _register(name, result)
+    if spec.get("langs"):
+        _tessdata(Path(result), spec["langs"], task)
     if task:
         task.done = 1
     return result
@@ -481,7 +541,7 @@ def remove(name: str) -> None:
             target.unlink(missing_ok=True)
         else:
             shutil.rmtree(engines_dir() / name, ignore_errors=True)
-    _paths_file().write_text(json.dumps(paths, ensure_ascii=False, indent=1), encoding="utf-8")
+    _save_paths(paths)
 
 
 if __name__ == "__main__":
