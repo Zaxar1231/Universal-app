@@ -13,10 +13,12 @@ Windows докачивает недостающие корневые серти�
 """
 from __future__ import annotations
 
+import json
 import ssl
 import threading
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 _lock = threading.Lock()
 _contexts: list[tuple[str, ssl.SSLContext]] | None = None
@@ -88,3 +90,58 @@ def reason(e: BaseException) -> str:
     if is_cert_error(e):
         return "не прошла проверка сертификата HTTPS"
     return f"{e.__class__.__name__}: {text[:120]}"
+
+
+def download(url: str, dest: Path, *, headers: dict | None = None, timeout: float = 60,
+             progress=None, check_cancel=None) -> Path:
+    """Скачать в dest с докачкой. Недокачанное лежит рядом (dest.part, а в dest.part.json — адрес и
+    ETag/Last-Modified): после обрыва или закрытия приложения продолжаем с того же места
+    (Range + If-Range: если файл на сервере успел смениться, сервер отдаст его целиком, и начнём заново).
+    progress(получено, всего или 0); check_cancel() бросает исключение, если задачу отменили."""
+    part = dest.with_name(dest.name + ".part")
+    meta = dest.with_name(dest.name + ".part.json")
+    try:
+        info = json.loads(meta.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        info = {}
+    have = part.stat().st_size if part.is_file() else 0
+    validator = info.get("etag") or info.get("last_modified")
+    h = dict(headers or {})
+    if have and info.get("url") == url and validator and not str(validator).startswith("W/"):
+        h["Range"] = f"bytes={have}-"
+        h["If-Range"] = validator
+    else:
+        have = 0
+    try:
+        r = urlopen(urllib.request.Request(url, headers=h), timeout=timeout)
+    except urllib.error.HTTPError as e:
+        if e.code == 416 and have:          # всё уже скачано, осталось переименовать
+            part.replace(dest)
+            meta.unlink(missing_ok=True)
+            return dest
+        raise
+    with r:
+        resumed = r.status == 206
+        if not resumed:
+            have = 0
+            meta.write_text(json.dumps({"url": url, "etag": r.headers.get("ETag"),
+                                        "last_modified": r.headers.get("Last-Modified")}), encoding="utf-8")
+        length = int(r.headers.get("Content-Length") or 0)
+        total = have + length if length else 0
+        got = have
+        with part.open("ab" if resumed else "wb") as f:
+            while True:
+                if check_cancel:
+                    check_cancel()
+                chunk = r.read(1 << 20)
+                if not chunk:
+                    break
+                f.write(chunk)
+                got += len(chunk)
+                if progress:
+                    progress(got, total)
+    if total and got < total:              # оборвалось: недокачанное остаётся до следующей попытки
+        raise urllib.error.URLError(f"соединение оборвалось на {got >> 20} из {total >> 20} МБ")
+    part.replace(dest)
+    meta.unlink(missing_ok=True)
+    return dest

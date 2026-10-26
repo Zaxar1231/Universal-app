@@ -1712,3 +1712,129 @@ def test_engine_download_error_names_the_reason(tmp_path, monkeypatch):
     with pytest.raises(engines.EngineError) as e:
         engines._download_once("https://example.invalid/x.zip", tmp_path / "x.zip", None, 0, 1)
     assert "Connection refused" in str(e.value)
+
+
+def test_engines_not_redownloaded_when_paths_json_broken(engine_env, monkeypatch):
+    """paths.json испорчен (приложение закрыли во время записи): движки на диске находятся сами."""
+    engines, srv_dir, base = engine_env
+    with zipfile.ZipFile(srv_dir / "ff.zip", "w") as z:
+        z.writestr("b/bin/ffmpeg.exe", "x")
+        z.writestr("b/bin/ffprobe.exe", "x")
+    monkeypatch.setitem(engines.CATALOG, "ffmpeg", {**engines.CATALOG["ffmpeg"], "url": base + "/ff.zip"})
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    first = engines.install("ffmpeg")
+    assert not list((engines.engines_dir() / "downloads").glob("*")), "архив после установки не нужен"
+
+    (engines.engines_dir() / "paths.json").write_text('{"ffmpeg": "C:\\\\', encoding="utf-8")
+    (srv_dir / "ff.zip").unlink()                        # скачать заново уже нельзя
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    assert "ffmpeg" not in engines.missing()
+    assert engines.install("ffmpeg") == first            # без загрузки
+    assert json.loads((engines.engines_dir() / "paths.json").read_text(encoding="utf-8"))["ffmpeg"] == first
+
+
+def test_tesseract_kept_when_languages_fail(engine_env, monkeypatch):
+    """Словари не скачались: сам Tesseract остаётся, в следующий раз докачиваются только словари."""
+    import time
+    engines, srv_dir, base = engine_env
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    with zipfile.ZipFile(srv_dir / "t.zip", "w") as z:
+        z.writestr("Tesseract-OCR/tesseract.exe", "x")
+    monkeypatch.setitem(engines.CATALOG, "tesseract", {**engines.CATALOG["tesseract"], "url": base + "/t.zip",
+                                                       "nsis": False, "langs": ["rus"]})
+    monkeypatch.setattr(engines, "TESSDATA_URL", base + "/{lang}.traineddata")
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    with pytest.raises(engines.EngineError):
+        engines.install("tesseract")
+    assert engines._load_paths().get("tesseract")        # сам движок запомнен
+    assert "tesseract" in engines.missing()              # но без словаря он не готов
+
+    (srv_dir / "rus.traineddata").write_bytes(b"r" * 2000)
+    (srv_dir / "t.zip").unlink()
+    d = engines.install("tesseract")
+    assert (Path(d) / "tessdata" / "rus.traineddata").stat().st_size == 2000
+    assert "tesseract" not in engines.missing()
+
+
+@pytest.fixture
+def range_server():
+    """HTTP с Range/If-Range и ETag, как у GitHub: (адрес, данные, список заголовков Range, смена версии)."""
+    import http.server
+    import threading
+    state = {"data": bytes(range(256)) * 12000, "etag": '"v1"', "ranges": []}
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            data, rng = state["data"], self.headers.get("Range")
+            state["ranges"].append(rng)
+            if rng and self.headers.get("If-Range") in (None, state["etag"]):
+                start = int(rng.split("=")[1].rstrip("-"))
+                if start >= len(data):
+                    self.send_response(416)
+                    self.end_headers()
+                    return
+                self.send_response(206)
+                body = data[start:]
+            else:
+                self.send_response(200)
+                body = data
+            self.send_header("ETag", state["etag"])
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_port}/f.bin", state
+    srv.shutdown()
+
+
+def test_download_resumes_after_restart(tmp_path, range_server):
+    import net
+    url, state = range_server
+    data = state["data"]
+    dest = tmp_path / "f.bin"
+    # прошлый запуск успел скачать треть и закрылся
+    (tmp_path / "f.bin.part").write_bytes(data[:len(data) // 3])
+    (tmp_path / "f.bin.part.json").write_text(json.dumps({"url": url, "etag": '"v1"'}), encoding="utf-8")
+    seen = []
+    net.download(url, dest, progress=lambda got, total: seen.append((got, total)))
+    assert dest.read_bytes() == data
+    assert state["ranges"] == [f"bytes={len(data) // 3}-"]          # докачан только остаток
+    assert seen[-1] == (len(data), len(data))
+    assert not (tmp_path / "f.bin.part").exists() and not (tmp_path / "f.bin.part.json").exists()
+
+
+def test_download_restarts_when_file_changed(tmp_path, range_server):
+    """На сервере новая версия (ffmpeg latest меняется каждый день): кусок старой не приклеиваем."""
+    import net
+    url, state = range_server
+    (tmp_path / "f.bin.part").write_bytes(b"old" * 1000)
+    (tmp_path / "f.bin.part.json").write_text(json.dumps({"url": url, "etag": '"v0"'}), encoding="utf-8")
+    net.download(url, tmp_path / "f.bin")
+    assert (tmp_path / "f.bin").read_bytes() == state["data"]
+
+
+def test_download_keeps_part_when_cancelled(tmp_path, range_server):
+    import net
+    url, state = range_server
+
+    class Stop(Exception):
+        pass
+    calls = []
+
+    def cancel():
+        calls.append(1)
+        if len(calls) > 1:
+            raise Stop
+    with pytest.raises(Stop):
+        net.download(url, tmp_path / "f.bin", check_cancel=cancel)
+    part = tmp_path / "f.bin.part"
+    size = part.stat().st_size
+    assert 0 < size < len(state["data"])
+    net.download(url, tmp_path / "f.bin")                # следующий запуск продолжает с того же места
+    assert (tmp_path / "f.bin").read_bytes() == state["data"]
+    assert state["ranges"][-1] == f"bytes={size}-"
