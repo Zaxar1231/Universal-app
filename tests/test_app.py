@@ -2473,7 +2473,7 @@ def test_offline_seed_moves_when_installed_and_keeps_user_files(tmp_path, monkey
     (app / "unins000.exe").write_text("u")                         # поставил установщик
     home = tmp_path / "home"
     (home / "whisper" / "fast").mkdir(parents=True)
-    (home / "whisper" / "fast" / "mine.txt").write_text("мой")     # у человека уже есть своя модель
+    (home / "whisper" / "fast" / "mine.txt").write_text("мой", encoding="utf-8")     # у человека уже есть своя модель
     monkeypatch.setattr(offline, "bundle_dir", lambda: b)
     monkeypatch.setenv("UNIVERSAL_HOME", str(home))
     done = offline.seed()
