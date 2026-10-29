@@ -62,13 +62,19 @@ def is_cert_error(e: BaseException) -> bool:
 
 def urlopen(req, timeout: float = 30):
     """Как urllib.request.urlopen, но перебирает способы проверки HTTPS (см. выше)."""
+    return open_with(req, timeout=timeout)
+
+
+def open_with(req, *handlers, timeout: float = 30):
+    """urlopen с дополнительными обработчиками urllib (прокси, cookies) и тем же перебором проверок HTTPS."""
     global _good
     ctxs = contexts()
     order = [_good] + [i for i in range(len(ctxs)) if i != _good]
     last = None
     for i in order:
+        opener = urllib.request.build_opener(*handlers, urllib.request.HTTPSHandler(context=ctxs[i][1]))
         try:
-            r = urllib.request.urlopen(req, timeout=timeout, context=ctxs[i][1])
+            r = opener.open(req, timeout=timeout)
             _good = i
             return r
         except Exception as e:

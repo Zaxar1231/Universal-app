@@ -25,6 +25,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg imagemagick pandoc poppler-utils tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus espeak-ng
       - name: Зависимости
         run: pip install -r requirements.txt -r requirements-android.txt pytest
+      - name: monolith (проверка ссылки на него и настоящего сохранения страницы)
+        run: |
+          python engines.py install monolith
+          python -c "import json,engines;print(json.load(open(engines.engines_dir()/'paths.json'))['monolith'])" >> "$GITHUB_PATH"
       - name: Тесты
         run: python -m pytest -q -rs -k "not test_stt_real" && python -m pytest -q -s -k test_stt_real
 
@@ -46,7 +50,7 @@ jobs:
       - name: Движки через engines.py
         shell: bash
         run: |
-          python engines.py install ffmpeg pandoc poppler imagemagick ytdlp tesseract
+          python engines.py install ffmpeg pandoc poppler imagemagick ytdlp tesseract monolith
           python -c "import json,engines;[print(v) for k,v in json.load(open(engines.engines_dir()/'paths.json')).items() if k!='ytdlp']" >> "$GITHUB_PATH"
       - name: Тесты
         run: python -m pytest -q

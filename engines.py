@@ -72,12 +72,28 @@ CATALOG = {
         "index": "https://digi.bib.uni-mannheim.de/tesseract/", "nsis": True, "langs": ["rus", "eng", "osd"],
         "for": "распознавание текста в сканах (OCR)",
     },
+    "monolith": {
+        # сохраняет страницу сайта одним HTML-файлом (CC0); один исполняемый файл, без архива
+        "title": "monolith", "size": "≈ 8 МБ", "exe": ["monolith.exe"], "single": True,
+        "url": "https://github.com/Y2Z/monolith/releases/latest/download/{asset}", "asset_fn": "_monolith_asset",
+        "for": "сохранить страницу сайта одним файлом",
+    },
     "ytdlp": {
         "title": "свежий yt-dlp", "size": "≈ 3 МБ", "exe": ["yt-dlp.zip"],
         "url": "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp",
         "for": "скачивание видео, если какой-то сайт перестал качаться",
     },
 }
+
+
+def _monolith_asset() -> str:
+    """Имя файла в релизах Y2Z/monolith для этой системы."""
+    arm = _arch() == "arm64"
+    if sys.platform == "win32":
+        return "monolith-cli.exe"
+    if sys.platform == "darwin":
+        return f"monolith-macos-{'aarch64' if arm else 'x86_64'}-apple-darwin"
+    return f"monolith-cli-linux-{'aarch64' if arm else 'x86_64'}"
 
 
 def _deno_asset() -> str:
@@ -88,7 +104,7 @@ def _deno_asset() -> str:
 
 
 # что ставить само при первом запуске настольной версии, по порядку нужности
-AUTO = ("ffmpeg", "pandoc", "imagemagick", "poppler", "deno", "tesseract")
+AUTO = ("ffmpeg", "pandoc", "imagemagick", "poppler", "deno", "tesseract", "monolith")
 # macOS: чего нет в виде готовых архивов, ставим Homebrew (если он есть)
 BREW = {"imagemagick": ["imagemagick"], "poppler": ["poppler"], "tesseract": ["tesseract", "tesseract-lang"],
         "ffmpeg": ["ffmpeg"], "pandoc": ["pandoc"], "deno": ["deno"]}
@@ -113,7 +129,7 @@ def _spec(name: str) -> dict:
 def _exe_names(name: str) -> list[str]:
     names = CATALOG[name]["exe"]
     # без .exe: deno для Linux/macOS и сборки для macOS (на Linux качаем только deno и yt-dlp)
-    if (name == "deno" and sys.platform != "win32") or sys.platform == "darwin":
+    if (name in ("deno", "monolith") and sys.platform != "win32") or sys.platform == "darwin":
         names = [n[:-4] if n.endswith(".exe") else n for n in names]
     return names
 
@@ -225,7 +241,7 @@ def activate() -> None:
 def can_install(name: str = "") -> bool:
     """Скачиваем сами: на Windows всё; на macOS ffmpeg, pandoc и deno (остальное — Homebrew);
     на Linux движки приходят зависимостями пакета. Свежий yt-dlp и deno годятся везде."""
-    if name in ("ytdlp", "deno"):
+    if name in ("ytdlp", "deno", "monolith"):
         return True
     if sys.platform == "win32" or os.environ.get("UNIVERSAL_ENGINES_ANYOS"):
         return True
@@ -291,7 +307,8 @@ def _assets_from_html(repo: str) -> list[tuple[str, str]]:
 
 def _resolve_url(spec: dict) -> str:
     if "url" in spec:
-        return spec["url"].replace("{asset}", _deno_asset())
+        asset = globals()[spec["asset_fn"]]() if spec.get("asset_fn") else _deno_asset()
+        return spec["url"].replace("{asset}", asset)
     spec = dict(spec)
     if isinstance(spec.get("asset"), str):
         spec["asset"] = spec["asset"].replace("{arch}", _arch())
@@ -468,6 +485,8 @@ def install(name: str, task: Task | None = None) -> str:
     riedl = "arm64" if _arch() == "arm64" else "amd64"
     urls = [u.replace("{riedl}", riedl) for u in spec["urls"]] if "urls" in spec else [_resolve_url(spec)]
     url = urls[0]
+    if spec.get("single"):
+        return _install_single(name, spec, url, task)
     # ignore_cleanup_errors: Windows держит файл открытым, и ошибка уборки скрыла бы настоящую
     with tempfile.TemporaryDirectory(dir=edir, ignore_cleanup_errors=True) as tmp:
         tmp = Path(tmp)
@@ -530,6 +549,28 @@ def install(name: str, task: Task | None = None) -> str:
     if task:
         task.done = 1
     return result
+
+
+def _install_single(name: str, spec: dict, url: str, task: Task | None) -> str:
+    """Движок из одного исполняемого файла (monolith): без распаковки, сразу в engines/<имя>."""
+    edir = engines_dir()
+    cache = edir / "downloads"
+    cache.mkdir(exist_ok=True)
+    tmp = cache / f"{name}-{url.rsplit('/', 1)[-1]}"
+    _download(url, tmp, task, 0, 0.95)
+    if tmp.stat().st_size < 100_000:
+        _discard([tmp])
+        raise EngineError(f"Скачался не тот файл {name}")
+    target = edir / name
+    target.mkdir(exist_ok=True)
+    exe = target / _exe_names(name)[0]
+    os.replace(tmp, exe)
+    if sys.platform != "win32":
+        exe.chmod(0o755)
+    _register(name, str(target))
+    if task:
+        task.done = 1
+    return str(target)
 
 
 def remove(name: str) -> None:

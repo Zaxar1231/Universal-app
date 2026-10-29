@@ -37,6 +37,7 @@ from flask import Flask, Response, jsonify, render_template, request, send_file,
 
 import about
 import stt
+import webpage
 import changelog
 import converters as conv
 import downloader
@@ -683,6 +684,7 @@ def formats():
     eng = conv.engines()
     eng.update({"ytdlp": downloader.available(), "ytdlp_version": downloader.version(),
                 "qrcode": qrtools.available(), "pypdf": pdftools.available(),
+                "page": webpage.available(), "monolith": bool(webpage.monolith_exe()),
                 "poppler": all(poppler_ok().values()), "can_install": engine_store.can_install(),
                 "installable": [n for n in engine_store.CATALOG if engine_store.can_install(n)],
                 "platform": sys.platform,
@@ -1013,6 +1015,18 @@ def dl_netcheck():
 
 @app.route("/api/dl", methods=["POST"])
 def dl():
+    if request.form.get("mode") == "page":            # «Скачать» → «Страницу сайта»: один HTML-файл со всем внутри
+        urls = downloader.extract_urls(request.form.get("urls", ""))
+        if not urls:
+            return jsonify({"error": "Не нашёл ссылок. Вставь адрес страницы, начинающийся с http"}), 400
+        if len(urls) > 50:
+            return jsonify({"error": "Не больше 50 страниц за раз"}), 400
+        opts = webpage.read_opts(request.form)
+        job_id, job_dir, archive = new_job(request.form.get("archive_name", "") or "pages")
+        cookie = _cookiefile(job_dir)
+        task = Task(job_id, "dl", job_dir, archive)
+        TASKS.submit(task, lambda t: webpage.run_page_task(t, urls, opts, cookie))
+        return jsonify(task.to_dict())
     if not downloader.available():
         return jsonify({"error": "yt-dlp не установлен: pip install yt-dlp"}), 500
     urls = downloader.extract_urls(request.form.get("urls", ""))

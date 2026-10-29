@@ -33,6 +33,7 @@ TOOLS = [
      r"LibreOffice (\S+)", "старые .doc"),
     ("Tesseract", lambda: shutil.which("tesseract"), ["--version"], r"tesseract v?(\S+)", "распознавание текста"),
     ("deno", lambda: shutil.which("deno"), ["--version"], r"deno (\S+)", "быстрое скачивание с YouTube"),
+    ("monolith", lambda: shutil.which("monolith"), ["--version"], r"monolith (\S+)", "сохранить страницу сайта одним файлом"),
 ]
 
 def _pkg_version(name: str) -> str:
