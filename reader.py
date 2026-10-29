@@ -38,6 +38,10 @@ TEXT_EXT = {".md", ".markdown", ".mdown", ".txt"}
 _lock = threading.Lock()
 _port = 0
 _error = ""
+_stage = ""
+# к самой читалке ходим напрямую: системный прокси (корпоративный, антивирусный) к 127.0.0.1 отношения не имеет
+_local = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+START_TIMEOUT = 90                # первый запуск тяжёлых библиотек в собранном приложении бывает долгим
 
 
 class ReaderError(Exception):
@@ -53,6 +57,12 @@ def _paths() -> None:
     p = str(THIRD)
     if THIRD.is_dir() and p not in sys.path:
         sys.path.insert(0, p)
+
+
+def prepare() -> None:
+    """Путь к пакету textfold и папка его данных: делать до первого импорта textfold (store читает её сразу)."""
+    os.environ.setdefault("TEXTFOLD_DATA", str(data_dir()))
+    _paths()
 
 
 def missing() -> list[str]:
@@ -109,12 +119,22 @@ def _pick_port() -> int:
 
 
 def _serve(port: int) -> None:
-    global _error
+    global _error, _stage
     try:
+        _stage = "загрузка библиотек"
         from textfold import server
+        _stage = "запуск сервера"
         server.serve(port)
     except Exception as e:           # поток читалки не должен ронять приложение
         _error = f"{e.__class__.__name__}: {str(e)[:200]}"
+
+
+def _listening(port: int) -> bool:
+    try:
+        socket.create_connection(("127.0.0.1", port), 0.5).close()
+        return True
+    except OSError:
+        return False
 
 
 def start() -> str:
@@ -126,30 +146,34 @@ def start() -> str:
         miss = missing()
         if miss or os.environ.get("UNIVERSAL_ANDROID"):
             raise ReaderError("Читалка не может запуститься: не хватает " + ", ".join(miss or ["поддержки на этой системе"]))
-        os.environ.setdefault("TEXTFOLD_DATA", str(data_dir()))     # до импорта textfold.store
         data_dir().mkdir(parents=True, exist_ok=True)
-        _paths()
+        prepare()
         _error = ""
         port = _pick_port()
-        threading.Thread(target=_serve, args=(port,), daemon=True, name="universal-reader").start()
+        th = threading.Thread(target=_serve, args=(port,), daemon=True, name="universal-reader")
+        th.start()
         t0 = time.time()
-        while time.time() - t0 < 30:
+        last = ""
+        while time.time() - t0 < START_TIMEOUT:
             if _error:
                 raise ReaderError("Читалка не запустилась: " + _error)
             try:
-                urllib.request.urlopen(f"http://127.0.0.1:{port}/api/langs", timeout=1).close()
+                _local.open(f"http://127.0.0.1:{port}/api/langs", timeout=2).close()
                 _port = port
                 return running_url()
-            except (urllib.error.URLError, OSError):
-                time.sleep(0.2)
-        raise ReaderError("Читалка не ответила за 30 секунд")
+            except (urllib.error.URLError, OSError) as e:
+                last = f"{e.__class__.__name__}: {str(getattr(e, 'reason', e))[:80]}"
+                time.sleep(0.3)
+        raise ReaderError(f"Читалка не ответила за {START_TIMEOUT} секунд (этап: {_stage or 'не начат'}, "
+                          f"порт {port} {'открыт' if _listening(port) else 'закрыт'}, поток {'жив' if th.is_alive() else 'остановился'}, "
+                          f"последний ответ: {last or 'нет'})")
 
 
 def _post(path: str, body: dict, timeout: float = 60) -> dict:
     req = urllib.request.Request(start() + path, data=json.dumps(body).encode("utf-8"),
                                  headers={"Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with _local.open(req, timeout=timeout) as r:
             return json.load(r)
     except urllib.error.HTTPError as e:
         try:
@@ -194,7 +218,7 @@ def import_file(path: Path, name: str = "") -> dict:
             pass
         else:
             raise ReaderError("Этому файлу (скан, картинка или сложный PDF) нужен PDF-движок MinerU: "
-                              "установи его во вкладке «PDF и документы в Markdown»")
+                              "перетащи его прямо в читалку, она сама предложит поставить движок")
     return {"paper": pid, "title": name, "url": open_url(pid)}
 
 

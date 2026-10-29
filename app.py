@@ -39,6 +39,7 @@ import about
 import stt
 import webpage
 import reader
+import mdconv
 import changelog
 import converters as conv
 import downloader
@@ -686,6 +687,7 @@ def formats():
     eng.update({"ytdlp": downloader.available(), "ytdlp_version": downloader.version(),
                 "qrcode": qrtools.available(), "pypdf": pdftools.available(),
                 "page": webpage.available(), "monolith": bool(webpage.monolith_exe()),
+                "mineru": {**mdconv.status(), "local": _reader_local()},
                 "reader": {"usable": _reader_usable(), "local": _reader_local(), "missing": reader.missing(), "pip": reader.pip_command()},
                 "poppler": all(poppler_ok().values()), "can_install": engine_store.can_install(),
                 "installable": [n for n in engine_store.CATALOG if engine_store.can_install(n)],
@@ -1317,6 +1319,52 @@ def stt_run():
     items = save_uploads(files, job_dir / "in")
     task = Task(job_id, "stt", job_dir, archive)
     TASKS.submit(task, lambda t: stt.run_stt_task(t, items, opts))
+    return jsonify(task.to_dict())
+
+
+# ---------- Документы в Markdown (MinerU) ----------
+
+@app.route("/api/md/engine")
+def md_engine():
+    return jsonify({**mdconv.status(), "local": _reader_local()})
+
+
+@app.route("/api/md/install", methods=["POST"])
+def md_install():
+    """Ставит движок MinerU (гигабайты): только с этого компьютера."""
+    _local_only()
+    if not mdconv.supported():
+        return jsonify({"error": "MinerU здесь не ставится"}), 400
+    level = request.form.get("level", "basic")
+    if level not in ("basic", "full"):
+        return jsonify({"error": "Неизвестный уровень установки"}), 400
+    job_id, job_dir, archive = new_job("mineru")
+    task = Task(job_id, "mdinstall", job_dir, archive)
+    TASKS.submit(task, lambda t: mdconv.install(level, t))
+    return jsonify(task.to_dict())
+
+
+@app.route("/api/md/uninstall", methods=["POST"])
+def md_uninstall():
+    _local_only()
+    return jsonify(mdconv.uninstall())
+
+
+@app.route("/api/md", methods=["POST"])
+def md_run():
+    if not mdconv.supported():
+        return jsonify({"error": "Здесь этот режим недоступен"}), 400
+    opts = mdconv.read_opts(request.form)
+    files = [f for f in request.files.getlist("files") if f.filename]
+    if not files:
+        return jsonify({"error": "Файлы не выбраны"}), 400
+    bad = [f.filename for f in files if not mdconv.can_read(f.filename)]
+    if bad:
+        return jsonify({"error": "Такие файлы MinerU не читает: " + ", ".join(bad[:3])}), 400
+    job_id, job_dir, archive = new_job(request.form.get("archive_name", "") or "markdown")
+    items = save_uploads(files, job_dir / "in")
+    task = Task(job_id, "md", job_dir, archive)
+    TASKS.submit(task, lambda t: mdconv.run_md_task(t, items, opts))
     return jsonify(task.to_dict())
 
 

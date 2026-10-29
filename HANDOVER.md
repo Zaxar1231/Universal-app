@@ -526,3 +526,24 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - Модель сворачивания подключает человек в самой читалке (её настройки лежат в `~/.textfold`). `TEXTFOLD_NO_MODELS=1` отключает поиск моделей (тесты).
 - Тесты `-k reader`: запуск, импорт текста и Word, маршруты, закрытость от телефона, подсказка при нехватке библиотек.
 
+### 13.23 Документы в Markdown: MinerU по запросу (v2.9.0)
+- `mdconv.py` ставит и запускает MinerU через `textfold.engine` (вшитый TextFold): `uv` + Python 3.12 + `mineru==4.0.10` в `<данные приложений>/TextFold/engine` (общая папка с читалкой). Уровни: **basic** (пакет, ≈ 0,9 ГБ, маркер `installed-basic.txt`, быстрый режим = `--tier flash`) и **full** (плюс `mineru-kit models download --tier standard`, ≈ 3 ГБ, маркер `installed.txt` textfold; точный = `--tier advanced --disable-image-analysis`).
+- Проверено на настоящем MinerU: flash читает PDF с текстом, Word (таблицы в Markdown), сканы и картинки (OCR докачивает ≈ 230 МБ при первом использовании), advanced точнее на сканах («4.2 million dollars» вместо «milliondollars»), 157 с на картинку и PDF на процессоре.
+- Результат `mineru-kit parse --format markdown`: `<имя>.md`; вшитые в Markdown картинки (base64) выносятся в `<имя>_images/` (`images=files`, по умолчанию), остаются (`inline`) или удаляются (`none`).
+- Маршруты: `/api/md/engine`, `/api/md/install` (задача `mdinstall`, только `_local_only`), `/api/md/uninstall`, `/api/md` (задача `md`, архив). `engines.mineru` в `/api/formats` (`supported`, `basic`, `full`, `local`). Нет на Android и в Docker.
+- Интерфейс: пункт «В Markdown» (`#mdBox`: режим, картинки, карточка движка с прогрессом и «Остановить»); кнопка конвертации включается, когда установлен нужный уровень.
+- Тесты `-k md_` на поддельных `uv` и `mineru-kit` (Linux и macOS), без скачивания гигабайтов.
+- Читалка: запросы к ней идут через opener без прокси (`reader._local`), старт ждёт `START_TIMEOUT` = 90 с, при неудаче сообщение с этапом, состоянием порта и потока. `.github/workflows/mac-smoke.yml` собирает macOS-приложение на обеих архитектурах и запускает `--smoke` (быстрая диагностика, срабатывает и при правке самого файла).
+
+### 13.24 Разделение по голосам (v2.9.0)
+- `diarize.py`: sherpa-onnx, сегментация pyannote-segmentation-3.0 (int8) + отпечаток 3D-Speaker ERes2Net (VoxCeleb), кластеризация FastClustering (порог 0,8; `num_clusters=-1` — само, число — вручную). Модели (≈ 28 МБ) в `<данные>/diarization`, качаются через `net.download` один раз.
+- `stt.py`: поле формы `speakers` (`auto`/число/пусто), `transcribe(..., audio=)`, звук грузится один раз; подписи «Спикер N» в тексте и .srt, `speakers` в результате; caps `diarize` для интерфейса.
+- Нет на Android (`UNIVERSAL_ANDROID`) и там, где не стоит `sherpa-onnx` (в `packaging/linux/vendor.txt` его нет: не чистый Python).
+- Настоящий тест: `DIARIZE_REAL=1 pytest -k diarize_real` (CI, job pytest). Проверено вручную на записи с четырьмя говорящими: найдено 4.
+
+### 13.25 Офлайн-сборка для Windows (v2.9.0)
+- `packaging/make_offline.py <папка>` скачивает те же движки (`engines.install` для `AUTO`) и модели (Whisper fast/normal, голоса) в папку формата папки данных. Workflow «Релиз» (job windows) копирует её в `dist\Universal\offline`, проверяет `--smoke` с мёртвым прокси (`checks.offline`), собирает `Universal-Offline-Setup-X.exe` (`iscc /DOffline=1`, lzma2/fast, без solid) и `Universal-Offline-X-windows-portable.zip`. Больше 2 ГиБ GitHub не примет: шаг это проверяет.
+- `offline.py`: `seed()` при старте (desktop.main, до `engines.activate`) раскладывает недостающие части в папку данных. Поставлено установщиком (рядом `unins*.exe`) → перенос (`os.replace`, мгновенно, места второй раз не занимает); portable → копия. Существующее не перезаписывается.
+- Имена `Universal-Offline-*` не совпадают с `ASSET_RE` в updater.py: обновление из приложения по-прежнему берёт обычный установщик.
+- `offline-check.yml` проверяет набор на Windows без релиза.
+

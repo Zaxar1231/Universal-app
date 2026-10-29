@@ -30,7 +30,7 @@ jobs:
           python engines.py install monolith
           python -c "import json,engines;print(json.load(open(engines.engines_dir()/'paths.json'))['monolith'])" >> "$GITHUB_PATH"
       - name: Тесты
-        run: python -m pytest -q -rs -k "not test_stt_real" && python -m pytest -q -s -k test_stt_real
+        run: python -m pytest -q -rs -k "not test_stt_real" && python -m pytest -q -s -k test_stt_real && DIARIZE_REAL=1 python -m pytest -q -s -k diarize_real
 
   windows:
     # тесты на Windows с движками, которые ставит само приложение (проверяет и ссылки на них)

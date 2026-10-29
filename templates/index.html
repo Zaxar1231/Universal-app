@@ -436,6 +436,7 @@ ul.files .up { width: 40px; height: 40px; }
       'topdf': 'M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.500-23.500T160-160v-640q0-33 23.500-56.500T240-880h320l240 240v480q0 33-23.500 56.500T720-80H240Zm280-520h200L520-800v200Z',
       'pdft': 'M120-120v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80ZM240-280q-33 0-56.500-23.500T160-360v-400q0-33 23.500-56.500T240-840h480q33 0 56.500 23.500T800-760v400q0 33-23.500 56.500T720-280H240Zm0-80h480v-400H240v400Zm80-80h320v-80H320v80Zm0-160h320v-80H320v80Z',
       'stt': 'M480-400q-50 0-85-35t-35-85v-240q0-50 35-85t85-35q50 0 85 35t35 85v240q0 50-35 85t-85 35Zm0-240Zm-40 520v-123q-104-14-172-93t-68-184h80q0 83 58.500 141.500T480-320q83 0 141.500-58.500T680-520h80q0 105-68 184t-172 93v123h-80Zm40-360q17 0 28.500-11.500T520-520v-240q0-17-11.500-28.500T480-800q-17 0-28.500 11.500T440-760v240q0 17 11.500 28.500T480-480Z',
+      'md': 'M200-120q-33 0-56.500-23.500T120-200v-560q0-33 23.500-56.500T200-840h560q33 0 56.500 23.500T840-760v560q0 33-23.500 56.500T760-120H200Zm0-80h560v-560H200v560Zm80-80h400v-80H280v80Zm0-160h400v-80H280v80Zm0-160h400v-80H280v80Z',
       'reader': 'M480-160q-50-35-109-52.500T240-230q-40 0-77 9.500T90-190v-480q35-17 75-28t75-11q69 0 130 26t110 74q49-48 110-74t130-26q35 0 75 11t75 28v480q-35-18-72-28.500T720-230q-72 0-131 17.500T480-160Zm40-96q42-23 85.500-35T720-303q30 0 59.500 5.500T840-283v-355q-29-12-58.500-17.500T720-661q-45 0-88.500 13.500T520-596v340Zm-80 0v-340q-47-31-91.500-48T240-661q-31 0-60.500 5.500T120-638v355q30-10 59.500-15.500T240-303q45 0 88.500 12T440-256Z',
       'ocr': 'M80-680v-200h200v80H160v120H80Zm0 600v-200h80v120h120v80H80Zm600 0v-80h120v-120h80v200H680Zm120-600v-120H680v-80h200v200h-80ZM240-320h480v-80H240v80Zm0-120h480v-80H240v80Zm0-120h320v-80H240v80Z',
       'photoedit': 'M440-120v-240h80v80h320v80H520v80h-80Zm-320-80v-80h240v80H120Zm160-160v-80H120v-80h160v-80h80v240h-80Zm160-80v-80h400v80H440Zm160-160v-240h80v80h160v80H680v80h-80Zm-480-80v-80h400v80H120Z',
@@ -453,7 +454,7 @@ ul.files .up { width: 40px; height: 40px; }
       <span class="t-label-m">{{ label }}</span></label>
     {% endfor %}
     <span class="sep" role="separator"></span>
-    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF'),('pdft','Правка PDF'),('pdfedit','Редактор PDF'),('ocr','Распознать текст'),('stt','Голос в текст'),('reader','Читалка')] %}
+    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF'),('pdft','Правка PDF'),('pdfedit','Редактор PDF'),('ocr','Распознать текст'),('md','В Markdown'),('stt','Голос в текст'),('reader','Читалка')] %}
     <label class="nav"><input type="radio" name="mode" value="{{ key }}">
       <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
       <span class="t-label-m">{{ label }}</span></label>
@@ -861,7 +862,36 @@ ul.files .up { width: 40px; height: 40px; }
           <label class="tf"><span>Язык речи</span><select id="sttLang"></select></label>
           <label class="sw"><span class="txt"><span class="t-body-m">Ещё и субтитры .srt</span><span class="hint">Текст с таймкодами: подходит для видео, плееров и YouTube.</span></span>
             <input type="checkbox" id="sttSrt"><span class="track"></span></label>
+          <label class="sw" id="sttSpkRow"><span class="txt"><span class="t-body-m">Разделить по голосам</span><span class="hint" id="sttSpkHint"></span></span>
+            <input type="checkbox" id="sttSpk"><span class="track"></span></label>
+          <label class="tf" id="sttSpkNRow" hidden><span>Сколько говорящих</span><select id="sttSpkN">
+            <option value="auto">Определить само</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>8</option></select></label>
           <p class="hint">Всё распознаётся на этом {{ device }}, файлы никуда не отправляются. Интернет нужен один раз, чтобы скачать модель.</p>
+        </div>
+
+        <!-- документы в Markdown (MinerU) -->
+        <div id="mdBox" class="sect" hidden>
+          <div class="field">
+            <span class="lbl t-label-l">Режим</span>
+            <div class="seg">
+              <input type="radio" name="mdt" id="mdt1" value="fast" checked><label for="mdt1">Быстрый</label>
+              <input type="radio" name="mdt" id="mdt2" value="accurate"><label for="mdt2">Точный</label>
+            </div>
+            <p class="hint" id="mdTierHint"></p>
+          </div>
+          <label class="tf"><span>Картинки из документа</span><select id="mdImages">
+            <option value="files">Файлами рядом</option><option value="inline">Внутри текста</option><option value="none">Не нужны</option></select></label>
+          <div class="field">
+            <span class="lbl t-label-l">Движок MinerU</span>
+            <p class="hint" id="mdEngineText"></p>
+            <div class="row">
+              <button class="btn tonal state" id="mdInstBasic" type="button" hidden>Поставить быстрый (≈ 0,9 ГБ)</button>
+              <button class="btn tonal state" id="mdInstFull" type="button" hidden>Поставить полный (≈ 3 ГБ)</button>
+              <button class="btn text state" id="mdCancel" type="button" hidden>Остановить</button>
+            </div>
+            <div class="progress" id="mdProg" hidden><i></i></div>
+          </div>
+          <p class="hint">Всё считается на этом {{ device }}, файлы никуда не отправляются. Движок ставится один раз в отдельную папку и никак не меняет приложение.</p>
         </div>
 
         <!-- распознавание текста (OCRmyPDF) -->
@@ -1511,13 +1541,13 @@ ul.files .up { width: 40px; height: 40px; }
     image: { title: 'Картинки', kind: 'uni' }, audio: { title: 'Аудио', kind: 'uni' },
     video: { title: 'Видео', kind: 'uni' }, doc: { title: 'Документы', kind: 'uni' },
     pdf: { title: 'PDF в картинки', kind: 'pdf' }, photo: { title: 'Фото в A4', kind: 'photo' }, topdf: { title: 'Фото в PDF', kind: 'topdf' },
-    pdft: { title: 'PDF-инструменты', kind: 'pdft' }, ocr: { title: 'Распознать текст', kind: 'ocr' }, stt: { title: 'Голос в текст', kind: 'stt' }, reader: { title: 'Читалка', kind: 'reader' }, info: { title: 'Информация', kind: 'info' },
+    pdft: { title: 'PDF-инструменты', kind: 'pdft' }, ocr: { title: 'Распознать текст', kind: 'ocr' }, stt: { title: 'Голос в текст', kind: 'stt' }, md: { title: 'Документы в Markdown', kind: 'md' }, reader: { title: 'Читалка', kind: 'reader' }, info: { title: 'Информация', kind: 'info' },
     photoedit: { title: 'Фоторедактор', kind: 'photoedit' }, docedit: { title: 'Редактор документов', kind: 'docedit' },
     pdfedit: { title: 'Редактор PDF', kind: 'pdfedit' },
     files: { title: 'Архивы и файлы', kind: 'files' },
     edit: { title: 'Редактор видео и аудио', kind: 'edit' }, dl: { title: 'Скачать видео и страницы', kind: 'dl' }, qr: { title: 'QR-коды', kind: 'qr' },
   };
-  const isNew = () => ['edit', 'dl', 'qr', 'pdft', 'ocr', 'stt', 'reader', 'info', 'photoedit', 'docedit', 'pdfedit', 'files'].includes(MODES[mode()].kind);
+  const isNew = () => ['edit', 'dl', 'qr', 'pdft', 'ocr', 'stt', 'md', 'reader', 'info', 'photoedit', 'docedit', 'pdfedit', 'files'].includes(MODES[mode()].kind);
   const FULL = ['info', 'photoedit', 'docedit', 'pdfedit', 'reader'];          // режимы на всю ширину, без списка файлов
   const fOp = () => qs('input[name=fop]:checked').value;
   const pOp = () => qs('input[name=pop]:checked').value;
@@ -1566,6 +1596,7 @@ ul.files .up { width: 40px; height: 40px; }
   // сервер сам помнит, какую версию уже показывал (localStorage окна мог теряться при смене порта)
   fetch('/api/whatsnew?auto=1').then(r => r.json()).then(d => showNews(d, `Universal обновился до ${d.version}`)).catch(() => {});
   const IMG_RE = /\.(jpe?g|png|webp|tiff?|bmp)$/i;
+  const MD_RE = /\.(pdf|docx?|rtf|pptx?|xlsx?|od[tsp]|epub|html?|mhtml?|csv|tsv|png|jpe?g|webp|gif|bmp|tiff?|jp2)$/i;
   const STT_RE = /\.(ogg|oga|opus|mp3|m4a|aac|wav|flac|wma|amr|weba|webm|mp4|mkv|mov|avi|3gp|m4b|aiff?|caf)$/i;
 
   function accepts(f) {
@@ -1573,6 +1604,7 @@ ul.files .up { width: 40px; height: 40px; }
     if (m === 'pdf' || m === 'pdft') return /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
     if (m === 'ocr') return /\.(pdf|png|jpe?g|tiff?|bmp|webp|gif|jp2)$/i.test(f.name);
     if (m === 'stt') return STT_RE.test(f.name) || /^(audio|video)\//.test(f.type);
+    if (m === 'md') return MD_RE.test(f.name);
     if (m === 'files') return fOp() !== 'extract' || /\.(zip|7z|tar|tgz|tbz2?|txz|gz|bz2|xz|rar)$/i.test(f.name);
     if (isPhotoish()) return IMG_RE.test(f.name) || f.type.startsWith('image/');
     if (m === 'qr') return qrKind() === 'doc' ? /\.(docx|md|markdown|html?|odt|rtf|doc|epub)$/i.test(f.name) : /\.(txt|csv|docx)$/i.test(f.name);
@@ -1630,6 +1662,7 @@ ul.files .up { width: 40px; height: 40px; }
     if (m === 'dl') { ok = /https?:\/\//i.test($('urls').value); label = qs('input[name=dlm]:checked').value === 'page' ? 'Сохранить страницу' : 'Скачать'; }
     if (m === 'ocr') { ok = files.length > 0 && ocrLangs().length > 0; label = 'Распознать'; }
     if (m === 'stt') { ok = files.length > 0 && !!(caps && caps.engines.stt && caps.engines.stt.available); label = 'Распознать речь'; }
+    if (m === 'md') { const e = (caps && caps.engines.mineru) || {}; ok = files.length > 0 && !!(qs('input[name=mdt]:checked').value === 'fast' ? e.basic : e.full); label = 'В Markdown'; }
     if (m === 'files') {
       label = { zip: 'Упаковать в ZIP', '7z': 'Упаковать в 7z', extract: 'Распаковать', hash: 'Посчитать суммы', rename: 'Переименовать' }[fOp()];
       if (fOp() === 'hash') ok = ok && qsa('input[name=falg]:checked').length > 0;
@@ -1747,7 +1780,7 @@ ul.files .up { width: 40px; height: 40px; }
   function syncSettings() {
     const m = mode(), k = MODES[m].kind, uni = k === 'uni', topdf = k === 'topdf', photo = k === 'photo' || topdf, pdf = k === 'pdf';
     $('classicBox').hidden = isNew();
-    $('editBox').hidden = k !== 'edit'; $('pdftBox').hidden = k !== 'pdft'; if (k === 'pdft') syncPdft(); $('ocrBox').hidden = k !== 'ocr'; if (k === 'ocr') syncOcr(); $('sttBox').hidden = k !== 'stt'; if (k === 'stt') syncStt(); $('filesBox').hidden = k !== 'files'; if (k === 'files') syncFiles(); $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
+    $('editBox').hidden = k !== 'edit'; $('pdftBox').hidden = k !== 'pdft'; if (k === 'pdft') syncPdft(); $('ocrBox').hidden = k !== 'ocr'; if (k === 'ocr') syncOcr(); $('sttBox').hidden = k !== 'stt'; if (k === 'stt') syncStt(); $('mdBox').hidden = k !== 'md'; if (k === 'md') syncMd(); $('filesBox').hidden = k !== 'files'; if (k === 'files') syncFiles(); $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
     if (isNew()) { if (k === 'edit') syncEdit(); if (k === 'dl') syncDl(); if (k === 'qr') syncQr(); return; }
     $('uniField').hidden = !uni; $('autoRow').hidden = !(uni && m !== 'doc');
     $('formatsField').hidden = !(pdf || k === 'photo');
@@ -1810,6 +1843,7 @@ ul.files .up { width: 40px; height: 40px; }
     edit: 'Обрезка, склейка, кадрирование, поворот, скорость, громкость, сжатие до нужного размера и GIF. Работает ffmpeg.',
     dl: 'Видео и музыка с YouTube, TikTok, VK, Rutube и ещё ~1800 сайтов, а также любая страница сайта одним HTML-файлом. Качается сюда, на этот {{ 'телефон' if android else 'компьютер' }}.',
     pdft: 'Склеить, разделить, вытащить страницы, повернуть, сжать, поставить или снять пароль.',
+    md: 'PDF, сканы, Word, PowerPoint, Excel и EPUB превращаются в чистый Markdown: заголовки, списки, таблицы и формулы остаются на месте. Считает MinerU на этом {{ device }}.',
     reader: 'Любой текст сворачивается по уровням: от одного предложения на абзац до каждого слова. Ты читаешь оригинал, а не пересказ. Читалка — TextFold, модель для сворачивания подключаешь сам.',
     stt: 'Голосовые из Telegram и WhatsApp, MP3, запись звонка или видео — в текст. Распознаётся на этом {{ device }}, без интернета.',
     ocr: 'Сканы и фото документов становятся PDF, в котором можно искать и копировать текст. Работают OCRmyPDF и Tesseract.',
@@ -1822,11 +1856,12 @@ ul.files .up { width: 40px; height: 40px; }
   };
   function applyMode() {
     const m = mode(), k = MODES[m].kind;
+    qs('input[name=mode][value=md]').closest('label').hidden = !(caps && caps.engines.mineru && caps.engines.mineru.supported && (caps.engines.mineru.local || caps.engines.mineru.basic));
     qs('input[name=mode][value=reader]').closest('label').hidden = !(caps && caps.engines.reader && caps.engines.reader.local);    // читалка есть не везде
     $('title').textContent = MODES[m].title; $('subtitle').textContent = SUBS[m];
-    const acc = { pdf: 'application/pdf,.pdf', pdft: 'application/pdf,.pdf', ocr: 'application/pdf,.pdf,image/*,.tif,.tiff,.jp2', stt: 'audio/*,video/*,.ogg,.oga,.opus,.amr,.m4a,.mkv', files: '', qr: '.txt,.csv,.docx', dl: '', edit: caps ? caps.categories.edit.inputs.map(e => '.' + e).join(',') : 'audio/*,video/*' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps && caps.categories[m] ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
+    const acc = { pdf: 'application/pdf,.pdf', pdft: 'application/pdf,.pdf', ocr: 'application/pdf,.pdf,image/*,.tif,.tiff,.jp2', md: 'application/pdf,.pdf,image/*,.docx,.doc,.rtf,.pptx,.ppt,.xlsx,.xls,.odt,.ods,.odp,.epub,.html,.htm,.mhtml,.csv,.tsv,.tif,.tiff,.jp2', stt: 'audio/*,video/*,.ogg,.oga,.opus,.amr,.m4a,.mkv', files: '', qr: '.txt,.csv,.docx', dl: '', edit: caps ? caps.categories.edit.inputs.map(e => '.' + e).join(',') : 'audio/*,video/*' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps && caps.categories[m] ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
     picker.accept = acc; dirPicker.accept = acc;
-    const what = { pdf: 'PDF', image: 'картинки', audio: 'аудиофайлы', video: 'видео', doc: 'документы', pdft: 'PDF', ocr: 'сканы PDF или фото документов', stt: 'голосовые, аудио или видео', files: 'файлы или папку', edit: 'видео или аудио', qr: 'списки ссылок' }[m] || 'фото';
+    const what = { pdf: 'PDF', image: 'картинки', audio: 'аудиофайлы', video: 'видео', doc: 'документы', pdft: 'PDF', ocr: 'сканы PDF или фото документов', md: 'PDF, сканы или документы Word, PowerPoint, Excel, EPUB', stt: 'голосовые, аудио или видео', files: 'файлы или папку', edit: 'видео или аудио', qr: 'списки ссылок' }[m] || 'фото';
     $('dropTitle').textContent = `Перетащи ${what} сюда`;
     $('dropSub').textContent = k === 'pdf' ? 'Можно сразу сотню. Папку тоже можно перетащить.' : 'или нажми, чтобы выбрать. Папку тоже можно перетащить.';
     const d = { topdf: 200, photo: 300 }[m] || 150; $('dpi').value = d; $('dpiVal').textContent = d + ' DPI';
@@ -1963,6 +1998,11 @@ ul.files .up { width: 40px; height: 40px; }
       url = '/api/stt';
       fd.append('model', qs('input[name=sttm]:checked').value); fd.append('lang', $('sttLang').value);
       fd.append('srt', $('sttSrt').checked ? '1' : '0');
+      fd.append('speakers', $('sttSpk').checked && !$('sttSpkRow').hidden ? $('sttSpkN').value : '0');
+    }
+    else if (k === 'md') {
+      url = '/api/md';
+      fd.append('tier', qs('input[name=mdt]:checked').value); fd.append('images', $('mdImages').value);
     }
     else if (k === 'ocr') {
       url = '/api/ocr';
@@ -2082,13 +2122,14 @@ ul.files .up { width: 40px; height: 40px; }
     } else if (res.message && d.files) html = html.replace('</span>', ` ${esc(res.message)}.</span>`);
     if (res.transcripts && res.transcripts.length) {
       html += '<div class="stt-out">' + res.transcripts.map((t, i) => `<div class="stt-item"><div class="stt-head"><b>${esc(t.name)}</b>` +
-        `<span class="muted">${esc(t.language || '')}${t.duration ? ' · ' + fmtDur(t.duration) : ''}</span>` +
+        `<span class="muted">${esc(t.language || '')}${t.duration ? ' · ' + fmtDur(t.duration) : ''}${t.speakers > 1 ? ' · говорящих: ' + t.speakers : ''}</span>` +
         `<button class="btn text state stt-copy" type="button" data-i="${i}">Скопировать</button>` +
         `${readerUsable() && t.text ? `<button class="btn text state stt-read" type="button" data-i="${i}">В читалку</button>` : ''}</div>` +
-        `<p class="stt-text">${t.text ? esc(t.text) : '<span class="muted">Речи не найдено</span>'}</p></div>`).join('') + '</div>';
+        `<p class="stt-text">${t.text ? esc(t.text).replace(/^(Спикер \d+):/gm, '<b>$1:</b>') : '<span class="muted">Речи не найдено</span>'}</p></div>`).join('') + '</div>';
       setTimeout(() => qsa('.stt-copy').forEach(b => { b.onclick = () => navigator.clipboard.writeText(res.transcripts[+b.dataset.i].text).then(() => { b.textContent = 'Скопировано'; }); }));
       setTimeout(() => qsa('.stt-read').forEach(b => { b.onclick = () => openInReader(res.transcripts[+b.dataset.i].text, (res.transcripts[+b.dataset.i].name || 'голосовое').replace(/\.[^.]+$/, '') + '.md', b); }));
-      if (caps && caps.engines.stt) caps.engines.stt.models.forEach(x => { if (x.key === lastSttModel) x.downloaded = true; });
+      if (caps && caps.engines.stt) { caps.engines.stt.models.forEach(x => { if (x.key === lastSttModel) x.downloaded = true; });
+        if (caps.engines.stt.diarize && res.transcripts.some(t => t.speakers)) caps.engines.stt.diarize.downloaded = true; }
     }
     const errs = (d.failed || []).map(f => `<li><b>${esc(f.name)}</b>: ${esc(f.error)}</li>`);
     if (d.status === 'error' && !errs.length) errs.push(`<li>${esc(d.error)}</li>`);
@@ -2176,6 +2217,50 @@ ul.files .up { width: 40px; height: 40px; }
   const fmtDur = s => { s = Math.round(s); const m = Math.floor(s / 60); return m ? `${m} мин ${s % 60} с` : `${s} с`; };
   const STT_HINTS = { fast: 'Быстро и легко, но чаще ошибается в словах. Для чёткой речи.', normal: 'Хороший баланс: голосовые и записи разговоров распознаёт уверенно.',
     best: 'Точнее всех, справляется с шумом и невнятной речью. Медленнее, нужен компьютер помощнее (≈ 2 ГБ памяти).' };
+  // документы в Markdown: движок MinerU ставится по запросу
+  const MD_TIER_HINTS = {
+    fast: 'PDF, Word, PowerPoint, Excel, EPUB, HTML, а также сканы и картинки: секунды на файл, большие модели не нужны (для сканов при первом запуске докачается ≈ 230 МБ распознавания). Формулы и сложные таблицы выходят хуже.',
+    accurate: 'Сложные сканы и страницы, формулы в LaTeX, таблицы со слитыми ячейками. Несколько секунд на страницу, нужны большие модели (≈ 2 ГБ сверху).',
+  };
+  function syncMd() {
+    const e = (caps && caps.engines.mineru) || {}, t = qs('input[name=mdt]:checked').value;
+    $('mdTierHint').textContent = MD_TIER_HINTS[t];
+    const busy = !$('mdProg').hidden;
+    $('mdEngineText').textContent = busy ? $('mdEngineText').textContent
+      : (e.full ? 'Установлен полный движок: быстрый и точный режимы.'
+        : e.basic ? 'Установлен быстрый движок (без моделей). Для сложных сканов, формул и таблиц со слитыми ячейками нужен полный.'
+          : e.local ? 'Движок не установлен: его нужно поставить один раз.' : 'Движок не установлен, а ставить его можно только на самом компьютере.') + (syncMd.note ? ' ' + syncMd.note : '');
+    $('mdInstBasic').hidden = busy || !e.local || e.basic;
+    $('mdInstFull').hidden = busy || !e.local || e.full;
+    $('mdInstFull').textContent = e.basic ? 'Докачать модели (≈ 2 ГБ)' : 'Поставить полный (≈ 3 ГБ)';
+    updateGo();
+  }
+  function mdInstall(level) {
+    const txt = $('mdEngineText'), prog = $('mdProg'), cancel = $('mdCancel');
+    syncMd.note = ''; prog.hidden = false; cancel.hidden = false; $('mdInstBasic').hidden = $('mdInstFull').hidden = true;
+    txt.textContent = 'Начинаю…'; prog.className = 'progress busy'; prog.innerHTML = '<i></i>';
+    const fd = new FormData(); fd.append('level', level);
+    const finish = note => { prog.hidden = true; cancel.hidden = true; syncMd.note = note || '';
+      fetch('/api/formats').then(r => r.json()).then(x => { caps = x; syncMd(); }).catch(syncMd); };
+    fetch('/api/md/install', { method: 'POST', body: fd }).then(r => r.json()).then(t => {
+      if (t.error) return finish(t.error);
+      cancel.onclick = () => { cancel.disabled = true; fetch('/api/task/' + t.task + '/cancel', { method: 'POST' }); };
+      const tick = () => fetch('/api/task/' + t.task).then(r => r.json()).then(d => {
+        if (['queued', 'running'].includes(d.status)) {
+          const p = Math.round((d.progress || 0) * 100);
+          prog.className = 'progress'; prog.innerHTML = `<i style="width:${p}%"></i>`; txt.textContent = `${d.message} · ${p}%`;
+          setTimeout(tick, 700); return;
+        }
+        cancel.disabled = false;
+        finish(d.status === 'done' ? '' : d.status === 'cancelled' ? 'Остановлено: установка продолжится с того же шага.' : 'Не получилось: ' + (d.error || d.message));
+      }).catch(() => finish('Нет связи с приложением.'));
+      tick();
+    }).catch(() => finish('Нет связи с приложением.'));
+  }
+  $('mdInstBasic').onclick = () => mdInstall('basic');
+  $('mdInstFull').onclick = () => mdInstall('full');
+  $('mdBox').addEventListener('change', syncMd);
+
   function syncStt() {
     const c = caps && caps.engines.stt;
     if (!c) return;
@@ -2184,14 +2269,23 @@ ul.files .up { width: 40px; height: 40px; }
       const cur = c.models.some(x => x.key === saved) ? saved : 'normal';
       $('sttModels').innerHTML = c.models.map(x => `<input type="radio" name="sttm" id="sttm-${x.key}" value="${x.key}" ${x.key === cur ? 'checked' : ''}><label for="sttm-${x.key}">${esc(x.label)}</label>`).join('');
       let lang = ''; try { lang = localStorage.getItem('sttLang') || ''; } catch (_) {}
+      try { $('sttSpk').checked = localStorage.getItem('sttSpk') === '1'; $('sttSpkN').value = localStorage.getItem('sttSpkN') || 'auto'; } catch (_) {}
       $('sttLang').innerHTML = Object.entries(c.langs).map(([k, v]) => `<option value="${k}" ${k === lang ? 'selected' : ''}>${esc(v)}</option>`).join('');
     }
     const key = qs('input[name=sttm]:checked').value, x = c.models.find(y => y.key === key);
     lastSttModel = key;
+    const dz = c.diarize || {}, spk = $('sttSpk');
+    $('sttSpkRow').hidden = !!c.android;                       // на телефоне разделения по голосам пока нет
+    spk.disabled = !dz.available;
+    if (!dz.available) spk.checked = false;
+    $('sttSpkHint').textContent = dz.available
+      ? 'Каждая реплика подписана: Спикер 1, Спикер 2… Число говорящих находится само. ' + (dz.downloaded ? 'Модель голосов уже скачана.' : `При первом запуске скачается ≈ ${dz.mb} МБ.`)
+      : 'Не хватает библиотеки: ' + esc(dz.pip || 'pip install sherpa-onnx') + ' (и перезапуск).';
+    $('sttSpkNRow').hidden = !spk.checked || $('sttSpkRow').hidden;
     $('sttModelHint').textContent = STT_HINTS[key] + (x.downloaded ? ' Модель уже скачана.' : ` При первом запуске скачается ≈ ${x.mb >= 1000 ? (x.mb / 1024).toFixed(1).replace('.', ',') + ' ГБ' : x.mb + ' МБ'}.`);
   }
   $('sttBox').addEventListener('change', () => {
-    try { localStorage.setItem('sttModel', qs('input[name=sttm]:checked').value); localStorage.setItem('sttLang', $('sttLang').value); } catch (_) {}
+    try { localStorage.setItem('sttModel', qs('input[name=sttm]:checked').value); localStorage.setItem('sttLang', $('sttLang').value); localStorage.setItem('sttSpk', $('sttSpk').checked ? '1' : '0'); localStorage.setItem('sttSpkN', $('sttSpkN').value); } catch (_) {}
     syncStt();
   });
 
