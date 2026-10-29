@@ -319,7 +319,7 @@ def _():
 def _():
     site = OUT / "host" / "site"          # эту папку отдаёт http.server из run.sh
     site.mkdir(parents=True, exist_ok=True)
-    (site / "pic.png").write_bytes(png(40, 30))
+    (site / "pic.png").write_bytes(png(200, 120))
     (site / "e.css").write_text(".e{color:red}", encoding="utf-8")
     (site / "s.css").write_text("@import 'e.css'; body{background:url(pic.png)}", encoding="utf-8")
     (site / "index.html").write_text("<html><head><meta charset='utf-8'><title>Проверка страницы</title>"
