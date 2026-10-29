@@ -88,6 +88,10 @@ class _Fetcher:
                 self.jar.load(str(cookiefile), ignore_discard=True, ignore_expires=True)
             except (OSError, http.cookiejar.LoadError):
                 raise PageError("cookies.txt не читается: нужен файл в формате Netscape (его делает расширение «Get cookies.txt LOCALLY»)")
+            for c in self.jar:
+                if not c.expires:        # 0 в cookies.txt — сессионная cookie; Python 3.12 считает её уже просроченной
+                    c.expires = None
+                    c.discard = True
         handlers.append(urllib.request.HTTPCookieProcessor(self.jar))
         self.handlers = handlers
         self.total = 0
