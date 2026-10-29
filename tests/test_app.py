@@ -2513,7 +2513,7 @@ def test_av_scan_finds_virus_and_keeps_clean(tmp_path, monkeypatch):
     (job / "in").mkdir(parents=True)
     (job / "out").mkdir()
     a, b = job / "in" / "письмо.txt", job / "in" / "вирус.com"
-    a.write_text("привет")
+    a.write_text("привет", encoding="utf-8")
     b.write_bytes(EICAR)
     from tasks import Task
     t = Task("x", "av", job, "av")
