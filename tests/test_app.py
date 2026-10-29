@@ -2053,3 +2053,20 @@ def test_engine_single_file_install(engine_env, monkeypatch):
     engines.remove("monolith")
     with pytest.raises(engines.EngineError, match="не тот файл"):
         engines.install("monolith")
+
+
+def test_fresh_ytdlp_not_activated_on_python_310(tmp_path, monkeypatch):
+    """Свежий yt-dlp (3.11+) на Python 3.10 не подключаем и не предлагаем: он не импортируется, и всё скачивание умерло бы."""
+    import engines
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path))
+    z = tmp_path / "engines" / "yt-dlp.zip"
+    z.parent.mkdir(parents=True)
+    z.write_bytes(b"PK")
+    (z.parent / "paths.json").write_text(json.dumps({"ytdlp": str(z)}), encoding="utf-8")
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.setattr(sys, "version_info", (3, 10, 12, "final", 0))
+    engines.activate()
+    assert str(z) not in sys.path and not engines.can_install("ytdlp")
+    monkeypatch.setattr(sys, "version_info", (3, 12, 1, "final", 0))
+    engines.activate()
+    assert str(z) in sys.path and engines.can_install("ytdlp")
