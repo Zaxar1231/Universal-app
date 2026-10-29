@@ -535,3 +535,8 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - Тесты `-k md_` на поддельных `uv` и `mineru-kit` (Linux и macOS), без скачивания гигабайтов.
 - Читалка: запросы к ней идут через opener без прокси (`reader._local`), старт ждёт `START_TIMEOUT` = 90 с, при неудаче сообщение с этапом, состоянием порта и потока. `.github/workflows/mac-smoke.yml` собирает macOS-приложение на обеих архитектурах и запускает `--smoke` (быстрая диагностика, срабатывает и при правке самого файла).
 
+### 13.24 Разделение по голосам (v2.9.0)
+- `diarize.py`: sherpa-onnx, сегментация pyannote-segmentation-3.0 (int8) + отпечаток 3D-Speaker ERes2Net (VoxCeleb), кластеризация FastClustering (порог 0,8; `num_clusters=-1` — само, число — вручную). Модели (≈ 28 МБ) в `<данные>/diarization`, качаются через `net.download` один раз.
+- `stt.py`: поле формы `speakers` (`auto`/число/пусто), `transcribe(..., audio=)`, звук грузится один раз; подписи «Спикер N» в тексте и .srt, `speakers` в результате; caps `diarize` для интерфейса.
+- Нет на Android (`UNIVERSAL_ANDROID`) и там, где не стоит `sherpa-onnx` (в `packaging/linux/vendor.txt` его нет: не чистый Python).
+- Настоящий тест: `DIARIZE_REAL=1 pytest -k diarize_real` (CI, job pytest). Проверено вручную на записи с четырьмя говорящими: найдено 4.

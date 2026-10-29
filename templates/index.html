@@ -862,6 +862,10 @@ ul.files .up { width: 40px; height: 40px; }
           <label class="tf"><span>Язык речи</span><select id="sttLang"></select></label>
           <label class="sw"><span class="txt"><span class="t-body-m">Ещё и субтитры .srt</span><span class="hint">Текст с таймкодами: подходит для видео, плееров и YouTube.</span></span>
             <input type="checkbox" id="sttSrt"><span class="track"></span></label>
+          <label class="sw" id="sttSpkRow"><span class="txt"><span class="t-body-m">Разделить по голосам</span><span class="hint" id="sttSpkHint"></span></span>
+            <input type="checkbox" id="sttSpk"><span class="track"></span></label>
+          <label class="tf" id="sttSpkNRow" hidden><span>Сколько говорящих</span><select id="sttSpkN">
+            <option value="auto">Определить само</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>8</option></select></label>
           <p class="hint">Всё распознаётся на этом {{ device }}, файлы никуда не отправляются. Интернет нужен один раз, чтобы скачать модель.</p>
         </div>
 
@@ -1994,6 +1998,7 @@ ul.files .up { width: 40px; height: 40px; }
       url = '/api/stt';
       fd.append('model', qs('input[name=sttm]:checked').value); fd.append('lang', $('sttLang').value);
       fd.append('srt', $('sttSrt').checked ? '1' : '0');
+      fd.append('speakers', $('sttSpk').checked && !$('sttSpkRow').hidden ? $('sttSpkN').value : '0');
     }
     else if (k === 'md') {
       url = '/api/md';
@@ -2117,13 +2122,14 @@ ul.files .up { width: 40px; height: 40px; }
     } else if (res.message && d.files) html = html.replace('</span>', ` ${esc(res.message)}.</span>`);
     if (res.transcripts && res.transcripts.length) {
       html += '<div class="stt-out">' + res.transcripts.map((t, i) => `<div class="stt-item"><div class="stt-head"><b>${esc(t.name)}</b>` +
-        `<span class="muted">${esc(t.language || '')}${t.duration ? ' · ' + fmtDur(t.duration) : ''}</span>` +
+        `<span class="muted">${esc(t.language || '')}${t.duration ? ' · ' + fmtDur(t.duration) : ''}${t.speakers > 1 ? ' · говорящих: ' + t.speakers : ''}</span>` +
         `<button class="btn text state stt-copy" type="button" data-i="${i}">Скопировать</button>` +
         `${readerUsable() && t.text ? `<button class="btn text state stt-read" type="button" data-i="${i}">В читалку</button>` : ''}</div>` +
-        `<p class="stt-text">${t.text ? esc(t.text) : '<span class="muted">Речи не найдено</span>'}</p></div>`).join('') + '</div>';
+        `<p class="stt-text">${t.text ? esc(t.text).replace(/^(Спикер \d+):/gm, '<b>$1:</b>') : '<span class="muted">Речи не найдено</span>'}</p></div>`).join('') + '</div>';
       setTimeout(() => qsa('.stt-copy').forEach(b => { b.onclick = () => navigator.clipboard.writeText(res.transcripts[+b.dataset.i].text).then(() => { b.textContent = 'Скопировано'; }); }));
       setTimeout(() => qsa('.stt-read').forEach(b => { b.onclick = () => openInReader(res.transcripts[+b.dataset.i].text, (res.transcripts[+b.dataset.i].name || 'голосовое').replace(/\.[^.]+$/, '') + '.md', b); }));
-      if (caps && caps.engines.stt) caps.engines.stt.models.forEach(x => { if (x.key === lastSttModel) x.downloaded = true; });
+      if (caps && caps.engines.stt) { caps.engines.stt.models.forEach(x => { if (x.key === lastSttModel) x.downloaded = true; });
+        if (caps.engines.stt.diarize && res.transcripts.some(t => t.speakers)) caps.engines.stt.diarize.downloaded = true; }
     }
     const errs = (d.failed || []).map(f => `<li><b>${esc(f.name)}</b>: ${esc(f.error)}</li>`);
     if (d.status === 'error' && !errs.length) errs.push(`<li>${esc(d.error)}</li>`);
@@ -2263,14 +2269,23 @@ ul.files .up { width: 40px; height: 40px; }
       const cur = c.models.some(x => x.key === saved) ? saved : 'normal';
       $('sttModels').innerHTML = c.models.map(x => `<input type="radio" name="sttm" id="sttm-${x.key}" value="${x.key}" ${x.key === cur ? 'checked' : ''}><label for="sttm-${x.key}">${esc(x.label)}</label>`).join('');
       let lang = ''; try { lang = localStorage.getItem('sttLang') || ''; } catch (_) {}
+      try { $('sttSpk').checked = localStorage.getItem('sttSpk') === '1'; $('sttSpkN').value = localStorage.getItem('sttSpkN') || 'auto'; } catch (_) {}
       $('sttLang').innerHTML = Object.entries(c.langs).map(([k, v]) => `<option value="${k}" ${k === lang ? 'selected' : ''}>${esc(v)}</option>`).join('');
     }
     const key = qs('input[name=sttm]:checked').value, x = c.models.find(y => y.key === key);
     lastSttModel = key;
+    const dz = c.diarize || {}, spk = $('sttSpk');
+    $('sttSpkRow').hidden = !!c.android;                       // на телефоне разделения по голосам пока нет
+    spk.disabled = !dz.available;
+    if (!dz.available) spk.checked = false;
+    $('sttSpkHint').textContent = dz.available
+      ? 'Каждая реплика подписана: Спикер 1, Спикер 2… Число говорящих находится само. ' + (dz.downloaded ? 'Модель голосов уже скачана.' : `При первом запуске скачается ≈ ${dz.mb} МБ.`)
+      : 'Не хватает библиотеки: ' + esc(dz.pip || 'pip install sherpa-onnx') + ' (и перезапуск).';
+    $('sttSpkNRow').hidden = !spk.checked || $('sttSpkRow').hidden;
     $('sttModelHint').textContent = STT_HINTS[key] + (x.downloaded ? ' Модель уже скачана.' : ` При первом запуске скачается ≈ ${x.mb >= 1000 ? (x.mb / 1024).toFixed(1).replace('.', ',') + ' ГБ' : x.mb + ' МБ'}.`);
   }
   $('sttBox').addEventListener('change', () => {
-    try { localStorage.setItem('sttModel', qs('input[name=sttm]:checked').value); localStorage.setItem('sttLang', $('sttLang').value); } catch (_) {}
+    try { localStorage.setItem('sttModel', qs('input[name=sttm]:checked').value); localStorage.setItem('sttLang', $('sttLang').value); localStorage.setItem('sttSpk', $('sttSpk').checked ? '1' : '0'); localStorage.setItem('sttSpkN', $('sttSpkN').value); } catch (_) {}
     syncStt();
   });
 

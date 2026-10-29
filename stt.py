@@ -15,6 +15,7 @@ import time
 import urllib.request
 from pathlib import Path
 
+import diarize
 import engines
 import net
 from tasks import Task
@@ -68,21 +69,25 @@ def downloaded(key: str) -> bool:
 def caps() -> dict:
     if _android() and available():
         import android_stt as a
-        return {"available": True, "android": True, "langs": a.LANGS,
+        return {"available": True, "android": True, "langs": a.LANGS, "diarize": diarize.caps(),
                 "models": [{"key": "normal", "label": "Встроенная (Vosk)", "mb": a.MODELS["ru"][1],
                             "downloaded": a.downloaded("ru")}]}
-    return {"available": available(), "langs": LANGS,
+    return {"available": available(), "langs": LANGS, "diarize": diarize.caps(),
             "models": [{"key": k, "label": lbl, "mb": mb, "downloaded": downloaded(k)} for k, (_, mb, lbl) in MODELS.items()]}
 
 
 def read_opts(form) -> dict:
-    o = {"model": form.get("model", "normal"), "lang": form.get("lang", ""), "srt": form.get("srt") == "1"}
+    o = {"model": form.get("model", "normal"), "lang": form.get("lang", ""), "srt": form.get("srt") == "1",
+         "speakers": diarize.read_speakers(form.get("speakers"))}
     if o["model"] not in MODELS:
         raise SttError("Неизвестная модель")
     if o["lang"] not in LANGS:
         o["lang"] = ""
     if not available():
         raise SttError("Не установлен faster-whisper: pip install faster-whisper")
+    if o["speakers"] and not diarize.available():
+        raise SttError("На телефоне разделения по голосам пока нет" if _android()
+                       else "Разделить по голосам нельзя: не установлен sherpa-onnx (pip install sherpa-onnx)")
     return o
 
 
@@ -216,9 +221,10 @@ def load_audio(src: Path):
         raise SttError(f"не получилось прочитать звук ({e.__class__.__name__}: {str(e)[:120]})")
 
 
-def transcribe(src: Path, key: str, lang: str, task: Task | None = None, base: float = 0.0, span: float = 1.0):
-    """-> (сегменты [(начало, конец, текст)], язык, длительность)"""
-    audio = load_audio(src)
+def transcribe(src: Path, key: str, lang: str, task: Task | None = None, base: float = 0.0, span: float = 1.0, audio=None):
+    """-> (сегменты [(начало, конец, текст)], язык, длительность). audio: уже прочитанный звук (его же берёт и разделение по голосам)"""
+    if audio is None:
+        audio = load_audio(src)
     if audio.size < SR // 10:
         raise SttError("в файле нет звука или он короче 0,1 секунды")
     model = _model(key)
@@ -245,6 +251,11 @@ def run_stt_task(task: Task, items: list[tuple[Path, str]], o: dict) -> None:
     out_dir, n = task.out_dir, len(items)
     task.total = n
     task.update(0, "Готовлю модель распознавания…")
+    if o.get("speakers") and not _android():
+        try:
+            diarize.ensure_models(task)                    # маленькие модели голосов (≈ 28 МБ), один раз
+        except diarize.DiarizeError as e:
+            raise SttError(str(e))
     if _android():
         import android_stt
         lang = o["lang"] if o["lang"] in android_stt.LANGS else "ru"
@@ -252,13 +263,13 @@ def run_stt_task(task: Task, items: list[tuple[Path, str]], o: dict) -> None:
             android_stt.ensure_model(lang, task)
         except android_stt.SttError as e:
             raise SttError(str(e))
-        recognize = lambda src, task, base, span: android_stt.transcribe(src, lang, task, base, span)  # noqa: E731
+        recognize = lambda src, task, base, span, audio=None: android_stt.transcribe(src, lang, task, base, span)  # noqa: E731
         langs = android_stt.LANGS
     else:
         ensure_model(o["model"], task)
         task.update(0.3, "Загружаю модель в память…")
         _model(o["model"])
-        recognize = lambda src, task, base, span: transcribe(src, o["model"], o["lang"], task, base, span)  # noqa: E731
+        recognize = lambda src, task, base, span, audio=None: transcribe(src, o["model"], o["lang"], task, base, span, audio)  # noqa: E731
         langs = LANGS
     results = []
     for i, (src, stem) in enumerate(items):
@@ -267,7 +278,8 @@ def run_stt_task(task: Task, items: list[tuple[Path, str]], o: dict) -> None:
         base, span = 0.3 + 0.7 * i / n, 0.7 / n
         task.update(base, f"Распознаю {i + 1} из {n}: {name}")
         try:
-            segs, lang, dur = recognize(src, task, base, span)
+            audio = load_audio(src) if o.get("speakers") else None      # звук читаем один раз: для текста и для голосов
+            segs, lang, dur = recognize(src, task, base, span, audio)
         except Exception as e:
             if task.cancel_event.is_set():
                 raise
@@ -275,12 +287,26 @@ def run_stt_task(task: Task, items: list[tuple[Path, str]], o: dict) -> None:
             msg = str(e) if e.__class__.__name__ == "SttError" else f"{e.__class__.__name__}: {str(e)[:150]}"
             task.failed.append({"name": name, "error": msg})
             continue
-        text = " ".join(t for _, _, t in segs)
+        who: list[int] = []
+        if o.get("speakers") and segs:
+            task.update(base + span * 0.9, f"Определяю голоса {i + 1} из {n}: {name}")
+            try:
+                who = diarize.assign(segs, diarize.turns(audio, o["speakers"]))
+            except Exception as e:                                       # без голосов текст всё равно получен
+                if task.cancel_event.is_set():
+                    raise
+                task.failed.append({"name": name, "error": "Голоса разделить не удалось: " + (
+                    str(e) if isinstance(e, diarize.DiarizeError) else f"{e.__class__.__name__}: {str(e)[:120]}")})
+                who = []
+        many = len(set(who)) > 1                                         # один говорящий: подписи только мешали бы
+        text = diarize.join(segs, who) if many else " ".join(t for _, _, t in segs)
         (out_dir / f"{stem}.txt").write_text(text + "\n", encoding="utf-8")
         if o["srt"]:
-            srt = "".join(f"{k}\n{_ts(a)} --> {_ts(b)}\n{t}\n\n" for k, (a, b, t) in enumerate(segs, 1))
+            pre = [f"[{diarize.label(w)}] " for w in who] if many else [""] * len(segs)
+            srt = "".join(f"{k}\n{_ts(a)} --> {_ts(b)}\n{p}{t}\n\n" for k, ((a, b, t), p) in enumerate(zip(segs, pre), 1))
             (out_dir / f"{stem}.srt").write_text(srt, encoding="utf-8")
-        results.append({"name": name, "text": text, "language": langs.get(lang, lang), "duration": round(dur, 1)})
+        results.append({"name": name, "text": text, "language": langs.get(lang, lang), "duration": round(dur, 1),
+                        **({"speakers": len(set(who))} if who else {})})
         task.done += 1
     task.result = {"transcripts": results[:200]}
     if not task.done and task.failed:

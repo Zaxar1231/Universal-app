@@ -1446,7 +1446,7 @@ def test_stt_task_writes_txt_and_srt(tmp_path, monkeypatch):
     monkeypatch.setattr(stt, "available", lambda: True)
     monkeypatch.setattr(stt, "ensure_model", lambda key, task=None: tmp_path)
     monkeypatch.setattr(stt, "_model", lambda key: None)
-    monkeypatch.setattr(stt, "transcribe", lambda src, key, lang, task=None, base=0, span=1:
+    monkeypatch.setattr(stt, "transcribe", lambda src, key, lang, task=None, base=0, span=1, audio=None:
                         ([(0.0, 1.5, "Привет"), (1.5, 3.25, "это проверка")], "ru", 3.25))
     job = tmp_path / "job"
     (job / "out").mkdir(parents=True)
@@ -2341,3 +2341,98 @@ def test_md_unsupported_on_android(monkeypatch, client):
     monkeypatch.setenv("UNIVERSAL_ANDROID", "1")
     assert not mdconv.supported() and mdconv.status()["supported"] is False
     assert client.post("/api/md/install", data={"level": "basic"}).status_code == 400
+
+
+# ---------------------------------------------------------------- голос в текст: разделение по голосам
+
+def test_diarize_assign_and_join():
+    import diarize
+    segs = [(0.0, 2.0, "Привет, как дела?"), (2.2, 4.0, "Нормально."), (4.1, 5.0, "А у тебя?"), (6.5, 7.0, "Тоже."), (9.0, 9.5, "Пока.")]
+    found = [(0.0, 2.1, 7), (2.1, 4.05, 3), (4.05, 6.0, 7), (6.0, 7.2, 3)]       # номера у модели произвольные
+    who = diarize.assign(segs, found)
+    assert who == [0, 1, 0, 1, 1]                      # номера по порядку появления; «Пока» в паузе -> ближайший говорящий (3)
+    assert diarize.join(segs, who) == ("Спикер 1: Привет, как дела?\n\nСпикер 2: Нормально.\n\nСпикер 1: А у тебя?\n\n"
+                                       "Спикер 2: Тоже. Пока.")
+    assert diarize.assign(segs, []) == [0] * 5
+    assert diarize.read_speakers("auto") == -1 and diarize.read_speakers("3") == 3 and diarize.read_speakers("") == 0
+    assert diarize.read_speakers("0") == 0 and diarize.read_speakers("99") == -1 and diarize.read_speakers("abc") == -1
+
+
+def _stt_job(tmp_path, monkeypatch, who_segments, found):
+    import diarize
+    import stt
+    from tasks import Task
+    monkeypatch.setattr(stt, "available", lambda: True)
+    monkeypatch.setattr(diarize, "available", lambda: True)
+    monkeypatch.setattr(stt, "ensure_model", lambda key, task=None: tmp_path)
+    monkeypatch.setattr(stt, "_model", lambda key: None)
+    monkeypatch.setattr(stt, "load_audio", lambda src: b"audio")
+    calls = []
+    monkeypatch.setattr(stt, "transcribe", lambda src, key, lang, task=None, base=0, span=1, audio=None:
+                        (calls.append(audio) or who_segments, "ru", 9.0))
+    monkeypatch.setattr(diarize, "ensure_models", lambda task=None, base=0, span=0: tmp_path)
+    monkeypatch.setattr(diarize, "turns", lambda audio, n=-1: found if not isinstance(found, Exception) else (_ for _ in ()).throw(found))
+    job = tmp_path / "job"
+    (job / "out").mkdir(parents=True, exist_ok=True)
+    src = tmp_path / "meet.ogg"
+    src.write_bytes(b"x")
+    task = Task("m1", "stt", job, "text")
+    return stt, task, src, job, calls
+
+
+def test_stt_with_speakers_labels_text_and_srt(tmp_path, monkeypatch):
+    segs = [(0.0, 2.0, "Добрый день."), (2.2, 4.0, "Здравствуйте."), (4.2, 6.0, "Начнём.")]
+    stt, task, src, job, calls = _stt_job(tmp_path, monkeypatch, segs, [(0.0, 2.1, 0), (2.1, 4.1, 1), (4.1, 6.0, 0)])
+    stt.run_stt_task(task, [(src, "meet")], stt.read_opts({"model": "fast", "srt": "1", "speakers": "auto"}))
+    txt = (job / "out" / "meet.txt").read_text(encoding="utf-8")
+    assert txt.strip() == "Спикер 1: Добрый день.\n\nСпикер 2: Здравствуйте.\n\nСпикер 1: Начнём."
+    srt = (job / "out" / "meet.srt").read_text(encoding="utf-8")
+    assert "[Спикер 2] Здравствуйте." in srt and srt.count("[Спикер") == 3
+    r = task.result["transcripts"][0]
+    assert r["speakers"] == 2 and r["text"].startswith("Спикер 1:")
+    assert calls == [b"audio"]                          # звук прочитан один раз и передан в распознавание
+
+
+def test_stt_single_speaker_has_no_labels_and_failure_keeps_text(tmp_path, monkeypatch):
+    import diarize
+    segs = [(0.0, 2.0, "Только я."), (2.5, 4.0, "Один говорю.")]
+    stt, task, src, job, _ = _stt_job(tmp_path, monkeypatch, segs, [(0.0, 4.0, 5)])
+    stt.run_stt_task(task, [(src, "meet")], stt.read_opts({"model": "fast", "speakers": "2"}))
+    assert (job / "out" / "meet.txt").read_text(encoding="utf-8").strip() == "Только я. Один говорю."
+    assert task.result["transcripts"][0]["speakers"] == 1
+    stt, task, src, job, _ = _stt_job(tmp_path / "b", monkeypatch, segs, diarize.DiarizeError("модель сломана"))
+    stt.run_stt_task(task, [(src, "meet")], stt.read_opts({"model": "fast", "speakers": "auto"}))
+    assert (job / "out" / "meet.txt").read_text(encoding="utf-8").strip() == "Только я. Один говорю."   # текст не потерян
+    assert task.done == 1 and "Голоса разделить не удалось: модель сломана" in task.failed[0]["error"]
+
+
+def test_stt_speakers_needs_sherpa(monkeypatch):
+    import diarize
+    import stt
+    monkeypatch.setattr(stt, "available", lambda: True)
+    monkeypatch.setattr(diarize, "available", lambda: False)
+    with pytest.raises(stt.SttError, match="sherpa-onnx"):
+        stt.read_opts({"model": "fast", "speakers": "auto"})
+    assert stt.read_opts({"model": "fast"})["speakers"] == 0          # без галочки ничего не требуется
+    assert stt.caps()["diarize"]["available"] is False and "sherpa-onnx" in stt.caps()["diarize"]["pip"]
+
+
+@pytest.mark.skipif(not os.environ.get("DIARIZE_REAL"), reason="настоящие модели голосов: DIARIZE_REAL=1 (качает ≈ 30 МБ)")
+def test_diarize_real_four_speakers(tmp_path, monkeypatch):
+    """Запись, где говорят четверо: настоящая сегментация и отпечатки голосов находят четверых."""
+    import wave
+    import numpy as np
+    import diarize
+    if not diarize.available():
+        pytest.skip("нет sherpa-onnx")
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
+    diarize.ensure_models()
+    assert diarize.downloaded()
+    wav = tmp_path / "four.wav"
+    import net
+    net.download("https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/0-four-speakers-zh.wav", wav)
+    w = wave.open(str(wav))
+    x = np.frombuffer(w.readframes(w.getnframes()), np.int16).astype(np.float32) / 32768
+    found = diarize.turns(x, -1)
+    assert len({s for _, _, s in found}) == 4
+    assert len({s for _, _, s in diarize.turns(x, 2)}) == 2          # число говорящих можно задать
