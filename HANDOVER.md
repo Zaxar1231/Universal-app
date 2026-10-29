@@ -540,3 +540,10 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - `stt.py`: поле формы `speakers` (`auto`/число/пусто), `transcribe(..., audio=)`, звук грузится один раз; подписи «Спикер N» в тексте и .srt, `speakers` в результате; caps `diarize` для интерфейса.
 - Нет на Android (`UNIVERSAL_ANDROID`) и там, где не стоит `sherpa-onnx` (в `packaging/linux/vendor.txt` его нет: не чистый Python).
 - Настоящий тест: `DIARIZE_REAL=1 pytest -k diarize_real` (CI, job pytest). Проверено вручную на записи с четырьмя говорящими: найдено 4.
+
+### 13.25 Офлайн-сборка для Windows (v2.9.0)
+- `packaging/make_offline.py <папка>` скачивает те же движки (`engines.install` для `AUTO`) и модели (Whisper fast/normal, голоса) в папку формата папки данных. Workflow «Релиз» (job windows) копирует её в `dist\Universal\offline`, проверяет `--smoke` с мёртвым прокси (`checks.offline`), собирает `Universal-Offline-Setup-X.exe` (`iscc /DOffline=1`, lzma2/fast, без solid) и `Universal-Offline-X-windows-portable.zip`. Больше 2 ГиБ GitHub не примет: шаг это проверяет.
+- `offline.py`: `seed()` при старте (desktop.main, до `engines.activate`) раскладывает недостающие части в папку данных. Поставлено установщиком (рядом `unins*.exe`) → перенос (`os.replace`, мгновенно, места второй раз не занимает); portable → копия. Существующее не перезаписывается.
+- Имена `Universal-Offline-*` не совпадают с `ASSET_RE` в updater.py: обновление из приложения по-прежнему берёт обычный установщик.
+- `offline-check.yml` проверяет набор на Windows без релиза.
+

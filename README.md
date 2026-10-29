@@ -53,6 +53,7 @@
 |---|---|---|
 | Windows 10/11 | `Universal-Setup-X.Y.Z.exe` | запустить установщик. Движки приложение предложит скачать одной кнопкой |
 | Windows без установки | `Universal-X.Y.Z-windows-portable.zip` | распаковать, запустить `Universal.exe` |
+| Windows без интернета | `Universal-Offline-Setup-X.Y.Z.exe` или `Universal-Offline-X.Y.Z-windows-portable.zip` | то же самое, но движки и модели Whisper уже внутри (≈ 1,5 ГБ): работает без интернета с первого запуска |
 | Debian, Ubuntu, Mint | `universal_X.Y.Z_all.deb` | `sudo apt install ./universal_X.Y.Z_all.deb` |
 | Fedora | `universal-X.Y.Z-1.noarch.rpm` | `sudo dnf install ./universal-X.Y.Z-1.noarch.rpm` |
 | Arch, Manjaro | `universal-X.Y.Z-1-any.pkg.tar.zst` | `sudo pacman -U universal-X.Y.Z-1-any.pkg.tar.zst` |
