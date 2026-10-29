@@ -2070,3 +2070,95 @@ def test_fresh_ytdlp_not_activated_on_python_310(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "version_info", (3, 12, 1, "final", 0))
     engines.activate()
     assert str(z) in sys.path and engines.can_install("ytdlp")
+
+
+# ---------------------------------------------------------------- читалка (TextFold, вшит в third_party)
+
+@pytest.fixture(scope="module")
+def reader_env(tmp_path_factory):
+    """Читалка запускается один раз на модуль: данные во временной папке, модели не ищем и не вызываем."""
+    import reader
+    if not reader.available():
+        pytest.skip("читалке не хватает библиотек: " + ", ".join(reader.missing()))
+    mp = pytest.MonkeyPatch()
+    mp.setenv("TEXTFOLD_DATA", str(tmp_path_factory.mktemp("textfold")))
+    mp.setenv("TEXTFOLD_NO_MODELS", "1")
+    mp.setenv("UNIVERSAL_DESKTOP", "1")
+    yield reader
+    mp.undo()
+
+
+def test_reader_imports_text_and_serves_page(reader_env):
+    import urllib.request
+    reader = reader_env
+    url = reader.start()
+    assert url.startswith("http://127.0.0.1:") and reader.start() == url          # второй запуск тот же
+    r = reader.import_text("# Заголовок статьи\n\nПервый абзац про дело.\n\n## Раздел\n\nВторой абзац с числом 42.", "статья.md")
+    assert r["paper"].startswith("md-") and r["title"] == "Заголовок статьи" and r["url"] == f"{url}/p/{r['paper']}"
+    with urllib.request.urlopen(r["url"], timeout=10) as page:
+        html = page.read().decode("utf-8")
+    assert page.status == 200 and "Заголовок статьи" in html
+    with pytest.raises(reader.ReaderError, match="Пустой"):
+        reader.import_text("  \n ")
+
+
+def test_reader_imports_word_and_rejects_unknown(reader_env, tmp_path):
+    import docx
+    reader = reader_env
+    d = docx.Document()
+    d.add_heading("Отчёт", 1)
+    d.add_paragraph("Текст отчёта про важное дело.")
+    f = tmp_path / "отчёт.docx"
+    d.save(f)
+    r = reader.import_file(f)
+    assert r["paper"].startswith("doc-") and r["url"].endswith(r["paper"])
+    bad = tmp_path / "x.mp3"
+    bad.write_bytes(b"ID3")
+    with pytest.raises(reader.ReaderError, match="не открывает"):
+        reader.import_file(bad)
+    scan = tmp_path / "скан.png"
+    scan.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 50)
+    with pytest.raises(reader.ReaderError, match="MinerU"):
+        reader.import_file(scan)
+
+
+def test_reader_routes(reader_env, client, monkeypatch):
+    import io
+    st = client.get("/api/reader").get_json()
+    assert st["available"] and st["usable"] and st["url"].startswith("http://127.0.0.1:")
+    eng = client.get("/api/formats").get_json()["engines"]["reader"]
+    assert eng["usable"] is True and eng["local"] is True and eng["missing"] == []
+    r = client.post("/api/reader/open", data={"text": "# Привет\n\nТекст для чтения.", "name": "n.md"})
+    d = r.get_json()
+    assert r.status_code == 200 and d["url"].endswith("/p/" + d["paper"])
+    r = client.post("/api/reader/open", data={"files": (io.BytesIO("# Из файла\n\nАбзац.".encode()), "файл.md")},
+                    content_type="multipart/form-data")
+    assert r.status_code == 200 and r.get_json()["title"] == "Из файла"
+    assert client.post("/api/reader/open", data={"text": " "}).status_code == 400
+    # телефону через сервер читалку не показываем: 127.0.0.1 компьютера ему недоступен
+    import base64
+    import phoneserver
+    monkeypatch.setattr(phoneserver, "password", lambda: "pw")
+    auth = {"Authorization": "Basic " + base64.b64encode(b"x:pw").decode()}
+    phone = {"environ_overrides": {phoneserver.MARK: True}, "headers": auth}
+    st = client.get("/api/reader", **phone).get_json()
+    assert st["usable"] is False and st["local"] is False
+    assert client.post("/api/reader/open", data={"text": "x"}, **phone).status_code == 403
+
+
+def test_reader_unavailable_on_android(monkeypatch):
+    import reader
+    monkeypatch.setenv("UNIVERSAL_ANDROID", "1")
+    assert not reader.available() and not reader.reachable()
+
+
+def test_reader_missing_libraries_hint(monkeypatch):
+    import importlib.util
+    import reader
+    real = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda n, *a, **k: None if n in ("trafilatura", "lxml") else real(n, *a, **k))
+    assert set(reader.missing()) == {"trafilatura", "lxml"} and not reader.available()
+    assert reader.pip_command() == 'pip install --user "trafilatura>=2.0" lxml'
+    monkeypatch.setattr(reader, "_port", 0)
+    with pytest.raises(reader.ReaderError, match="не хватает"):
+        reader.start()

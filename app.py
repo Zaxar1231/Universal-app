@@ -38,6 +38,7 @@ from flask import Flask, Response, jsonify, render_template, request, send_file,
 import about
 import stt
 import webpage
+import reader
 import changelog
 import converters as conv
 import downloader
@@ -685,6 +686,7 @@ def formats():
     eng.update({"ytdlp": downloader.available(), "ytdlp_version": downloader.version(),
                 "qrcode": qrtools.available(), "pypdf": pdftools.available(),
                 "page": webpage.available(), "monolith": bool(webpage.monolith_exe()),
+                "reader": {"usable": _reader_usable(), "local": _reader_local(), "missing": reader.missing(), "pip": reader.pip_command()},
                 "poppler": all(poppler_ok().values()), "can_install": engine_store.can_install(),
                 "installable": [n for n in engine_store.CATALOG if engine_store.can_install(n)],
                 "platform": sys.platform,
@@ -1316,6 +1318,52 @@ def stt_run():
     task = Task(job_id, "stt", job_dir, archive)
     TASKS.submit(task, lambda t: stt.run_stt_task(t, items, opts))
     return jsonify(task.to_dict())
+
+
+# ---------- Читалка (TextFold) ----------
+
+def _reader_local() -> bool:
+    """Читалка живёт на 127.0.0.1 этого компьютера: открыть её может только браузер на нём же."""
+    local = request.remote_addr in ("127.0.0.1", "::1") and not request.environ.get(phoneserver.MARK)
+    return bool(local and reader.reachable())
+
+
+def _reader_usable() -> bool:
+    return _reader_local() and reader.available()
+
+
+@app.route("/api/reader")
+def reader_status():
+    st = reader.status()
+    st["usable"] = _reader_usable()
+    st["local"] = _reader_local()
+    return jsonify(st)
+
+
+@app.route("/api/reader/start", methods=["POST"])
+def reader_start():
+    _local_only()
+    try:
+        return jsonify({"url": reader.start()})
+    except reader.ReaderError as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/reader/open", methods=["POST"])
+def reader_open():
+    """Текст (поле text) или файл (files) в библиотеку читалки; в ответе адрес, где его читать."""
+    _local_only()
+    try:
+        files = [f for f in request.files.getlist("files") if f.filename]
+        if files:
+            job_id, job_dir, _ = new_job("reader")
+            (src, stem), = save_uploads(files[:1], job_dir / "in")
+            return jsonify(reader.import_file(src, files[0].filename))
+        return jsonify(reader.import_text(request.form.get("text", ""), request.form.get("name", "text.md")))
+    except reader.ReaderError as e:
+        return jsonify({"error": str(e)}), 400
+    except ValueError as e:                 # save_uploads вернул не один файл
+        return jsonify({"error": "Нужен один файл"}), 400
 
 
 # ---------- Информация ----------
