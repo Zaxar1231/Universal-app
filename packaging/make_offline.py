@@ -15,6 +15,7 @@ WHISPER = ("fast", "normal")          # «Точная» (≈ 1,6 ГБ) в на�
 
 
 def main(target: str) -> None:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")     # консоль Windows: cp1252
     out = Path(target).resolve()
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
