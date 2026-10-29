@@ -516,3 +516,13 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - `net.open_with(req, *handlers)`: urlopen с прокси и cookies и тем же перебором проверок HTTPS.
 - Тесты: локальный сайт (`site`), встроенный способ, cookies+переадресация+gzip, настоящий monolith (пропускается без него; в CI ставится `engines.py install monolith`), установка одного файла. Android e2e: проверка «страница сайта».
 
+### 13.22 Читалка: TextFold внутри (v2.8.0)
+- `third_party/textfold/` — пакет `textfold` без изменений (Apache-2.0, версия и коммит в `VENDORED.md`, лицензия и NOTICE рядом). Обновлять заменой папки.
+- `reader.py`: `start()` запускает `textfold.server.serve(port)` потоком внутри Universal (порт 3057, если занят, любой свободный; `TEXTFOLD_DATA` = `<UNIVERSAL_HOME>/textfold` до импорта), `import_text`, `import_file` (md/txt как есть; Word, Excel, EPUB, HTML и PDF с текстом через `textfold.office`/`pdftext`; сканам и картинкам нужен MinerU), `available()`, `missing()`, `pip_command()`, `reachable()` (читалка на 127.0.0.1: только если браузер на этом же компьютере; нет в Docker, на телефоне и через сервер для телефона).
+- `app.py`: `/api/reader`, `/api/reader/start`, `/api/reader/open` (text или files), `engines.reader` в `/api/formats` (`usable`, `local`, `missing`, `pip`). Все закрыты `_local_only`.
+- Интерфейс: пункт «Читалка» (`#readerView`, iframe `#readerFrame` на адрес читалки), виден, когда `reader.local`; если нет библиотек, вместо iframe команда `pip install`. Кнопка «В читалку» у результатов голоса в текст (`openInReader`).
+- Сборки: `packaging/universal.spec` (pathex, модули `textfold.*`, данные `web` и `skills`, данные trafilatura/justext/courlan/htmldate/tld/latex2mathml/dateparser, библиотека pypdfium2_raw); `desktop.py --smoke` проверяет, что читалка запускается и открывает импортированный текст в собранном приложении. Linux-пакеты копируют `third_party`, а библиотеки читалки (lxml и др.) туда не вшиваются (бинарные): `reader.available()` False, пока их не поставили.
+- Зависимости читалки в `requirements.txt`; на Android не нужны (`UNIVERSAL_ANDROID` → `available()` False).
+- Модель сворачивания подключает человек в самой читалке (её настройки лежат в `~/.textfold`). `TEXTFOLD_NO_MODELS=1` отключает поиск моделей (тесты).
+- Тесты `-k reader`: запуск, импорт текста и Word, маршруты, закрытость от телефона, подсказка при нехватке библиотек.
+

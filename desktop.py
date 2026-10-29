@@ -159,6 +159,15 @@ def smoke(url: str) -> int:
         req = urllib.request.Request(url + "api/qr", data=b"text=hi", method="POST")
         with urllib.request.urlopen(req, timeout=10) as r:
             checks["qr"] = r.read(8) == b"\x89PNG\r\n\x1a\n"
+        # читалка: TextFold запускается внутри и открывает импортированный текст (проверяет, что весь его набор попал в сборку)
+        import reader
+        if reader.available():
+            r = reader.import_text("# Проверка\n\nПервый абзац про дело.\n\n## Раздел\n\nВторой абзац с числом 42.", "smoke.md")
+            with urllib.request.urlopen(r["url"], timeout=15) as page:
+                checks["reader"] = page.status == 200 and "Проверка" in page.read().decode("utf-8")
+        elif getattr(sys, "frozen", False):
+            checks["reader"] = False
+            checks["reader_missing"] = ", ".join(reader.missing())
         import webview  # noqa: F401  (проверяем, что окно попало в сборку)
         import yt_dlp  # noqa: F401
         checks["imports"] = True

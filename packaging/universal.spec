@@ -9,6 +9,12 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, co
 ROOT = SPECPATH + "/.."
 VERSION = os.environ.get("UNIVERSAL_VERSION", "0.0.0")
 
+# читалка: TextFold лежит в third_party (reader.py); модули его пакета PyInstaller сам не найдёт
+TEXTFOLD = os.path.join(ROOT, "third_party", "textfold")
+TEXTFOLD_MODULES = ["textfold"] + ["textfold." + n[:-3] for n in sorted(os.listdir(os.path.join(TEXTFOLD, "textfold")))
+                                   if n.endswith(".py") and n != "__init__.py"]
+TEXTFOLD_DATA = [(os.path.join(TEXTFOLD, "textfold", d), "textfold/" + d) for d in ("web", "skills")]
+
 # Windows: библиотеки Visual C++ кладём рядом с exe (так разрешает Microsoft): на чистой Windows
 # без «Visual C++ Redistributable» иначе не грузятся CTranslate2 (распознавание речи) и другие модули
 VC_RUNTIME = []
@@ -21,16 +27,20 @@ if sys.platform == "win32":
 
 a = Analysis(
     [ROOT + "/desktop.py"],
-    pathex=[ROOT],
+    pathex=[ROOT, TEXTFOLD],
     # CTranslate2 (движок Whisper) держит свои библиотеки рядом с модулем
-    binaries=collect_dynamic_libs("ctranslate2") + VC_RUNTIME,
+    binaries=collect_dynamic_libs("ctranslate2") + VC_RUNTIME + collect_dynamic_libs("pypdfium2_raw"),
     # yt_dlp_ejs: JS-скрипты, которыми deno решает задачки YouTube
     # ocrmypdf: шрифты и данные для текстового слоя, а версию он читает из метаданных пакета
     datas=[(ROOT + "/templates", "templates"), (ROOT + "/static", "static"), (ROOT + "/CHANGELOG.md", ".")] + collect_data_files("yt_dlp_ejs")
-    + collect_data_files("ocrmypdf") + copy_metadata("ocrmypdf") + collect_data_files("faster_whisper"),
+    + collect_data_files("ocrmypdf") + copy_metadata("ocrmypdf") + collect_data_files("faster_whisper")
+    + TEXTFOLD_DATA + [(TEXTFOLD + "/NOTICE", "textfold"), (TEXTFOLD + "/LICENSE", "textfold")]
+    + sum((collect_data_files(m) for m in ("trafilatura", "justext", "courlan", "htmldate", "tld", "latex2mathml", "dateparser")), []),
     # yt-dlp подгружает экстракторы динамически, а app импортирует модули по имени
     hiddenimports=collect_submodules("yt_dlp") + collect_submodules("yt_dlp_ejs") + collect_submodules("ocrmypdf")
-    + ["about", "app", "changelog", "converters", "docedit", "downloader", "filetools", "editor", "engines", "ocr", "pdftools", "phoneserver", "qrdoc", "qrtools", "tasks", "updater", "version", "py7zr", "pillow_heif", "stt", "faster_whisper", "ctranslate2"],
+    + ["about", "app", "changelog", "converters", "docedit", "downloader", "filetools", "editor", "engines", "ocr", "pdftools", "phoneserver", "qrdoc", "qrtools", "tasks", "updater", "version", "py7zr", "pillow_heif", "stt", "faster_whisper", "ctranslate2", "reader", "webpage", "net", "pydocs"]
+    + TEXTFOLD_MODULES + ["markdown_it", "mdit_py_plugins", "trafilatura", "lxml_html_clean", "pypdfium2", "pdf_inspector", "bs4"]
+    + collect_submodules("trafilatura") + collect_submodules("justext") + collect_submodules("courlan") + collect_submodules("htmldate"),
     excludes=["tkinter", "pytest", "playwright", "onnxruntime", "torch", "transformers"],
 )
 pyz = PYZ(a.pure)
