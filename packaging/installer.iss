@@ -19,11 +19,24 @@ DefaultGroupName=Universal
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\Output
+#ifdef Offline
+; офлайн-сборка: в dist\Universal добавлена папка offline (движки и модели), модели не сжимаются, поэтому быстрее
+OutputBaseFilename=Universal-Offline-Setup-{#AppVersion}
+#else
 OutputBaseFilename=Universal-Setup-{#AppVersion}
+#endif
 SetupIconFile=universal.ico
 UninstallDisplayIcon={app}\Universal.exe
+#ifdef Offline
+Compression=lzma2/fast
+#else
 Compression=lzma2/max
+#endif
+#ifdef Offline
+SolidCompression=no
+#else
 SolidCompression=yes
+#endif
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

@@ -1,0 +1,27 @@
+name: Офлайн-набор (проверка)
+
+# Собирает офлайн-набор для Windows и проверяет, что из него всё раскладывается без сети.
+# Запускается при изменении самого набора и вручную; в релизе то же самое делает workflow «Релиз».
+on:
+  push:
+    paths: ["packaging/make_offline.py", "offline.py", ".github/workflows/offline-check.yml"]
+  workflow_dispatch:
+
+jobs:
+  offline:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r packaging/requirements-desktop.txt
+      - name: Набор
+        run: python packaging/make_offline.py "$env:RUNNER_TEMP\offline"
+      - name: Раскладка на чистую папку без сети
+        shell: pwsh
+        run: |
+          $env:UNIVERSAL_HOME = "$env:RUNNER_TEMP\home"
+          $env:HTTPS_PROXY = "http://127.0.0.1:9"; $env:HTTP_PROXY = "http://127.0.0.1:9"
+          python -c "import offline, sys, pathlib; offline.bundle_dir = lambda: pathlib.Path(sys.argv[1]); print(offline.seed()); r = offline.ready(); print(r); sys.exit(0 if not r['engines_missing'] and not r['whisper_missing'] and r['voices'] else 1)" "$env:RUNNER_TEMP\offline"

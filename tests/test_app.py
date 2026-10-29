@@ -2436,3 +2436,54 @@ def test_diarize_real_four_speakers(tmp_path, monkeypatch):
     found = diarize.turns(x, -1)
     assert len({s for _, _, s in found}) == 4
     assert len({s for _, _, s in diarize.turns(x, 2)}) == 2          # число говорящих можно задать
+
+
+def _fake_bundle(base):
+    """Офлайн-набор в миниатюре: один движок, одна модель Whisper, модели голосов."""
+    b = base / "offline"
+    (b / "engines" / "pandoc" / "x").mkdir(parents=True)
+    (b / "engines" / "pandoc" / "x" / "pandoc.exe").write_text("exe")
+    (b / "whisper" / "fast").mkdir(parents=True)
+    (b / "whisper" / "fast" / "model.bin").write_text("m")
+    (b / "whisper" / "fast" / "config.json").write_text("{}")
+    (b / "diarization").mkdir()
+    (b / "diarization" / "segmentation.int8.onnx").write_text("s")
+    (b / "diarization" / "embedding.onnx").write_text("e")
+    return b
+
+
+def test_offline_seed_copies_when_portable(tmp_path, monkeypatch):
+    import offline
+    import stt
+    import diarize
+    b = _fake_bundle(tmp_path / "app")
+    monkeypatch.setattr(offline, "bundle_dir", lambda: b)
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
+    assert sorted(offline.seed()) == ["diarization", "engines/pandoc", "whisper/fast"]
+    assert stt.downloaded("fast") and diarize.downloaded()
+    assert (tmp_path / "home" / "engines" / "pandoc" / "x" / "pandoc.exe").is_file()
+    assert (b / "whisper" / "fast" / "model.bin").is_file()        # портативная папка остаётся целой
+    assert offline.seed() == []                                    # второй запуск ничего не делает
+
+
+def test_offline_seed_moves_when_installed_and_keeps_user_files(tmp_path, monkeypatch):
+    import offline
+    app = tmp_path / "app"
+    b = _fake_bundle(app)
+    (app / "unins000.exe").write_text("u")                         # поставил установщик
+    home = tmp_path / "home"
+    (home / "whisper" / "fast").mkdir(parents=True)
+    (home / "whisper" / "fast" / "mine.txt").write_text("мой")     # у человека уже есть своя модель
+    monkeypatch.setattr(offline, "bundle_dir", lambda: b)
+    monkeypatch.setenv("UNIVERSAL_HOME", str(home))
+    done = offline.seed()
+    assert "whisper/fast" not in done and (home / "whisper" / "fast" / "mine.txt").is_file()
+    assert not (home / "whisper" / "fast" / "model.bin").exists()
+    assert (home / "engines" / "pandoc").is_dir() and not (b / "engines" / "pandoc").exists()   # перенесено, не скопировано
+
+
+def test_offline_absent_is_noop(tmp_path, monkeypatch):
+    import offline
+    monkeypatch.setattr(offline, "bundle_dir", lambda: None)
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
+    assert offline.seed() == [] and offline.pending() == []

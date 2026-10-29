@@ -38,7 +38,7 @@ a = Analysis(
     + sum((collect_data_files(m) for m in ("trafilatura", "justext", "courlan", "htmldate", "tld", "latex2mathml", "dateparser")), []),
     # yt-dlp подгружает экстракторы динамически, а app импортирует модули по имени
     hiddenimports=collect_submodules("yt_dlp") + collect_submodules("yt_dlp_ejs") + collect_submodules("ocrmypdf")
-    + ["about", "app", "changelog", "converters", "docedit", "downloader", "filetools", "editor", "engines", "ocr", "pdftools", "phoneserver", "qrdoc", "qrtools", "tasks", "updater", "version", "py7zr", "pillow_heif", "stt", "faster_whisper", "ctranslate2", "reader", "webpage", "net", "pydocs", "diarize", "mdconv", "sherpa_onnx"]
+    + ["about", "app", "changelog", "converters", "docedit", "downloader", "filetools", "editor", "engines", "ocr", "pdftools", "phoneserver", "qrdoc", "qrtools", "tasks", "updater", "version", "py7zr", "pillow_heif", "stt", "faster_whisper", "ctranslate2", "reader", "webpage", "net", "pydocs", "diarize", "mdconv", "sherpa_onnx", "offline"]
     + TEXTFOLD_MODULES + ["markdown_it", "mdit_py_plugins", "trafilatura", "lxml_html_clean", "pypdfium2", "pdf_inspector", "bs4"]
     + collect_submodules("trafilatura") + collect_submodules("justext") + collect_submodules("courlan") + collect_submodules("htmldate"),
     excludes=["tkinter", "pytest", "playwright", "onnxruntime", "torch", "transformers"],

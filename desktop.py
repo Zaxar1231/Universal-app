@@ -200,6 +200,16 @@ def smoke(url: str) -> int:
             checks["gui"] = True
     except Exception as e:
         checks["error"] = repr(e)
+    try:
+        import offline
+        if offline.bundle_dir():
+            r = offline.ready()
+            checks["offline"] = not r["engines_missing"] and not r["whisper_missing"] and r["voices"]
+            if checks["offline"] is not True:
+                checks["offline_missing"] = json.dumps(r)
+    except Exception as e:
+        checks["offline"] = False
+        checks["offline_error"] = repr(e)
     out = engines.root() / "smoke.json"
     out.write_text(json.dumps(checks), encoding="utf-8")
     return 0 if checks and all(v is True for v in checks.values()) else 1
@@ -232,6 +242,8 @@ def main() -> None:
         os.environ["PATH"] = os.pathsep.join(extra + [os.environ.get("PATH", "")])
     os.environ.setdefault("WORK_DIR", str(home / "jobs"))
     os.environ["UNIVERSAL_DESKTOP"] = "1"
+    import offline
+    offline.seed()                # офлайн-сборка: движки и модели из папки приложения, до проверки «чего не хватает»
     engines.activate()            # PATH к движкам и свежий yt-dlp, до импорта app
 
     import app as webapp

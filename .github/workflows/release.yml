@@ -88,6 +88,35 @@ jobs:
         run: |
           V="${{ steps.v.outputs.version }}"
           gh release upload "v$V" "Output/Universal-Setup-$V.exe" "Output/Universal-$V-windows-portable.zip" --clobber
+      - name: Офлайн-набор (движки и модели внутрь)
+        shell: pwsh
+        run: python packaging/make_offline.py "$env:RUNNER_TEMP\offline"
+      - name: Офлайн-сборка и самопроверка без сети
+        shell: pwsh
+        run: |
+          Copy-Item "$env:RUNNER_TEMP\offline" dist\Universal\offline -Recurse
+          # самопроверка на чистой папке данных: движки и модели должны появиться из набора, ничего не качается
+          $env:UNIVERSAL_HOME = "$env:RUNNER_TEMP\universal-smoke-offline"
+          $env:HTTPS_PROXY = "http://127.0.0.1:9"; $env:HTTP_PROXY = "http://127.0.0.1:9"; $env:NO_PROXY = "127.0.0.1,localhost"
+          $p = Start-Process -FilePath dist\Universal\Universal.exe -ArgumentList "--smoke" -Wait -PassThru
+          Get-Content "$env:UNIVERSAL_HOME\smoke.json"
+          if ($p.ExitCode -ne 0) { Get-Content "$env:UNIVERSAL_HOME\universal.log" -ErrorAction SilentlyContinue; exit 1 }
+          Remove-Item Env:HTTPS_PROXY, Env:HTTP_PROXY, Env:NO_PROXY
+          iscc /DOffline=1 /DAppVersion=${{ steps.v.outputs.version }} packaging\installer.iss
+          Compress-Archive -CompressionLevel Fastest -Path dist\Universal -DestinationPath "Output\Universal-Offline-${{ steps.v.outputs.version }}-windows-portable.zip"
+          Get-ChildItem Output | Select-Object Name, @{n='MB';e={[int]($_.Length/1MB)}}
+      - name: Офлайн в релиз
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          for f in "Output/Universal-Offline-Setup-$V.exe" "Output/Universal-Offline-$V-windows-portable.zip"; do
+            s=$(stat -c %s "$f"); echo "$f: $((s/1048576)) МБ"
+            # GitHub не принимает файлы больше 2 ГиБ
+            [ "$s" -lt 2147483648 ] || { echo "::error::$f больше 2 ГиБ"; exit 1; }
+          done
+          gh release upload "v$V" "Output/Universal-Offline-Setup-$V.exe" "Output/Universal-Offline-$V-windows-portable.zip" --clobber
 
   linux:
     # .deb (Debian, Ubuntu, Mint), .rpm (Fedora) и пакет для Arch из одного дерева /usr
