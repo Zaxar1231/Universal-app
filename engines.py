@@ -227,6 +227,9 @@ def _save_paths(paths: dict) -> None:
     os.replace(tmp, f)
 
 
+YTDLP_MIN_PYTHON = (3, 11)
+
+
 def activate() -> None:
     """Добавляет скачанные движки в PATH и подключает свежий yt-dlp. Вызывать до импорта app."""
     paths = _load_paths()
@@ -234,14 +237,17 @@ def activate() -> None:
     if dirs:
         os.environ["PATH"] = os.pathsep.join(dirs + [os.environ.get("PATH", "")])
     yt = paths.get("ytdlp")
-    if yt and Path(yt).is_file() and yt not in sys.path:
+    # yt-dlp с 2026.10.26 требует Python 3.11: на 3.10 (Ubuntu 22.04) скачанный свежий не подключаем, он не запустится
+    if yt and Path(yt).is_file() and yt not in sys.path and sys.version_info >= YTDLP_MIN_PYTHON:
         sys.path.insert(0, yt)       # zipapp yt-dlp импортируется как обычный пакет
 
 
 def can_install(name: str = "") -> bool:
     """Скачиваем сами: на Windows всё; на macOS ffmpeg, pandoc и deno (остальное — Homebrew);
     на Linux движки приходят зависимостями пакета. Свежий yt-dlp и deno годятся везде."""
-    if name in ("ytdlp", "deno", "monolith"):
+    if name == "ytdlp":
+        return sys.version_info >= YTDLP_MIN_PYTHON
+    if name in ("deno", "monolith"):
         return True
     if sys.platform == "win32" or os.environ.get("UNIVERSAL_ENGINES_ANYOS"):
         return True
