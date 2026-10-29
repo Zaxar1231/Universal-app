@@ -552,3 +552,6 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - Колесо форматов (Filee): только `templates/index.html`, блок «колесо форматов». dragover с Ctrl (Mac Option) и `Files` показывает `#wheel`; виды по MIME при перетаскивании, по расширению при броске; список форматов `WHEEL` пересекается с `caps.categories[*].outputs`; PDF идёт через `/api/convert` (все страницы), остальное через `/api/universal` с настройками по умолчанию.
 - `dbtools.py`: просмотр SQLite только на чтение (`mode=ro`), `/api/db`, `/api/db/rows`, `/api/db/open`. DBeaver: `engines.CATALOG["dbeaver"]` (Windows, портативный zip с Java), на macOS и Linux ищется в системе. Запуск `dbeaver -con "name=…|driver=sqlite_jdbc|database=<путь>|connect=true|openConsole=false"`: параметры и id драйвера сверены с исходниками DBeaver (DataSourceUtils, ApplicationInstanceServer), обратные слэши путей удваиваются. Сам DBeaver в песочнице не запускался.
 
+### 13.27 ClamAV убран (v2.10.1)
+По просьбе владельца проверка на вирусы удалена целиком: `av.py`, маршруты `/api/av*`, вкладка, запись `clamav` в `engines.CATALOG`, тесты, шаги CI (`AV_REAL`, установка clamav) и `Suggests` в пакетах Linux. Раздел 13.26 выше про ClamAV больше не действует; колесо форматов и `dbtools.py` остаются как описано. Хелпер `installUi` в `templates/index.html` остался (его использует DBeaver).
+

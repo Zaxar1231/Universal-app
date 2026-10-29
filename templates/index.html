@@ -230,7 +230,6 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
   background: var(--md-primary-container); color: var(--md-on-primary-container); box-shadow: 0 2px 8px rgba(0,0,0,.35); transition: transform .12s, background .12s; }
 #wheel .wb.on { transform: scale(1.25); background: var(--md-primary); color: var(--md-on-primary); }
 #wheel .wmsg { position: absolute; left: 0; right: 0; bottom: 32px; text-align: center; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
-.result.av-bad { background: var(--md-error-container); color: var(--md-on-error-container); }
 .errs { list-style: none; margin: 0; padding: 12px 16px; border-radius: var(--sh-l); background: var(--md-error-container);
   color: var(--md-on-error-container); font-size: .875rem; display: grid; gap: 4px; }
 
@@ -447,7 +446,6 @@ ul.files .up { width: 40px; height: 40px; }
       'pdft': 'M120-120v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80ZM240-280q-33 0-56.500-23.500T160-360v-400q0-33 23.500-56.500T240-840h480q33 0 56.500 23.500T800-760v400q0 33-23.500 56.500T720-280H240Zm0-80h480v-400H240v400Zm80-80h320v-80H320v80Zm0-160h320v-80H320v80Z',
       'stt': 'M480-400q-50 0-85-35t-35-85v-240q0-50 35-85t85-35q50 0 85 35t35 85v240q0 50-35 85t-85 35Zm0-240Zm-40 520v-123q-104-14-172-93t-68-184h80q0 83 58.500 141.500T480-320q83 0 141.500-58.500T680-520h80q0 105-68 184t-172 93v123h-80Zm40-360q17 0 28.500-11.500T520-520v-240q0-17-11.500-28.500T480-800q-17 0-28.500 11.500T440-760v240q0 17 11.500 28.500T480-480Z',
       'db': 'M480-120q-151 0-255.500-46.500T120-280v-400q0-66 105.500-113T480-840q149 0 254.500 47T840-680v400q0 67-104.500 113.500T480-120Zm0-479q89 0 179-25.500T760-679q-11-29-100.500-55T480-760q-91 0-178.500 25.500T200-679q14 30 101.500 55T480-599Zm0 199q42 0 81-4t74.500-11.500q35.500-7.500 67-18.500t57.500-25v-120q-26 14-57.500 25t-67 18.500Q600-528 561-524t-81 4q-42 0-82-4t-75.500-11.500Q287-543 256-554t-56-25v120q25 14 56 25t66.500 18.500Q358-408 398-404t82 4Zm0 200q46 0 93.500-7t87.500-18.500q40-11.500 67-26t31-32.500v-103q-26 14-57.500 25t-67 18.500Q600-328 561-324t-81 4q-42 0-82-4t-75.500-11.500Q287-343 256-354t-56-25v103q3 17 30 31.500t67 26q40 11.500 87.500 18.500t95.500 7Z',
-      'av': 'M480-80q-139-35-229.500-159.500T160-516v-244l320-120 320 120v244q0 152-90.500 276.500T480-80Zm0-84q104-33 172-132t68-220v-189l-240-90-240 90v189q0 121 68 220t172 132Zm-40-176 226-226-56-58-170 170-85-85-57 57 142 142Z',
       'md': 'M200-120q-33 0-56.500-23.500T120-200v-560q0-33 23.500-56.500T200-840h560q33 0 56.500 23.500T840-760v560q0 33-23.500 56.500T760-120H200Zm0-80h560v-560H200v560Zm80-80h400v-80H280v80Zm0-160h400v-80H280v80Zm0-160h400v-80H280v80Z',
       'reader': 'M480-160q-50-35-109-52.500T240-230q-40 0-77 9.500T90-190v-480q35-17 75-28t75-11q69 0 130 26t110 74q49-48 110-74t130-26q35 0 75 11t75 28v480q-35-18-72-28.500T720-230q-72 0-131 17.500T480-160Zm40-96q42-23 85.500-35T720-303q30 0 59.500 5.500T840-283v-355q-29-12-58.500-17.500T720-661q-45 0-88.500 13.500T520-596v340Zm-80 0v-340q-47-31-91.500-48T240-661q-31 0-60.500 5.500T120-638v355q30-10 59.500-15.500T240-303q45 0 88.500 12T440-256Z',
       'ocr': 'M80-680v-200h200v80H160v120H80Zm0 600v-200h80v120h120v80H80Zm600 0v-80h120v-120h80v200H680Zm120-600v-120H680v-80h200v200h-80ZM240-320h480v-80H240v80Zm0-120h480v-80H240v80Zm0-120h320v-80H240v80Z',
@@ -466,7 +464,7 @@ ul.files .up { width: 40px; height: 40px; }
       <span class="t-label-m">{{ label }}</span></label>
     {% endfor %}
     <span class="sep" role="separator"></span>
-    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF'),('pdft','Правка PDF'),('pdfedit','Редактор PDF'),('ocr','Распознать текст'),('md','В Markdown'),('av','Проверка на вирусы'),('db','Базы данных'),('stt','Голос в текст'),('reader','Читалка')] %}
+    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF'),('pdft','Правка PDF'),('pdfedit','Редактор PDF'),('ocr','Распознать текст'),('md','В Markdown'),('db','Базы данных'),('stt','Голос в текст'),('reader','Читалка')] %}
     <label class="nav"><input type="radio" name="mode" value="{{ key }}">
       <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
       <span class="t-label-m">{{ label }}</span></label>
@@ -919,22 +917,6 @@ ul.files .up { width: 40px; height: 40px; }
             <div class="progress" id="dbProg" hidden><i></i></div>
           </div>
           <p class="hint">Файлы SQLite (.db, .sqlite, .sqlite3) можно посмотреть прямо здесь: таблицы и первые строки, только чтение. В DBeaver открывается копия, оригинал не меняется; готовую копию можно скачать обратно.</p>
-        </div>
-
-        <!-- проверка на вирусы (ClamAV) -->
-        <div id="avBox" class="sect" hidden>
-          <label class="sw"><span class="txt"><span class="t-body-m">Заглянуть внутрь архивов</span><span class="hint">zip, 7z, rar и другие: вирус внутри архива тоже будет найден. Чуть медленнее.</span></span>
-            <input type="checkbox" id="avArchives" checked><span class="track"></span></label>
-          <div class="field">
-            <span class="lbl t-label-l">Антивирус ClamAV</span>
-            <p class="hint" id="avEngineText"></p>
-            <div class="row">
-              <button class="btn tonal state" id="avInstall" type="button" hidden></button>
-              <button class="btn text state" id="avCancel" type="button" hidden>Остановить</button>
-            </div>
-            <div class="progress" id="avProg" hidden><i></i></div>
-          </div>
-          <p class="hint">Проверка идёт на этом {{ device }}, файлы никуда не отправляются. Ничего не удаляется и не лечится: ты только узнаёшь, что нашлось. Базы вирусов (≈ 300 МБ) качаются один раз и обновляются кнопкой.</p>
         </div>
 
         <!-- распознавание текста (OCRmyPDF) -->
@@ -1584,13 +1566,13 @@ ul.files .up { width: 40px; height: 40px; }
     image: { title: 'Картинки', kind: 'uni' }, audio: { title: 'Аудио', kind: 'uni' },
     video: { title: 'Видео', kind: 'uni' }, doc: { title: 'Документы', kind: 'uni' },
     pdf: { title: 'PDF в картинки', kind: 'pdf' }, photo: { title: 'Фото в A4', kind: 'photo' }, topdf: { title: 'Фото в PDF', kind: 'topdf' },
-    pdft: { title: 'PDF-инструменты', kind: 'pdft' }, ocr: { title: 'Распознать текст', kind: 'ocr' }, stt: { title: 'Голос в текст', kind: 'stt' }, md: { title: 'Документы в Markdown', kind: 'md' }, av: { title: 'Проверка на вирусы', kind: 'av' }, db: { title: 'Базы данных', kind: 'db' }, reader: { title: 'Читалка', kind: 'reader' }, info: { title: 'Информация', kind: 'info' },
+    pdft: { title: 'PDF-инструменты', kind: 'pdft' }, ocr: { title: 'Распознать текст', kind: 'ocr' }, stt: { title: 'Голос в текст', kind: 'stt' }, md: { title: 'Документы в Markdown', kind: 'md' }, db: { title: 'Базы данных', kind: 'db' }, reader: { title: 'Читалка', kind: 'reader' }, info: { title: 'Информация', kind: 'info' },
     photoedit: { title: 'Фоторедактор', kind: 'photoedit' }, docedit: { title: 'Редактор документов', kind: 'docedit' },
     pdfedit: { title: 'Редактор PDF', kind: 'pdfedit' },
     files: { title: 'Архивы и файлы', kind: 'files' },
     edit: { title: 'Редактор видео и аудио', kind: 'edit' }, dl: { title: 'Скачать видео и страницы', kind: 'dl' }, qr: { title: 'QR-коды', kind: 'qr' },
   };
-  const isNew = () => ['edit', 'dl', 'qr', 'pdft', 'ocr', 'stt', 'md', 'av', 'db', 'reader', 'info', 'photoedit', 'docedit', 'pdfedit', 'files'].includes(MODES[mode()].kind);
+  const isNew = () => ['edit', 'dl', 'qr', 'pdft', 'ocr', 'stt', 'md', 'db', 'reader', 'info', 'photoedit', 'docedit', 'pdfedit', 'files'].includes(MODES[mode()].kind);
   const FULL = ['info', 'photoedit', 'docedit', 'pdfedit', 'reader'];          // режимы на всю ширину, без списка файлов
   const fOp = () => qs('input[name=fop]:checked').value;
   const pOp = () => qs('input[name=pop]:checked').value;
@@ -1648,7 +1630,6 @@ ul.files .up { width: 40px; height: 40px; }
     if (m === 'ocr') return /\.(pdf|png|jpe?g|tiff?|bmp|webp|gif|jp2)$/i.test(f.name);
     if (m === 'stt') return STT_RE.test(f.name) || /^(audio|video)\//.test(f.type);
     if (m === 'md') return MD_RE.test(f.name);
-    if (m === 'av') return true;
     if (m === 'db') return /\.(db|sqlite3?|db3|s3db|sl3)$/i.test(f.name);
     if (m === 'files') return fOp() !== 'extract' || /\.(zip|7z|tar|tgz|tbz2?|txz|gz|bz2|xz|rar)$/i.test(f.name);
     if (isPhotoish()) return IMG_RE.test(f.name) || f.type.startsWith('image/');
@@ -1708,7 +1689,6 @@ ul.files .up { width: 40px; height: 40px; }
     if (m === 'ocr') { ok = files.length > 0 && ocrLangs().length > 0; label = 'Распознать'; }
     if (m === 'stt') { ok = files.length > 0 && !!(caps && caps.engines.stt && caps.engines.stt.available); label = 'Распознать речь'; }
     if (m === 'md') { const e = (caps && caps.engines.mineru) || {}; ok = files.length > 0 && !!(qs('input[name=mdt]:checked').value === 'fast' ? e.basic : e.full); label = 'В Markdown'; }
-    if (m === 'av') { const e = (caps && caps.engines.av) || {}; ok = files.length > 0 && !!e.available && !!(e.db && e.db.ready); label = 'Проверить'; }
     if (m === 'db') label = 'Показать';
     if (m === 'files') {
       label = { zip: 'Упаковать в ZIP', '7z': 'Упаковать в 7z', extract: 'Распаковать', hash: 'Посчитать суммы', rename: 'Переименовать' }[fOp()];
@@ -1903,7 +1883,7 @@ ul.files .up { width: 40px; height: 40px; }
   function syncSettings() {
     const m = mode(), k = MODES[m].kind, uni = k === 'uni', topdf = k === 'topdf', photo = k === 'photo' || topdf, pdf = k === 'pdf';
     $('classicBox').hidden = isNew();
-    $('editBox').hidden = k !== 'edit'; $('pdftBox').hidden = k !== 'pdft'; if (k === 'pdft') syncPdft(); $('ocrBox').hidden = k !== 'ocr'; if (k === 'ocr') syncOcr(); $('sttBox').hidden = k !== 'stt'; if (k === 'stt') syncStt(); $('mdBox').hidden = k !== 'md'; if (k === 'md') syncMd(); $('avBox').hidden = k !== 'av'; if (k === 'av') syncAv(); $('dbBox').hidden = k !== 'db'; if (k === 'db') syncDb(); $('filesBox').hidden = k !== 'files'; if (k === 'files') syncFiles(); $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
+    $('editBox').hidden = k !== 'edit'; $('pdftBox').hidden = k !== 'pdft'; if (k === 'pdft') syncPdft(); $('ocrBox').hidden = k !== 'ocr'; if (k === 'ocr') syncOcr(); $('sttBox').hidden = k !== 'stt'; if (k === 'stt') syncStt(); $('mdBox').hidden = k !== 'md'; if (k === 'md') syncMd(); $('dbBox').hidden = k !== 'db'; if (k === 'db') syncDb(); $('filesBox').hidden = k !== 'files'; if (k === 'files') syncFiles(); $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
     if (isNew()) { if (k === 'edit') syncEdit(); if (k === 'dl') syncDl(); if (k === 'qr') syncQr(); return; }
     $('uniField').hidden = !uni; $('autoRow').hidden = !(uni && m !== 'doc');
     $('formatsField').hidden = !(pdf || k === 'photo');
@@ -1981,7 +1961,6 @@ ul.files .up { width: 40px; height: 40px; }
     const m = mode(), k = MODES[m].kind;
     qs('input[name=mode][value=md]').closest('label').hidden = !(caps && caps.engines.mineru && caps.engines.mineru.supported && (caps.engines.mineru.local || caps.engines.mineru.basic));
     qs('input[name=mode][value=db]').closest('label').hidden = !(caps && caps.engines.db && caps.engines.db.supported);
-    qs('input[name=mode][value=av]').closest('label').hidden = !(caps && caps.engines.av && caps.engines.av.supported && (caps.engines.av.available || caps.engines.av.local));
     qs('input[name=mode][value=reader]').closest('label').hidden = !(caps && caps.engines.reader && caps.engines.reader.local);    // читалка есть не везде
     $('title').textContent = MODES[m].title; $('subtitle').textContent = SUBS[m];
     const acc = { pdf: 'application/pdf,.pdf', pdft: 'application/pdf,.pdf', ocr: 'application/pdf,.pdf,image/*,.tif,.tiff,.jp2', md: 'application/pdf,.pdf,image/*,.docx,.doc,.rtf,.pptx,.ppt,.xlsx,.xls,.odt,.ods,.odp,.epub,.html,.htm,.mhtml,.csv,.tsv,.tif,.tiff,.jp2', stt: 'audio/*,video/*,.ogg,.oga,.opus,.amr,.m4a,.mkv', files: '', qr: '.txt,.csv,.docx', dl: '', edit: caps ? caps.categories.edit.inputs.map(e => '.' + e).join(',') : 'audio/*,video/*' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps && caps.categories[m] ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
@@ -2126,7 +2105,6 @@ ul.files .up { width: 40px; height: 40px; }
       fd.append('speakers', $('sttSpk').checked && !$('sttSpkRow').hidden ? $('sttSpkN').value : '0');
     }
     else if (k === 'db') { url = '/api/db'; }
-    else if (k === 'av') { url = '/api/av'; fd.append('archives', $('avArchives').checked ? '1' : '0'); }
     else if (k === 'md') {
       url = '/api/md';
       fd.append('tier', qs('input[name=mdt]:checked').value); fd.append('images', $('mdImages').value);
@@ -2260,13 +2238,6 @@ ul.files .up { width: 40px; height: 40px; }
       if (caps && caps.engines.stt) { caps.engines.stt.models.forEach(x => { if (x.key === lastSttModel) x.downloaded = true; });
         if (caps.engines.stt.diarize && res.transcripts.some(t => t.speakers)) caps.engines.stt.diarize.downloaded = true; }
     }
-    if (res.av) {
-      const a = res.av, bad = a.infected || [];
-      html += `<div class="result av-${bad.length ? 'bad' : 'ok'}"><span class="t-body-m"><b>${bad.length ? 'Найдено заражённых: ' + bad.length : 'Угроз не найдено'}</b>` +
-        ` · проверено ${plural(a.scanned, ['файл', 'файла', 'файлов'])}${a.db && a.db.updated ? ', базы от ' + new Date(a.db.updated * 1000).toLocaleDateString('ru-RU') : ''}.</span>` +
-        (bad.length ? '<ul class="names">' + bad.map(b => `<li><b>${esc(b.name)}</b>: ${esc(b.virus)}</li>`).join('') + '</ul>' +
-          '<span class="t-body-m">Файлы не тронуты. Не открывай их, а лучше удали.</span>' : '') + '</div>';
-    }
     const errs = (d.failed || []).map(f => `<li><b>${esc(f.name)}</b>: ${esc(f.error)}</li>`);
     if (d.status === 'error' && !errs.length) errs.push(`<li>${esc(d.error)}</li>`);
     if (errs.length) html += `<ul class="errs">${errs.join('')}</ul>`;
@@ -2397,22 +2368,6 @@ ul.files .up { width: 40px; height: 40px; }
   $('mdInstFull').onclick = () => mdInstall('full');
   $('mdBox').addEventListener('change', syncMd);
 
-  // проверка на вирусы: ClamAV и базы ставятся по запросу
-  function syncAv() {
-    const e = (caps && caps.engines.av) || {}, db = e.db || {}, busy = !$('avProg').hidden;
-    const age = db.updated ? Math.round((Date.now() / 1000 - db.updated) / 86400) : 0;
-    const txt = !e.available
-      ? (e.can_install && e.local ? 'ClamAV не установлен: приложение скачает его и базы вирусов одним нажатием.'
-        : e.hint ? `ClamAV не установлен. Поставь его системой: ${e.hint}` : 'ClamAV не установлен, а ставить его можно только на самом компьютере.')
-      : !db.ready ? 'ClamAV есть, но баз вирусов нет: скачай их (≈ 300 МБ, один раз).'
-        : `ClamAV готов, базы ${db.mb} МБ` + (age > 7 ? `, им ${age} дн.: лучше обновить.` : age >= 0 ? ', свежие.' : '.');
-    if (!busy) $('avEngineText').textContent = txt + (syncAv.note ? ' ' + syncAv.note : '');
-    const need = e.local && (e.available || e.can_install) && (!e.available || !db.ready || age > 7);
-    const upd = e.local && e.available && db.ready && !need;
-    $('avInstall').hidden = busy || !(need || upd);
-    $('avInstall').textContent = !e.available ? 'Поставить ClamAV и базы' : !db.ready ? 'Скачать базы вирусов' : 'Обновить базы';
-    updateGo();
-  }
   // установка движка с полосой: ui = {txt, prog, cancel, btn}, after(note) вызывается, когда всё кончилось
   function installUi(url, ui, after) {
     const { txt, prog, cancel, btn } = ui;
@@ -2434,11 +2389,6 @@ ul.files .up { width: 40px; height: 40px; }
       tick();
     }).catch(() => finish('Нет связи с приложением.'));
   }
-  function avInstall() {
-    syncAv.note = '';
-    installUi('/api/av/install', { txt: $('avEngineText'), prog: $('avProg'), cancel: $('avCancel'), btn: $('avInstall') }, note => { syncAv.note = note; syncAv(); });
-  }
-  $('avInstall').onclick = avInstall;
 
   // базы данных: просмотр SQLite и DBeaver по требованию
   function syncDb() {

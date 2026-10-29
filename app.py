@@ -39,7 +39,6 @@ import about
 import stt
 import webpage
 import reader
-import av
 import dbtools
 import mdconv
 import changelog
@@ -690,7 +689,6 @@ def formats():
                 "qrcode": qrtools.available(), "pypdf": pdftools.available(),
                 "page": webpage.available(), "monolith": bool(webpage.monolith_exe()),
                 "mineru": {**mdconv.status(), "local": _reader_local()},
-                "av": {**av.status(), "local": _reader_local()},
                 "db": {**dbtools.status(), "local": _reader_local()},
                 "reader": {"usable": _reader_usable(), "local": _reader_local(), "missing": reader.missing(), "pip": reader.pip_command()},
                 "poppler": all(poppler_ok().values()), "can_install": engine_store.can_install(),
@@ -1433,45 +1431,6 @@ def db_open():
     except dbtools.DbError as e:
         return jsonify({"error": str(e)}), 400
     return jsonify({"ok": True})
-
-
-# ---------- Проверка на вирусы (ClamAV) ----------
-
-@app.route("/api/av/engine")
-def av_engine():
-    return jsonify({**av.status(), "local": _reader_local()})
-
-
-@app.route("/api/av/install", methods=["POST"])
-def av_install():
-    """Ставит ClamAV (на Windows) и скачивает базы вирусов; без движка только обновляет базы."""
-    _local_only()
-    if not av.supported():
-        return jsonify({"error": "Здесь проверка на вирусы недоступна"}), 400
-    job_id, job_dir, archive = new_job("clamav")
-    task = Task(job_id, "avinstall", job_dir, archive)
-    if av.available():
-        TASKS.submit(task, lambda t: av.update_db(t))
-    else:
-        TASKS.submit(task, lambda t: av.install(t))
-    return jsonify(task.to_dict())
-
-
-@app.route("/api/av", methods=["POST"])
-def av_run():
-    if not av.supported():
-        return jsonify({"error": "Здесь проверка на вирусы недоступна"}), 400
-    if not av.available() or not av.db_path():
-        return jsonify({"error": "Сначала поставь ClamAV и базы вирусов"}), 400
-    files = [f for f in request.files.getlist("files") if f.filename]
-    if not files:
-        return jsonify({"error": "Файлы не выбраны"}), 400
-    opts = av.read_opts(request.form)
-    job_id, job_dir, archive = new_job("av")
-    items = save_uploads(files, job_dir / "in")
-    task = Task(job_id, "av", job_dir, archive)
-    TASKS.submit(task, lambda t: av.run_av_task(t, items, opts))
-    return jsonify(task.to_dict())
 
 
 # ---------- Читалка (TextFold) ----------

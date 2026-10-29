@@ -2489,121 +2489,6 @@ def test_offline_absent_is_noop(tmp_path, monkeypatch):
     assert offline.seed() == [] and offline.pending() == []
 
 
-# ---------- проверка на вирусы (ClamAV) ----------
-
-EICAR = rb"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
-needs_clam = pytest.mark.skipif(not (shutil.which("clamscan") and shutil.which("freshclam")), reason="ClamAV не установлен")
-
-
-def _home_with_test_db(tmp_path, monkeypatch):
-    """Базы вирусов из одной сигнатуры (хеш EICAR): настоящие весят 300 МБ и качаются из сети."""
-    import hashlib
-    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
-    import av
-    d = av.db_dir()
-    d.mkdir(parents=True)
-    (d / "test.hdb").write_text(f"{hashlib.md5(EICAR).hexdigest()}:{len(EICAR)}:Eicar-Test-Signature\n")
-    return av
-
-
-@needs_clam
-def test_av_scan_finds_virus_and_keeps_clean(tmp_path, monkeypatch):
-    av = _home_with_test_db(tmp_path, monkeypatch)
-    job = tmp_path / "job"
-    (job / "in").mkdir(parents=True)
-    (job / "out").mkdir()
-    a, b = job / "in" / "письмо.txt", job / "in" / "вирус.com"
-    a.write_text("привет", encoding="utf-8")
-    b.write_bytes(EICAR)
-    from tasks import Task
-    t = Task("x", "av", job, "av")
-    av.run_av_task(t, [(a, "письмо"), (b, "вирус")], av.read_opts({}))
-    r = t.result["av"]
-    assert r["scanned"] == 2 and r["clean"] == 1
-    assert [i["virus"].split(".")[0] for i in r["infected"]] == ["Eicar-Test-Signature"]
-    assert r["infected"][0]["name"] == "вирус.com"            # показываем своё имя, а не служебное f0002
-    assert b.read_bytes() == EICAR and a.exists()              # ничего не удаляем и не меняем
-    assert not (job / "scan").exists()
-
-
-@needs_clam
-def test_av_route_end_to_end(tmp_path, monkeypatch):
-    av = _home_with_test_db(tmp_path, monkeypatch)
-    import app as webapp
-    c = webapp.app.test_client()
-    st = c.get("/api/av/engine").get_json()
-    assert st["available"] and st["db"]["ready"] and st["supported"]
-    assert c.post("/api/av", data={}).status_code == 400
-    r = c.post("/api/av", data={"files": [(io.BytesIO(EICAR), "eicar.txt"), (io.BytesIO(b"hello"), "ok.txt")]},
-               content_type="multipart/form-data")
-    assert r.status_code == 200, r.get_json()
-    d = wait_task(c, r.get_json()["task"])
-    assert d["status"] == "done", d
-    assert d["result"]["av"]["infected"][0]["name"] == "eicar.txt" and d["result"]["av"]["clean"] == 1
-
-
-def test_av_needs_engine_and_db(tmp_path, monkeypatch):
-    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
-    import av
-    import app as webapp
-    monkeypatch.setattr(av, "clamscan", lambda: None)
-    monkeypatch.setattr(av, "SYSTEM_DBS", ())
-    c = webapp.app.test_client()
-    r = c.post("/api/av", data={"files": [(io.BytesIO(b"x"), "a.txt")]}, content_type="multipart/form-data")
-    assert r.status_code == 400 and "ClamAV" in r.get_json()["error"]
-    assert c.get("/api/av/engine").get_json()["db"]["ready"] is False
-    assert c.get("/api/formats").get_json()["engines"]["av"]["available"] is False
-
-
-@pytest.mark.skipif(sys.platform == "win32", reason="поддельный freshclam — shell-скрипт")
-def test_av_update_db_with_fake_freshclam(tmp_path, monkeypatch):
-    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
-    import av
-    from tasks import Task
-    fake = tmp_path / "freshclam"
-    fake.write_text('#!/bin/sh\nfor a in "$@"; do case $a in --datadir=*) d=${a#--datadir=};; --config-file=*) c=${a#--config-file=};; esac; done\n'
-                    'grep -q "^DatabaseMirror database.clamav.net" "$c" || exit 3\n'
-                    'echo "Downloading daily.cvd [100%]"; echo "x" > "$d/daily.cvd"\n')
-    fake.chmod(0o755)
-    monkeypatch.setattr(av, "freshclam", lambda: str(fake))
-    job = tmp_path / "j"
-    job.mkdir()
-    t = Task("y", "avinstall", job, "av")
-    av.update_db(t)
-    assert av.db_info()["ready"] and (av.db_dir() / "daily.cvd").exists()
-    bad = tmp_path / "freshclam2"
-    bad.write_text("#!/bin/sh\necho 'ERROR: Can not reach database.clamav.net'\nexit 62\n")
-    bad.chmod(0o755)
-    (av.db_dir() / "daily.cvd").unlink()
-    monkeypatch.setattr(av, "freshclam", lambda: str(bad))
-    with pytest.raises(av.AvError) as e:
-        av.update_db(t)
-    assert "Не получилось скачать базы" in str(e.value) and "database.clamav.net" in str(e.value)
-
-
-@needs_clam
-@pytest.mark.skipif(not os.environ.get("AV_REAL"), reason="настоящие базы вирусов: AV_REAL=1 (качает ≈ 300 МБ)")
-def test_av_real_database_and_eicar(tmp_path, monkeypatch):
-    """freshclam скачивает настоящие базы нашей командой, и по ним находится тестовый вирус EICAR."""
-    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
-    import av
-    from tasks import Task
-    job = tmp_path / "job"
-    (job / "in").mkdir(parents=True)
-    (job / "out").mkdir()
-    t0 = Task("u", "avinstall", job, "av")
-    av.update_db(t0)
-    info = av.db_info()
-    assert info["ready"] and info["mb"] > 100, info
-    a, b = job / "in" / "a.txt", job / "in" / "eicar.com"
-    a.write_text("hello")
-    b.write_bytes(EICAR)
-    t = Task("v", "av", job, "av")
-    av.run_av_task(t, [(a, "a"), (b, "eicar")], av.read_opts({}))
-    r = t.result["av"]
-    assert r["clean"] == 1 and len(r["infected"]) == 1 and "EICAR" in r["infected"][0]["virus"].upper()
-
-
 # ---------- базы данных: просмотр SQLite и DBeaver ----------
 
 def _make_db(path):
@@ -2683,7 +2568,7 @@ def test_db_dbeaver_engine_entry():
     import re
     assert re.search(spec["asset"], "dbeaver-ce-24.3.0-win32.win32.x86_64.zip")
     assert not re.search(spec["asset"], "dbeaver-ce-24.3.0-linux.gtk.x86_64.tar.gz")
-    assert "dbeaver" not in engines.AUTO and "clamav" not in engines.AUTO
+    assert "dbeaver" not in engines.AUTO
 
 
 def test_db_connection_arg_matches_dbeaver_spec():
