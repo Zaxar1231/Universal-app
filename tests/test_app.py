@@ -2157,8 +2157,187 @@ def test_reader_missing_libraries_hint(monkeypatch):
     import reader
     real = importlib.util.find_spec
     monkeypatch.setattr(importlib.util, "find_spec", lambda n, *a, **k: None if n in ("trafilatura", "lxml") else real(n, *a, **k))
-    assert set(reader.missing()) == {"trafilatura", "lxml"} and not reader.available()
-    assert reader.pip_command() == 'pip install --user "trafilatura>=2.0" lxml'
+    assert {"trafilatura", "lxml"} <= set(reader.missing()) and not reader.available()
+    cmd = reader.pip_command()
+    assert cmd.startswith("pip install --user ") and '"trafilatura>=2.0"' in cmd and " lxml" in cmd
     monkeypatch.setattr(reader, "_port", 0)
     with pytest.raises(reader.ReaderError, match="не хватает"):
         reader.start()
+
+
+# ---------------------------------------------------------------- документы в Markdown (MinerU)
+
+FAKE_KIT = '''#!/usr/bin/env python3
+import base64, os, sys
+a = sys.argv[1:]
+if a[:2] == ["models", "download"]:
+    os.makedirs(os.path.join(os.environ["MINERU_HOME"], "models"), exist_ok=True)
+    print("Fetching 2 files: 100%|██████████| 2/2", flush=True)
+    sys.exit(0)
+assert a[0] == "parse", a
+src, out = a[1], a[a.index("-o") + 1]
+tier = a[a.index("--tier") + 1]
+if src.endswith("broken.pdf"):
+    print("boom", file=sys.stderr); sys.exit(3)
+stem = os.path.splitext(os.path.basename(src))[0]
+png = base64.b64encode(b"\\x89PNG\\r\\n\\x1a\\n" + b"0" * 20).decode()
+text = "" if src.endswith("empty.pdf") else f"# Заголовок {stem}\\n\\nТекст ({tier}).\\n\\n![](data:image/png;base64,{png})\\n\\n![рис](images/a.png)\\n"
+os.makedirs(os.path.join(out, "images"), exist_ok=True)
+open(os.path.join(out, "images", "a.png"), "wb").write(b"\\x89PNG\\r\\n\\x1a\\n" + b"1" * 20)
+open(os.path.join(out, stem + ".md"), "w", encoding="utf-8").write(text)
+'''
+
+FAKE_UV = '''#!/usr/bin/env python3
+import os, sys
+a = sys.argv[1:]
+log = os.environ.get("FAKE_UV_LOG")
+if log:
+    open(log, "a").write(" ".join(a) + "\\n")
+if a[0] == "venv":
+    os.makedirs(os.path.join(a[1], "bin"), exist_ok=True)
+    open(os.path.join(a[1], "bin", "python"), "w").write("")
+elif a[:2] == ["pip", "install"]:
+    py = a[a.index("--python") + 1]
+    kit = os.path.join(os.path.dirname(py), "mineru-kit")
+    open(kit, "w").write(open(os.environ["FAKE_KIT_SRC"]).read())
+    os.chmod(kit, 0o755)
+    print("Installing packages:  50%|█████     | 1/2", flush=True)
+'''
+
+
+@pytest.fixture
+def md_engine(tmp_path, monkeypatch):
+    """Поддельные uv и mineru-kit: проверяем установку и конвертацию без гигабайтов (только Linux и macOS)."""
+    if sys.platform == "win32":
+        pytest.skip("поддельные исполняемые файлы только для Linux и macOS")
+    import mdconv
+    import reader
+    reader.prepare()
+    from textfold import engine
+    home = tmp_path / "engine"
+    monkeypatch.setattr(engine, "home", lambda: home)
+    monkeypatch.setattr(engine, "legacy", lambda: tmp_path / "no-such-engine")
+    uv = tmp_path / "uv"
+    uv.write_text(FAKE_UV)
+    uv.chmod(0o755)
+    kit = tmp_path / "kit-src.py"
+    kit.write_text(FAKE_KIT)
+    monkeypatch.setattr(engine, "_uv", lambda e, log, stop: str(uv))
+    monkeypatch.setenv("FAKE_KIT_SRC", str(kit))
+    monkeypatch.setenv("FAKE_UV_LOG", str(tmp_path / "uv.log"))
+    monkeypatch.delenv("UNIVERSAL_ANDROID", raising=False)
+    monkeypatch.delenv("UNIVERSAL_DOCKER", raising=False)
+    return mdconv, engine, home
+
+
+def _task(tmp_path, kind="md"):
+    from tasks import Task
+    (tmp_path / "job" / "out").mkdir(parents=True, exist_ok=True)
+    return Task("j1", kind, tmp_path / "job", "md")
+
+
+def test_md_install_levels_and_status(md_engine, tmp_path):
+    mdconv, engine, home = md_engine
+    assert not mdconv.status()["basic"] and not mdconv.status()["full"]
+    t = _task(tmp_path, "mdinstall")
+    mdconv.install("basic", t)
+    st = mdconv.status()
+    assert st["basic"] and not st["full"] and t.done == 1 and t.progress == 1
+    log = (tmp_path / "uv.log").read_text()
+    assert "venv" in log and "--python-preference only-managed" in log and f"mineru=={engine.VERSION}" in log
+    mdconv.install("full", _task(tmp_path, "mdinstall"))                     # модели докачиваются поверх базового
+    st = mdconv.status()
+    assert st["basic"] and st["full"] and (home / "mineru-home" / "models").is_dir()
+    assert mdconv.uninstall()["basic"] is False and not home.exists()
+    with pytest.raises(mdconv.MdError, match="Неизвестный"):
+        mdconv.install("huge", _task(tmp_path))
+
+
+def test_md_install_cancel(md_engine, tmp_path):
+    from tasks import Cancelled
+    mdconv, engine, home = md_engine
+    t = _task(tmp_path, "mdinstall")
+    t.cancel_event.set()
+    with pytest.raises(Cancelled):
+        mdconv.install("basic", t)
+
+
+def test_md_convert_images_modes_and_errors(md_engine, tmp_path):
+    mdconv, engine, home = md_engine
+    mdconv.install("basic", _task(tmp_path, "mdinstall"))
+    src = tmp_path / "in"
+    src.mkdir()
+    for n in ("doc.pdf", "empty.pdf", "broken.pdf"):
+        (src / n).write_bytes(b"%PDF-1.4")
+
+    t = _task(tmp_path)
+    mdconv.run_md_task(t, [(src / "doc.pdf", "doc"), (src / "empty.pdf", "empty"), (src / "broken.pdf", "broken")],
+                       mdconv.read_opts({"tier": "fast"}))
+    out = tmp_path / "job" / "out"
+    assert t.done == 1 and {f["name"] for f in t.failed} == {"empty.pdf", "broken.pdf"}
+    md = (out / "doc.md").read_text(encoding="utf-8")
+    assert "Заголовок doc" in md and "(flash)" in md        # быстрый режим = уровень flash у MinerU
+    assert "base64" not in md                                         # вшитая картинка вынесена в файл
+    assert (out / "doc_images" / "image1.png").read_bytes()[:4] == b"\x89PNG"
+    assert "doc_images/a.png" in md and (out / "doc_images" / "a.png").is_file()   # и та, что лежала файлом
+    assert "попробуй точный режим" in next(f["error"] for f in t.failed if f["name"] == "empty.pdf")
+    assert "MinerU не справился" in next(f["error"] for f in t.failed if f["name"] == "broken.pdf")
+
+    for mode, check in (("inline", lambda m, o: "base64" in m),
+                        ("none", lambda m, o: "![" not in m and not (o / "doc_images").exists())):
+        t = _task(tmp_path / mode)
+        mdconv.run_md_task(t, [(src / "doc.pdf", "doc")], mdconv.read_opts({"tier": "fast", "images": mode}))
+        o = tmp_path / mode / "job" / "out"
+        assert check((o / "doc.md").read_text(encoding="utf-8"), o), mode
+
+
+def test_md_accurate_needs_models(md_engine, tmp_path):
+    mdconv, engine, home = md_engine
+    src = tmp_path / "s.pdf"
+    src.write_bytes(b"%PDF")
+    with pytest.raises(mdconv.MdError, match="Точному режиму нужны модели"):
+        mdconv.run_md_task(_task(tmp_path), [(src, "s")], mdconv.read_opts({"tier": "accurate"}))
+    mdconv.install("full", _task(tmp_path, "mdinstall"))
+    t = _task(tmp_path / "x")
+    mdconv.run_md_task(t, [(src, "s")], mdconv.read_opts({"tier": "accurate"}))
+    assert "(advanced)" in (tmp_path / "x" / "job" / "out" / "s.md").read_text(encoding="utf-8")   # точный = advanced
+    with pytest.raises(mdconv.MdError, match="не установлен"):
+        mdconv.uninstall()
+        mdconv.run_md_task(_task(tmp_path / "y"), [(src, "s")], mdconv.read_opts({"tier": "fast"}))
+
+
+def test_md_routes(md_engine, client, tmp_path, monkeypatch):
+    import io
+    import phoneserver
+    mdconv, engine, home = md_engine
+    st = client.get("/api/md/engine").get_json()
+    assert st["supported"] and not st["basic"] and st["local"]
+    assert client.get("/api/formats").get_json()["engines"]["mineru"]["supported"] is True
+    # установка: задача, которую можно опросить, как и остальные
+    r = client.post("/api/md/install", data={"level": "basic"})
+    d = wait_task(client, r.get_json()["task"])
+    assert d["status"] == "done", d
+    assert client.get("/api/md/engine").get_json()["basic"] is True
+    assert client.post("/api/md/install", data={"level": "huge"}).status_code == 400
+    # конвертация: нужные файлы приходят в одном архиве
+    r = client.post("/api/md", data={"tier": "fast", "files": (io.BytesIO(b"%PDF-1.4"), "отчёт.pdf")}, content_type="multipart/form-data")
+    d = wait_task(client, r.get_json()["task"])
+    assert d["status"] == "done" and d["done"] == 1, d
+    assert "отчёт.md" in d["names"]
+    assert "Заголовок" in client.get(f"/api/file/{d['job']}/отчёт.md").data.decode("utf-8")
+    assert client.post("/api/md", data={"files": (io.BytesIO(b"x"), "музыка.mp3")}, content_type="multipart/form-data").status_code == 400
+    assert client.post("/api/md", data={}).status_code == 400
+    # телефону через сервер установка недоступна, а нет ли уже поставленного движка — не его дело
+    monkeypatch.setattr(phoneserver, "password", lambda: "pw")
+    import base64
+    phone = {"environ_overrides": {phoneserver.MARK: True}, "headers": {"Authorization": "Basic " + base64.b64encode(b"x:pw").decode()}}
+    assert client.post("/api/md/install", data={"level": "basic"}, **phone).status_code == 403
+    assert client.get("/api/md/engine", **phone).get_json()["local"] is False
+    assert client.post("/api/md/uninstall", **phone).status_code == 403
+
+
+def test_md_unsupported_on_android(monkeypatch, client):
+    import mdconv
+    monkeypatch.setenv("UNIVERSAL_ANDROID", "1")
+    assert not mdconv.supported() and mdconv.status()["supported"] is False
+    assert client.post("/api/md/install", data={"level": "basic"}).status_code == 400

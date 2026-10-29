@@ -1,0 +1,40 @@
+name: macOS самопроверка
+
+# Собирает .app так же, как релиз, и запускает его самопроверку: быстрый способ найти, почему не стартует
+# что-то в собранном приложении на macOS, не гоняя весь релиз (запускается вручную).
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "macos-latest (Apple Silicon) или macos-15-intel"
+        default: macos-latest
+
+jobs:
+  smoke:
+    runs-on: ${{ github.event.inputs.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Intel: готовые сборки
+        if: github.event.inputs.runner == 'macos-15-intel'
+        run: |
+          printf 'pikepdf<10.14\nocrmypdf<17.13\ncryptography<49\n' > "$RUNNER_TEMP/intel.txt"
+          echo "PIP_CONSTRAINT=$RUNNER_TEMP/intel.txt" >> "$GITHUB_ENV"
+          echo "PIP_ONLY_BINARY=pikepdf,cryptography" >> "$GITHUB_ENV"
+      - run: pip install -r packaging/requirements-desktop.txt
+      - name: Сборка .app
+        run: |
+          pyinstaller packaging/universal.spec --noconfirm
+          codesign --force --deep --sign - dist/Universal.app
+      - name: Самопроверка
+        run: |
+          export UNIVERSAL_HOME="$RUNNER_TEMP/universal-smoke"
+          dist/Universal.app/Contents/MacOS/Universal --smoke && rc=0 || rc=$?
+          cat "$UNIVERSAL_HOME/smoke.json"; echo
+          ls -la "$UNIVERSAL_HOME" "$UNIVERSAL_HOME/textfold" 2>&1 | head -30
+          cat "$UNIVERSAL_HOME/universal.log" 2>/dev/null | tail -60
+          exit $rc
