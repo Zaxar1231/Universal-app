@@ -21,8 +21,6 @@ Recommends:     libreoffice-writer
 Recommends:     ocrmypdf
 Recommends:     tesseract-langpack-rus
 Recommends:     python3-py7zr
-Suggests:       clamav
-Suggests:       clamav-update
 %global __requires_exclude_from ^/usr/lib/universal/.*$
 %global __provides_exclude_from ^/usr/lib/universal/.*$
 %global debug_package %{nil}
