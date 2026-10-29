@@ -1,17 +1,19 @@
 name: macOS самопроверка
 
 # Собирает .app так же, как релиз, и запускает его самопроверку: быстрый способ найти, почему не стартует
-# что-то в собранном приложении на macOS, не гоняя весь релиз (запускается вручную).
+# что-то в собранном приложении на macOS, не гоняя весь релиз (запускается вручную и при правке этого файла).
 on:
   workflow_dispatch:
-    inputs:
-      runner:
-        description: "macos-latest (Apple Silicon) или macos-15-intel"
-        default: macos-latest
+  push:
+    paths: [".github/workflows/mac-smoke.yml"]
 
 jobs:
   smoke:
-    runs-on: ${{ github.event.inputs.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -19,8 +21,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Intel: готовые сборки
-        if: github.event.inputs.runner == 'macos-15-intel'
+      - name: Для Intel готовые сборки
+        if: matrix.runner == 'macos-15-intel'
         run: |
           printf 'pikepdf<10.14\nocrmypdf<17.13\ncryptography<49\n' > "$RUNNER_TEMP/intel.txt"
           echo "PIP_CONSTRAINT=$RUNNER_TEMP/intel.txt" >> "$GITHUB_ENV"
