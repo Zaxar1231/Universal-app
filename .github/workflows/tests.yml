@@ -22,7 +22,7 @@ jobs:
           path: ${{ github.workspace }}/../universal-home/whisper
           key: whisper-base-v1
       - name: Программы
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg imagemagick pandoc poppler-utils tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus espeak-ng
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg imagemagick pandoc poppler-utils tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus espeak-ng clamav
       - name: Зависимости
         run: pip install -r requirements.txt -r requirements-android.txt pytest
       - name: monolith (проверка ссылки на него и настоящего сохранения страницы)
@@ -30,7 +30,7 @@ jobs:
           python engines.py install monolith
           python -c "import json,engines;print(json.load(open(engines.engines_dir()/'paths.json'))['monolith'])" >> "$GITHUB_PATH"
       - name: Тесты
-        run: python -m pytest -q -rs -k "not test_stt_real" && python -m pytest -q -s -k test_stt_real && DIARIZE_REAL=1 python -m pytest -q -s -k diarize_real
+        run: python -m pytest -q -rs -k "not test_stt_real" && python -m pytest -q -s -k test_stt_real && DIARIZE_REAL=1 python -m pytest -q -s -k diarize_real && AV_REAL=1 python -m pytest -q -s -k av_real
 
   windows:
     # тесты на Windows с движками, которые ставит само приложение (проверяет и ссылки на них)
@@ -50,9 +50,13 @@ jobs:
       - name: Движки через engines.py
         shell: bash
         run: |
-          python engines.py install ffmpeg pandoc poppler imagemagick ytdlp tesseract monolith
+          python engines.py install ffmpeg pandoc poppler imagemagick ytdlp tesseract monolith clamav
           python -c "import json,engines;[print(v) for k,v in json.load(open(engines.engines_dir()/'paths.json')).items() if k!='ytdlp']" >> "$GITHUB_PATH"
       - name: Тесты
         run: python -m pytest -q
+      - name: ClamAV с настоящими базами (скачивает ≈ 300 МБ)
+        env:
+          AV_REAL: "1"
+        run: python -m pytest -q -s -k av_real
       - name: Самопроверка desktop.py
         run: python desktop.py --smoke
