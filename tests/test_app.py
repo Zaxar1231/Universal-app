@@ -1864,3 +1864,192 @@ def test_engine_install_survives_locked_archive(engine_env, monkeypatch):
     monkeypatch.setattr(pathlib.Path, "unlink", real_unlink)
     assert engines.install("ffmpeg") == d             # повторно — без загрузки, остатки убраны
     assert not list((engines.engines_dir() / "downloads").glob("ffmpeg-*"))
+
+
+# ---------------------------------------------------------------- «Скачать» → «Страницу сайта»
+
+@pytest.fixture
+def site(tmp_path):
+    """Локальный сайт: страница со стилями, @import, шрифтом, картинками, скриптами; /secret — только с cookie."""
+    import http.server
+    import io
+    import threading
+    from PIL import Image
+    root = tmp_path / "site"
+    root.mkdir()
+
+    def png(color):
+        b = io.BytesIO()
+        Image.new("RGB", (8, 8), color).save(b, "PNG")
+        return b.getvalue()
+    (root / "pic.png").write_bytes(png("red"))
+    (root / "pic2.png").write_bytes(png("blue"))
+    (root / "bg.png").write_bytes(png("green"))
+    (root / "icon.png").write_bytes(png("black"))
+    (root / "f.woff2").write_bytes(b"wOF2" + b"\x00" * 200)
+    (root / "extra.css").write_text(".x { color: blue }", encoding="utf-8")
+    (root / "style.css").write_text(
+        '@import "extra.css";\nbody { background: url(bg.png); font-family: F }\n'
+        "@font-face { font-family: F; src: url(f.woff2) format('woff2') }\nh1 > span { color: red }\n", encoding="utf-8")
+    (root / "index.html").write_text("""<!doctype html><html><head><meta charset="utf-8"><title>Тестовая  страница</title>
+<link rel="stylesheet" href="style.css"><link rel="icon" href="icon.png">
+<style>.inl { background: url(bg.png) } p > b { color: red }</style>
+<script src="app.js"></script></head>
+<body onload="x()"><h1 style="background:url('bg.png')">Привет</h1><p>Текст <b>жирный</b></p>
+<img src="pic.png" srcset="pic.png 1x, pic2.png 2x"><img src="missing.png">
+<picture><source srcset="pic2.png"><img src="pic.png"></picture>
+<a href="page2.html">дальше</a> <a href="javascript:alert(1)">js</a>
+<noscript><p id="ns">без скриптов</p></noscript><video src="v.mp4"></video>
+<script>alert(1)</script></body></html>""", encoding="utf-8")
+
+    class H(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *a, **k):
+            super().__init__(*a, directory=str(root), **k)
+
+        def do_GET(self):
+            if self.path == "/secret":
+                if "sid=1" not in (self.headers.get("Cookie") or ""):
+                    self.send_response(403)
+                    self.end_headers()
+                    return
+                body = "<html><head><title>Секрет</title></head><body>для своих</body></html>".encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if self.path == "/go":
+                self.send_response(302)
+                self.send_header("Location", "/secret")
+                self.end_headers()
+                return
+            if self.path == "/gz":
+                import gzip
+                body = gzip.compress("<html><head><title>Сжатая</title></head><body>gzip</body></html>".encode())
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Encoding", "gzip")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            super().do_GET()
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_port}"
+    srv.shutdown()
+
+
+def test_page_builtin_inlines_everything(site, tmp_path):
+    import webpage
+    out = tmp_path / "out"
+    out.mkdir()
+    f = webpage._save_builtin(site + "/index.html", out, webpage.read_opts({}), None, None)
+    assert f.name == "Тестовая страница.html"
+    h = f.read_text(encoding="utf-8")
+    assert "<script" not in h and "onload" not in h and "alert(1)" not in h and "javascript:" not in h
+    assert "<noscript" not in h and 'id="ns"' in h                      # запасной вариант страницы виден
+    assert "<video" not in h and "<source" not in h and "srcset" not in h
+    assert 'rel="stylesheet"' not in h and "@import" not in h and "style.css" not in h
+    assert ".x { color: blue }" in h                                    # @import вшит
+    assert "p > b" in h and "h1 > span" in h                            # «>» в стилях не превратился в &gt;
+    assert h.count("data:image/png;base64,") >= 4                        # картинки, фон, значок
+    assert "data:font/woff2;base64," in h or "data:application/font-woff2;base64," in h
+    assert "url(bg.png)" not in h and "url('bg.png')" not in h
+    assert f'src="{site}/missing.png"' in h                              # не открылась: остался полный адрес
+    assert f'href="{site}/page2.html"' in h
+    assert '<meta charset="utf-8"/>' in h or '<meta charset="utf-8">' in h
+    assert "Сохранено Universal" in h
+
+
+def test_page_builtin_options(site, tmp_path):
+    import webpage
+    out = tmp_path / "out"
+    out.mkdir()
+    o = webpage.read_opts({"no_images": "1", "no_fonts": "1", "no_js": "0"})
+    h = webpage._save_builtin(site + "/index.html", out, o, None, None).read_text(encoding="utf-8")
+    assert "data:image/png;base64," not in h and "data:font" not in h
+    assert webpage.PIXEL in h
+    assert "alert(1)" in h and f'src="{site}/app.js"' in h               # скрипты оставлены, адрес полный
+
+
+def test_page_builtin_cookies_redirect_gzip(site, tmp_path):
+    import webpage
+    out = tmp_path / "out"
+    out.mkdir()
+    port = site.rsplit(":", 1)[1]
+    with pytest.raises(webpage.PageError, match="403"):
+        webpage._save_builtin(site + "/go", out, webpage.read_opts({}), None, None)
+    cookies = tmp_path / "cookies.txt"
+    cookies.write_text("# Netscape HTTP Cookie File\n127.0.0.1\tFALSE\t/\tFALSE\t0\tsid\t1\n", encoding="utf-8")
+    f = webpage._save_builtin(site + "/go", out, webpage.read_opts({}), cookies, None)   # через переадресацию
+    assert f.name == "Секрет.html" and "для своих" in f.read_text(encoding="utf-8"), port
+    g = webpage._save_builtin(site + "/gz", out, webpage.read_opts({}), None, None)
+    assert g.name == "Сжатая.html" and "gzip" in g.read_text(encoding="utf-8")
+
+
+def test_page_builtin_file_link_saved_as_is(site, tmp_path):
+    import webpage
+    out = tmp_path / "out"
+    out.mkdir()
+    f = webpage._save_builtin(site + "/pic.png", out, webpage.read_opts({}), None, None)
+    assert f.suffix == ".png" and f.read_bytes()[:4] == b"\x89PNG"
+
+
+def test_page_route_saves_html(site, client, monkeypatch):
+    monkeypatch.delenv("UNIVERSAL_ANDROID", raising=False)
+    r = client.post("/api/dl", data={"mode": "page", "urls": f"{site}/index.html\n{site}/gz", "builtin": "1"})
+    d = wait_task(client, r.get_json()["task"])
+    assert d["status"] == "done" and d["done"] == 2 and not d["failed"], d
+    assert sorted(d["names"]) == ["Сжатая.html", "Тестовая страница.html"]
+    body = client.get(f"/api/file/{d['job']}/Тестовая страница.html").data.decode("utf-8")
+    assert "data:image/png;base64," in body and "<script" not in body
+    bad = client.post("/api/dl", data={"mode": "page", "urls": "просто слова"})
+    assert bad.status_code == 400
+    r = client.post("/api/dl", data={"mode": "page", "urls": "http://127.0.0.1:9/none", "builtin": "1"})
+    d = wait_task(client, r.get_json()["task"])
+    assert d["status"] == "error" and "не открылась" in d["error"]
+
+
+@pytest.mark.skipif(not shutil.which("monolith"), reason="monolith не установлен")
+def test_page_with_real_monolith(site, tmp_path):
+    import webpage
+    out = tmp_path / "out"
+    out.mkdir()
+    f = webpage._save_monolith(shutil.which("monolith"), site + "/index.html", out, webpage.read_opts({}), None, None)
+    assert f.name == "Тестовая страница.html"
+    h = f.read_text(encoding="utf-8")
+    assert "alert(1)" not in h and "onload" not in h and "app.js" not in h      # пустой <script></script> monolith оставляет
+    assert "data:image/png;base64," in h and "style.css" not in h
+    import base64
+    import re
+    css = " ".join(re.findall(r"<style[^>]*>(.*?)</style>", h, re.S))
+    for payload in re.findall(r"data:text/css;base64,([A-Za-z0-9+/=]+)", h):      # monolith вшивает стили как data:-ссылку
+        css += " " + base64.b64decode(payload).decode("utf-8", "replace")
+    assert "bg.png" not in css and "data:image/png;base64," in css              # картинка из стилей вшита
+
+
+def test_engine_single_file_install(engine_env, monkeypatch):
+    """monolith — один исполняемый файл без архива: ложится в engines/monolith и находится сам."""
+    engines, srv_dir, base = engine_env
+    (srv_dir / "monolith-bin").write_bytes(b"\x7fELF" + b"\x00" * 200_000)
+    monkeypatch.setitem(engines.CATALOG, "monolith", {**engines.CATALOG["monolith"], "url": base + "/monolith-bin",
+                                                       "asset_fn": None})
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    d = engines.install("monolith")
+    exe = Path(d) / engines._exe_names("monolith")[0]
+    assert exe.is_file() and exe.stat().st_size > 100_000
+    if sys.platform != "win32":
+        assert os.access(exe, os.X_OK)
+    assert "monolith" not in engines.missing()
+    assert not list((engines.engines_dir() / "downloads").glob("monolith-*"))
+    (srv_dir / "tiny").write_bytes(b"<html>404</html>")
+    monkeypatch.setitem(engines.CATALOG, "monolith", {**engines.CATALOG["monolith"], "url": base + "/tiny"})
+    engines.remove("monolith")
+    with pytest.raises(engines.EngineError, match="не тот файл"):
+        engines.install("monolith")

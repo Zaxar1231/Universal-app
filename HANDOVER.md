@@ -507,3 +507,12 @@ curl -s -F files=@tone.mp3 -F to=flac http://127.0.0.1:5000/api/universal
 - Tesseract: путь регистрируется до `_tessdata`; `available("tesseract")` требует все `langs` в `tessdata` (`_langs_ok`), поэтому недокачанные словари ставятся при следующем запуске без повторной загрузки движка.
 - `net.download(url, dest, ...)`: докачка. `dest.part` + `dest.part.json` (url, ETag, Last-Modified), запрос `Range` + `If-Range` (сменился файл — сервер отдаёт 200, начинаем с нуля; слабый ETag не используется), 416 — уже скачано. Отмена и обрыв оставляют `.part`. Архивы движков лежат в `engines/downloads` до успешной установки, битый архив удаляется. Модели Whisper (`stt.ensure_model`) тоже через `net.download`. Проверено вживую на релизе deno: 206, zip цел.
 
+### 13.21 Сохранить страницу сайта (v2.7.0)
+- Режим `page` внутри `/api/dl` (третий вариант в «Что качать», блок `#dlPage`). `app.dl` при `mode=page` не требует yt-dlp: `webpage.run_page_task(task, urls, opts, cookie)`, задача того же вида `dl`, поэтому результат и интерфейс прогресса те же. До 50 адресов за раз.
+- `webpage.py`: сначала monolith (`monolith_exe()` = `shutil.which`, флаги: `-j -n` без скриптов, `-a -v` без видео и звука, `-i`, `-F`, `-e -q -t 40 -C cookies -u UA`, прокси через переменные окружения), при ошибке или на Android — встроенный (`_save_builtin`, BeautifulSoup `html.parser`): `_Fetcher` (cookies Netscape, прокси, gzip/deflate, лимиты 20 МБ на файл, 150 МБ и 800 файлов на страницу), `_Inliner` (стили с `@import`, `url()` в стилях и `style=""`, картинки/srcset/picture, значок, шрифты, видео и звук, ссылки становятся полными, пометка и `<meta charset>`).
+- Ссылка не на страницу, а на файл (по Content-Type): сохраняется как есть.
+- Отличия monolith: `@import "файл.css"` не вшивает (только `url()`), внешние стили кладёт как `<link href="data:text/css;base64,…">`, оставляет пустой `<script></script>`.
+- `engines.py`: движок `monolith` (`"single": True`, один исполняемый файл без архива, `_install_single`, имя файла по системе `_monolith_asset`: `monolith-cli.exe`, `monolith-macos-*-apple-darwin`, `monolith-cli-linux-*`), в `AUTO`, ставится и на Linux (`can_install`).
+- `net.open_with(req, *handlers)`: urlopen с прокси и cookies и тем же перебором проверок HTTPS.
+- Тесты: локальный сайт (`site`), встроенный способ, cookies+переадресация+gzip, настоящий monolith (пропускается без него; в CI ставится `engines.py install monolith`), установка одного файла. Android e2e: проверка «страница сайта».
+

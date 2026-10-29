@@ -17,3 +17,5 @@ bottle
 typing_extensions
 truststore
 certifi
+beautifulsoup4
+soupsieve

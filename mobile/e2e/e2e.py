@@ -315,6 +315,23 @@ def _():
     return ", ".join(n for n, _ in files)
 
 
+@check("страница сайта одним HTML (встроенный сохранитель)")
+def _():
+    site = OUT / "host" / "site"          # эту папку отдаёт http.server из run.sh
+    site.mkdir(parents=True, exist_ok=True)
+    (site / "pic.png").write_bytes(png(40, 30))
+    (site / "e.css").write_text(".e{color:red}", encoding="utf-8")
+    (site / "s.css").write_text("@import 'e.css'; body{background:url(pic.png)}", encoding="utf-8")
+    (site / "index.html").write_text("<html><head><meta charset='utf-8'><title>Проверка страницы</title>"
+                                     "<link rel=stylesheet href=s.css></head><body><img src=pic.png><script>1</script></body></html>",
+                                     encoding="utf-8")
+    t = run_task("api/dl", {"mode": "page", "urls": HOST_FILES + "site/index.html"}, None, timeout=300)
+    (name, data), = result_bytes(t)
+    h = data.decode("utf-8")
+    assert name.endswith(".html") and "data:image/png;base64," in h and ".e{color:red}" in h and "<script" not in h, h[:300]
+    return f"{name} {len(data)} Б"
+
+
 @check("вкладка «Информация»")
 def _():
     st, d = jreq("api/about")
