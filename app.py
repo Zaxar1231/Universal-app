@@ -39,6 +39,8 @@ import about
 import stt
 import webpage
 import reader
+import av
+import dbtools
 import mdconv
 import changelog
 import converters as conv
@@ -688,6 +690,8 @@ def formats():
                 "qrcode": qrtools.available(), "pypdf": pdftools.available(),
                 "page": webpage.available(), "monolith": bool(webpage.monolith_exe()),
                 "mineru": {**mdconv.status(), "local": _reader_local()},
+                "av": {**av.status(), "local": _reader_local()},
+                "db": {**dbtools.status(), "local": _reader_local()},
                 "reader": {"usable": _reader_usable(), "local": _reader_local(), "missing": reader.missing(), "pip": reader.pip_command()},
                 "poppler": all(poppler_ok().values()), "can_install": engine_store.can_install(),
                 "installable": [n for n in engine_store.CATALOG if engine_store.can_install(n)],
@@ -1365,6 +1369,108 @@ def md_run():
     items = save_uploads(files, job_dir / "in")
     task = Task(job_id, "md", job_dir, archive)
     TASKS.submit(task, lambda t: mdconv.run_md_task(t, items, opts))
+    return jsonify(task.to_dict())
+
+
+# ---------- Базы данных (просмотр SQLite и DBeaver) ----------
+
+def _db_file(job: str, name: str) -> Path:
+    if not re.fullmatch(r"[0-9a-f]{12}", job or "") or not name or "/" in name or "\\" in name or name.startswith("."):
+        abort(404)
+    p = (WORK_ROOT / job / "out" / name).resolve()
+    if not p.is_file() or (WORK_ROOT / job / "out").resolve() not in p.parents:
+        abort(404)
+    return p
+
+
+@app.route("/api/db/engine")
+def db_engine():
+    return jsonify({**dbtools.status(), "local": _reader_local()})
+
+
+@app.route("/api/db", methods=["POST"])
+def db_load():
+    """Загружает файлы SQLite и сразу показывает, что в них: таблицы, число строк, столбцы."""
+    files = [f for f in request.files.getlist("files") if f.filename]
+    if not files:
+        return jsonify({"error": "Файлы не выбраны"}), 400
+    bad = [f.filename for f in files if not dbtools.can_read(f.filename)]
+    if bad:
+        return jsonify({"error": "Это не базы SQLite (.db, .sqlite, .sqlite3): " + ", ".join(bad[:3])}), 400
+    job_id, job_dir, archive = new_job("db")
+    used: dict[str, int] = {}
+    out = []
+    for f in files:
+        stem, ext = safe_stem(f.filename), Path(f.filename).suffix.lower()
+        n = used.get(stem + ext, 0)
+        used[stem + ext] = n + 1
+        name = f"{stem}{'_' + str(n) if n else ''}{ext}"
+        dst = job_dir / "out" / name
+        f.save(dst)
+        try:
+            out.append({"name": name, **dbtools.inspect(dst)})
+        except dbtools.DbError as e:
+            out.append({"name": name, "error": str(e)})
+    return jsonify({"job": job_id, "files": out})
+
+
+@app.route("/api/db/rows")
+def db_rows():
+    path = _db_file(request.args.get("job", ""), request.args.get("file", ""))
+    try:
+        return jsonify(dbtools.rows(path, request.args.get("table", "")))
+    except dbtools.DbError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/db/open", methods=["POST"])
+def db_open():
+    """Открывает копию базы в DBeaver (только на этом компьютере)."""
+    _local_only()
+    path = _db_file(request.form.get("job", ""), request.form.get("file", ""))
+    try:
+        dbtools.open_in_dbeaver(path, path.name)
+    except dbtools.DbError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"ok": True})
+
+
+# ---------- Проверка на вирусы (ClamAV) ----------
+
+@app.route("/api/av/engine")
+def av_engine():
+    return jsonify({**av.status(), "local": _reader_local()})
+
+
+@app.route("/api/av/install", methods=["POST"])
+def av_install():
+    """Ставит ClamAV (на Windows) и скачивает базы вирусов; без движка только обновляет базы."""
+    _local_only()
+    if not av.supported():
+        return jsonify({"error": "Здесь проверка на вирусы недоступна"}), 400
+    job_id, job_dir, archive = new_job("clamav")
+    task = Task(job_id, "avinstall", job_dir, archive)
+    if av.available():
+        TASKS.submit(task, lambda t: av.update_db(t))
+    else:
+        TASKS.submit(task, lambda t: av.install(t))
+    return jsonify(task.to_dict())
+
+
+@app.route("/api/av", methods=["POST"])
+def av_run():
+    if not av.supported():
+        return jsonify({"error": "Здесь проверка на вирусы недоступна"}), 400
+    if not av.available() or not av.db_path():
+        return jsonify({"error": "Сначала поставь ClamAV и базы вирусов"}), 400
+    files = [f for f in request.files.getlist("files") if f.filename]
+    if not files:
+        return jsonify({"error": "Файлы не выбраны"}), 400
+    opts = av.read_opts(request.form)
+    job_id, job_dir, archive = new_job("av")
+    items = save_uploads(files, job_dir / "in")
+    task = Task(job_id, "av", job_dir, archive)
+    TASKS.submit(task, lambda t: av.run_av_task(t, items, opts))
     return jsonify(task.to_dict())
 
 

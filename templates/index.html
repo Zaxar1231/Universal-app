@@ -221,6 +221,16 @@ input[type=range]::-moz-range-thumb { width: 4px; height: 44px; border: 0; borde
 /* длинное имя файла: кнопка растёт в высоту, текст переносится, а не вылезает за края */
 .result a.btn { height: auto; min-height: 40px; padding: 10px 24px; white-space: normal;
   overflow-wrap: anywhere; text-align: center; line-height: 1.35; text-decoration: none; }
+.wheel-hint { text-align: center; }
+#wheel { position: fixed; inset: 0; z-index: 90; background: color-mix(in srgb, var(--md-scrim, #000) 45%, transparent); }
+#wheel[hidden] { display: none; }
+#wheel .hub { position: absolute; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%; display: grid; place-items: center; text-align: center;
+  background: var(--md-surface-container-high, #ece6f0); color: var(--md-on-surface, #1d1b20); font-size: .75rem; line-height: 1.2; box-shadow: 0 2px 12px rgba(0,0,0,.35); pointer-events: none; }
+#wheel .wb { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: .8125rem; text-transform: uppercase;
+  background: var(--md-primary-container); color: var(--md-on-primary-container); box-shadow: 0 2px 8px rgba(0,0,0,.35); transition: transform .12s, background .12s; }
+#wheel .wb.on { transform: scale(1.25); background: var(--md-primary); color: var(--md-on-primary); }
+#wheel .wmsg { position: absolute; left: 0; right: 0; bottom: 32px; text-align: center; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.result.av-bad { background: var(--md-error-container); color: var(--md-on-error-container); }
 .errs { list-style: none; margin: 0; padding: 12px 16px; border-radius: var(--sh-l); background: var(--md-error-container);
   color: var(--md-on-error-container); font-size: .875rem; display: grid; gap: 4px; }
 
@@ -436,6 +446,8 @@ ul.files .up { width: 40px; height: 40px; }
       'topdf': 'M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.500-23.500T160-160v-640q0-33 23.500-56.500T240-880h320l240 240v480q0 33-23.500 56.500T720-80H240Zm280-520h200L520-800v200Z',
       'pdft': 'M120-120v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80ZM240-280q-33 0-56.500-23.500T160-360v-400q0-33 23.500-56.500T240-840h480q33 0 56.500 23.500T800-760v400q0 33-23.500 56.500T720-280H240Zm0-80h480v-400H240v400Zm80-80h320v-80H320v80Zm0-160h320v-80H320v80Z',
       'stt': 'M480-400q-50 0-85-35t-35-85v-240q0-50 35-85t85-35q50 0 85 35t35 85v240q0 50-35 85t-85 35Zm0-240Zm-40 520v-123q-104-14-172-93t-68-184h80q0 83 58.500 141.500T480-320q83 0 141.500-58.500T680-520h80q0 105-68 184t-172 93v123h-80Zm40-360q17 0 28.500-11.500T520-520v-240q0-17-11.500-28.500T480-800q-17 0-28.500 11.500T440-760v240q0 17 11.500 28.500T480-480Z',
+      'db': 'M480-120q-151 0-255.500-46.500T120-280v-400q0-66 105.500-113T480-840q149 0 254.500 47T840-680v400q0 67-104.500 113.500T480-120Zm0-479q89 0 179-25.500T760-679q-11-29-100.500-55T480-760q-91 0-178.500 25.500T200-679q14 30 101.500 55T480-599Zm0 199q42 0 81-4t74.500-11.500q35.500-7.500 67-18.500t57.500-25v-120q-26 14-57.500 25t-67 18.500Q600-528 561-524t-81 4q-42 0-82-4t-75.500-11.500Q287-543 256-554t-56-25v120q25 14 56 25t66.500 18.500Q358-408 398-404t82 4Zm0 200q46 0 93.500-7t87.500-18.500q40-11.500 67-26t31-32.500v-103q-26 14-57.500 25t-67 18.500Q600-328 561-324t-81 4q-42 0-82-4t-75.500-11.500Q287-343 256-354t-56-25v103q3 17 30 31.500t67 26q40 11.500 87.500 18.500t95.500 7Z',
+      'av': 'M480-80q-139-35-229.500-159.500T160-516v-244l320-120 320 120v244q0 152-90.500 276.500T480-80Zm0-84q104-33 172-132t68-220v-189l-240-90-240 90v189q0 121 68 220t172 132Zm-40-176 226-226-56-58-170 170-85-85-57 57 142 142Z',
       'md': 'M200-120q-33 0-56.500-23.500T120-200v-560q0-33 23.500-56.500T200-840h560q33 0 56.500 23.500T840-760v560q0 33-23.500 56.500T760-120H200Zm0-80h560v-560H200v560Zm80-80h400v-80H280v80Zm0-160h400v-80H280v80Zm0-160h400v-80H280v80Z',
       'reader': 'M480-160q-50-35-109-52.500T240-230q-40 0-77 9.500T90-190v-480q35-17 75-28t75-11q69 0 130 26t110 74q49-48 110-74t130-26q35 0 75 11t75 28v480q-35-18-72-28.500T720-230q-72 0-131 17.500T480-160Zm40-96q42-23 85.500-35T720-303q30 0 59.500 5.500T840-283v-355q-29-12-58.500-17.500T720-661q-45 0-88.500 13.500T520-596v340Zm-80 0v-340q-47-31-91.500-48T240-661q-31 0-60.500 5.500T120-638v355q30-10 59.500-15.500T240-303q45 0 88.500 12T440-256Z',
       'ocr': 'M80-680v-200h200v80H160v120H80Zm0 600v-200h80v120h120v80H80Zm600 0v-80h120v-120h80v200H680Zm120-600v-120H680v-80h200v200h-80ZM240-320h480v-80H240v80Zm0-120h480v-80H240v80Zm0-120h320v-80H240v80Z',
@@ -454,7 +466,7 @@ ul.files .up { width: 40px; height: 40px; }
       <span class="t-label-m">{{ label }}</span></label>
     {% endfor %}
     <span class="sep" role="separator"></span>
-    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF'),('pdft','Правка PDF'),('pdfedit','Редактор PDF'),('ocr','Распознать текст'),('md','В Markdown'),('stt','Голос в текст'),('reader','Читалка')] %}
+    {% for key, label in [('pdf','PDF в картинки'),('photo','Фото в A4'),('topdf','Фото в PDF'),('pdft','Правка PDF'),('pdfedit','Редактор PDF'),('ocr','Распознать текст'),('md','В Markdown'),('av','Проверка на вирусы'),('db','Базы данных'),('stt','Голос в текст'),('reader','Читалка')] %}
     <label class="nav"><input type="radio" name="mode" value="{{ key }}">
       <span class="pill state"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="{{ icons[key] }}"/></svg></span>
       <span class="t-label-m">{{ label }}</span></label>
@@ -642,6 +654,7 @@ ul.files .up { width: 40px; height: 40px; }
           <strong class="t-title-l" id="dropTitle">Перетащи файлы сюда</strong>
           <span class="t-body-m muted" id="dropSub">или нажми, чтобы выбрать. Папку тоже можно перетащить.</span>
           <button type="button" class="btn text state" id="pickDir">Выбрать папку</button>
+          <span class="t-body-m muted wheel-hint" id="wheelHint" hidden></span>
         </label>
 
         <div class="card" style="margin-top:16px">
@@ -892,6 +905,36 @@ ul.files .up { width: 40px; height: 40px; }
             <div class="progress" id="mdProg" hidden><i></i></div>
           </div>
           <p class="hint">Всё считается на этом {{ device }}, файлы никуда не отправляются. Движок ставится один раз в отдельную папку и никак не меняет приложение.</p>
+        </div>
+
+        <!-- базы данных: просмотр SQLite и DBeaver -->
+        <div id="dbBox" class="sect" hidden>
+          <div class="field">
+            <span class="lbl t-label-l">DBeaver</span>
+            <p class="hint" id="dbEngineText"></p>
+            <div class="row">
+              <button class="btn tonal state" id="dbInstall" type="button" hidden>Скачать DBeaver (≈ 130 МБ)</button>
+              <button class="btn text state" id="dbCancel" type="button" hidden>Остановить</button>
+            </div>
+            <div class="progress" id="dbProg" hidden><i></i></div>
+          </div>
+          <p class="hint">Файлы SQLite (.db, .sqlite, .sqlite3) можно посмотреть прямо здесь: таблицы и первые строки, только чтение. В DBeaver открывается копия, оригинал не меняется; готовую копию можно скачать обратно.</p>
+        </div>
+
+        <!-- проверка на вирусы (ClamAV) -->
+        <div id="avBox" class="sect" hidden>
+          <label class="sw"><span class="txt"><span class="t-body-m">Заглянуть внутрь архивов</span><span class="hint">zip, 7z, rar и другие: вирус внутри архива тоже будет найден. Чуть медленнее.</span></span>
+            <input type="checkbox" id="avArchives" checked><span class="track"></span></label>
+          <div class="field">
+            <span class="lbl t-label-l">Антивирус ClamAV</span>
+            <p class="hint" id="avEngineText"></p>
+            <div class="row">
+              <button class="btn tonal state" id="avInstall" type="button" hidden></button>
+              <button class="btn text state" id="avCancel" type="button" hidden>Остановить</button>
+            </div>
+            <div class="progress" id="avProg" hidden><i></i></div>
+          </div>
+          <p class="hint">Проверка идёт на этом {{ device }}, файлы никуда не отправляются. Ничего не удаляется и не лечится: ты только узнаёшь, что нашлось. Базы вирусов (≈ 300 МБ) качаются один раз и обновляются кнопкой.</p>
         </div>
 
         <!-- распознавание текста (OCRmyPDF) -->
@@ -1541,13 +1584,13 @@ ul.files .up { width: 40px; height: 40px; }
     image: { title: 'Картинки', kind: 'uni' }, audio: { title: 'Аудио', kind: 'uni' },
     video: { title: 'Видео', kind: 'uni' }, doc: { title: 'Документы', kind: 'uni' },
     pdf: { title: 'PDF в картинки', kind: 'pdf' }, photo: { title: 'Фото в A4', kind: 'photo' }, topdf: { title: 'Фото в PDF', kind: 'topdf' },
-    pdft: { title: 'PDF-инструменты', kind: 'pdft' }, ocr: { title: 'Распознать текст', kind: 'ocr' }, stt: { title: 'Голос в текст', kind: 'stt' }, md: { title: 'Документы в Markdown', kind: 'md' }, reader: { title: 'Читалка', kind: 'reader' }, info: { title: 'Информация', kind: 'info' },
+    pdft: { title: 'PDF-инструменты', kind: 'pdft' }, ocr: { title: 'Распознать текст', kind: 'ocr' }, stt: { title: 'Голос в текст', kind: 'stt' }, md: { title: 'Документы в Markdown', kind: 'md' }, av: { title: 'Проверка на вирусы', kind: 'av' }, db: { title: 'Базы данных', kind: 'db' }, reader: { title: 'Читалка', kind: 'reader' }, info: { title: 'Информация', kind: 'info' },
     photoedit: { title: 'Фоторедактор', kind: 'photoedit' }, docedit: { title: 'Редактор документов', kind: 'docedit' },
     pdfedit: { title: 'Редактор PDF', kind: 'pdfedit' },
     files: { title: 'Архивы и файлы', kind: 'files' },
     edit: { title: 'Редактор видео и аудио', kind: 'edit' }, dl: { title: 'Скачать видео и страницы', kind: 'dl' }, qr: { title: 'QR-коды', kind: 'qr' },
   };
-  const isNew = () => ['edit', 'dl', 'qr', 'pdft', 'ocr', 'stt', 'md', 'reader', 'info', 'photoedit', 'docedit', 'pdfedit', 'files'].includes(MODES[mode()].kind);
+  const isNew = () => ['edit', 'dl', 'qr', 'pdft', 'ocr', 'stt', 'md', 'av', 'db', 'reader', 'info', 'photoedit', 'docedit', 'pdfedit', 'files'].includes(MODES[mode()].kind);
   const FULL = ['info', 'photoedit', 'docedit', 'pdfedit', 'reader'];          // режимы на всю ширину, без списка файлов
   const fOp = () => qs('input[name=fop]:checked').value;
   const pOp = () => qs('input[name=pop]:checked').value;
@@ -1605,6 +1648,8 @@ ul.files .up { width: 40px; height: 40px; }
     if (m === 'ocr') return /\.(pdf|png|jpe?g|tiff?|bmp|webp|gif|jp2)$/i.test(f.name);
     if (m === 'stt') return STT_RE.test(f.name) || /^(audio|video)\//.test(f.type);
     if (m === 'md') return MD_RE.test(f.name);
+    if (m === 'av') return true;
+    if (m === 'db') return /\.(db|sqlite3?|db3|s3db|sl3)$/i.test(f.name);
     if (m === 'files') return fOp() !== 'extract' || /\.(zip|7z|tar|tgz|tbz2?|txz|gz|bz2|xz|rar)$/i.test(f.name);
     if (isPhotoish()) return IMG_RE.test(f.name) || f.type.startsWith('image/');
     if (m === 'qr') return qrKind() === 'doc' ? /\.(docx|md|markdown|html?|odt|rtf|doc|epub)$/i.test(f.name) : /\.(txt|csv|docx)$/i.test(f.name);
@@ -1663,6 +1708,8 @@ ul.files .up { width: 40px; height: 40px; }
     if (m === 'ocr') { ok = files.length > 0 && ocrLangs().length > 0; label = 'Распознать'; }
     if (m === 'stt') { ok = files.length > 0 && !!(caps && caps.engines.stt && caps.engines.stt.available); label = 'Распознать речь'; }
     if (m === 'md') { const e = (caps && caps.engines.mineru) || {}; ok = files.length > 0 && !!(qs('input[name=mdt]:checked').value === 'fast' ? e.basic : e.full); label = 'В Markdown'; }
+    if (m === 'av') { const e = (caps && caps.engines.av) || {}; ok = files.length > 0 && !!e.available && !!(e.db && e.db.ready); label = 'Проверить'; }
+    if (m === 'db') label = 'Показать';
     if (m === 'files') {
       label = { zip: 'Упаковать в ZIP', '7z': 'Упаковать в 7z', extract: 'Распаковать', hash: 'Посчитать суммы', rename: 'Переименовать' }[fOp()];
       if (fOp() === 'hash') ok = ok && qsa('input[name=falg]:checked').length > 0;
@@ -1718,6 +1765,82 @@ ul.files .up { width: 40px; height: 40px; }
   });
   addEventListener('dragover', e => e.preventDefault());
   addEventListener('drop', e => e.preventDefault());
+
+  /* ---------- колесо форматов (как в Filee): зажми Ctrl, перетащи файлы и брось на нужный формат ---------- */
+  const WHEEL = {
+    image: ['png', 'jpg', 'webp', 'pdf', 'gif', 'avif', 'bmp', 'tiff'],
+    audio: ['mp3', 'wav', 'flac', 'ogg', 'm4a', 'opus', 'aac'],
+    video: ['mp4', 'webm', 'mkv', 'mov', 'gif', 'mp3', 'wav'],
+    doc: ['docx', 'md', 'html', 'txt', 'epub', 'odt', 'rtf'],
+    pdf: ['png', 'jpg'],
+    unknown: ['png', 'jpg', 'pdf', 'mp3', 'mp4', 'docx', 'txt'],
+  };
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform || '');
+  const wheelKey = e => isMac ? e.altKey : e.ctrlKey;
+  const wheelEl = document.createElement('div'); wheelEl.id = 'wheel'; wheelEl.hidden = true; document.body.appendChild(wheelEl);
+  let wheelKinds = '', wheelTimer = 0;
+  const kindOfName = name => {
+    const ext = extOf(name);
+    if (ext === 'pdf') return 'pdf';
+    const cats = caps ? caps.categories : {};
+    for (const c of ['image', 'doc', 'video', 'audio']) if (cats[c] && cats[c].inputs.includes(ext)) return c;
+    return 'unknown';
+  };
+  const kindOfMime = t => !t ? 'unknown' : t === 'application/pdf' ? 'pdf' : t.startsWith('image/') ? 'image' : t.startsWith('audio/') ? 'audio'
+    : t.startsWith('video/') ? 'video' : /^text\/|word|opendocument\.text|rtf|epub/.test(t) ? 'doc' : 'unknown';
+  function wheelTargets(kinds) {
+    const list = [...new Set(kinds)];
+    if (list.length > 1) list.splice(0, list.length, ...list.filter(k => k !== 'unknown'));
+    if (list.length !== 1) return { kind: '', to: [] };      // файлы разных видов: общего формата нет
+    const kind = list[0], outs = caps ? (kind === 'pdf' ? ['png', 'jpg'] : [].concat(...['image', 'audio', 'video', 'doc'].map(c => caps.categories[c] ? caps.categories[c].outputs : []))) : [];
+    return { kind, to: WHEEL[kind].filter(x => outs.includes(x)) };
+  }
+  function showWheel(e) {
+    const dt = e.dataTransfer, kinds = [...(dt.items || [])].filter(i => i.kind === 'file').map(i => kindOfMime(i.type));
+    const key = kinds.join();
+    clearTimeout(wheelTimer); wheelTimer = setTimeout(hideWheel, 700);     // dragover идёт, пока файл над окном
+    if (!wheelEl.hidden && key === wheelKinds) return;
+    wheelKinds = key; wheelEl.hidden = false;
+    const { kind, to } = wheelTargets(kinds.length ? kinds : ['unknown']);
+    const R = 112, cx = Math.max(R + 40, Math.min(innerWidth - R - 40, e.clientX)), cy = Math.max(R + 40, Math.min(innerHeight - R - 40, e.clientY));
+    wheelEl.innerHTML = `<div class="hub" style="left:${cx}px;top:${cy}px">${kinds.length ? plural(kinds.length, ['файл', 'файла', 'файлов']) : 'файлы'}</div>` +
+      (to.length ? to.map((x, i) => { const a = -Math.PI / 2 + 2 * Math.PI * i / to.length;
+        return `<div class="wb" data-to="${x}" data-kind="${kind}" style="left:${cx + R * Math.cos(a)}px;top:${cy + R * Math.sin(a)}px">${x}</div>`; }).join('')
+        : '<div class="wmsg t-body-m">Файлы разных видов: брось файлы одного вида (например, только картинки)</div>');
+  }
+  function hideWheel() { clearTimeout(wheelTimer); wheelEl.hidden = true; wheelKinds = ''; }
+  addEventListener('dragover', e => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files') && wheelKey(e)) showWheel(e); else if (!wheelEl.hidden) hideWheel(); });
+  addEventListener('dragend', hideWheel);
+  addEventListener('dragover', e => { const b = e.target.closest && e.target.closest('.wb'); wheelEl.querySelectorAll('.wb.on').forEach(x => { if (x !== b) x.classList.remove('on'); }); if (b) b.classList.add('on'); }, true);
+  wheelEl.addEventListener('drop', e => {
+    e.preventDefault();
+    const b = e.target.closest('.wb'), list = [...e.dataTransfer.files];
+    hideWheel();
+    if (!b || !list.length) return;
+    const kinds = list.map(f => kindOfName(f.name)), t = wheelTargets(kinds);
+    if (!t.kind || !t.to.includes(b.dataset.to)) { statusEl.hidden = false; setStatus('<ul class="errs"><li>Эти файлы нельзя превратить в ' + esc(b.dataset.to.toUpperCase()) + '</li></ul>'); return; }
+    wheelRun(list, b.dataset.to, t.kind);
+  });
+  function wheelRun(list, to, kind) {
+    if (busy) return;
+    if (!statusEl.offsetParent) goMode(kind === 'pdf' ? 'pdf' : kind === 'unknown' ? 'image' : kind);     // результат должен быть на виду
+    busy = true; updateGo();
+    const fd = new FormData(); list.forEach(f => fd.append('files', f, f.name));
+    if (kind === 'pdf') { fd.append('format', to); fd.append('dpi', '150'); fd.append('quality', '90'); fd.append('all_pages', '1'); }
+    else { fd.append('to', to); fd.append('quality', '90'); fd.append('density', '150'); fd.append('keep_metadata', '1'); }
+    setStatus('<span class="t-body-m">Отправляю файлы…</span><div class="progress busy"><i></i></div>');
+    fetch(kind === 'pdf' ? '/api/convert' : '/api/universal', { method: 'POST', body: fd }).then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => {
+      if (!ok || d.error) { busy = false; updateGo(); setStatus(`<ul class="errs"><li>${esc(d.error || 'Сервер вернул ошибку')}</li></ul>`); return; }
+      if (d.task) { pollTask(d); return; }
+      busy = false; updateGo();
+      setStatus(`<div class="result"><span class="t-body-m">Готово: ${d.done} из ${d.total}, получилось файлов: ${d.files}.</span><a class="btn filled state" href="/api/download/${d.job}" download>Скачать ${esc(d.archive)}</a></div>` +
+        ((d.failed || []).length ? '<ul class="errs">' + d.failed.map(f => `<li><b>${esc(f.name)}</b>: ${esc(f.error)}</li>`).join('') + '</ul>' : ''));
+    }).catch(() => { busy = false; updateGo(); setStatus('<ul class="errs"><li>Не удалось связаться с сервером. Он запущен?</li></ul>'); });
+  }
+  if (!matchMedia('(pointer: coarse)').matches) {
+    const h = $('wheelHint'); h.hidden = false;
+    h.textContent = `Быстрее: зажми ${isMac ? 'Option' : 'Ctrl'}, перетащи файлы в окно и брось на нужный формат.`;
+  }
 
   /* ---------- настройки ---------- */
   const vector = ['svg', 'ps', 'eps'], noQuality = ['png', 'tiff', 'svg', 'ps', 'eps'], noGray = ['svg', 'ps', 'eps'];
@@ -1780,7 +1903,7 @@ ul.files .up { width: 40px; height: 40px; }
   function syncSettings() {
     const m = mode(), k = MODES[m].kind, uni = k === 'uni', topdf = k === 'topdf', photo = k === 'photo' || topdf, pdf = k === 'pdf';
     $('classicBox').hidden = isNew();
-    $('editBox').hidden = k !== 'edit'; $('pdftBox').hidden = k !== 'pdft'; if (k === 'pdft') syncPdft(); $('ocrBox').hidden = k !== 'ocr'; if (k === 'ocr') syncOcr(); $('sttBox').hidden = k !== 'stt'; if (k === 'stt') syncStt(); $('mdBox').hidden = k !== 'md'; if (k === 'md') syncMd(); $('filesBox').hidden = k !== 'files'; if (k === 'files') syncFiles(); $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
+    $('editBox').hidden = k !== 'edit'; $('pdftBox').hidden = k !== 'pdft'; if (k === 'pdft') syncPdft(); $('ocrBox').hidden = k !== 'ocr'; if (k === 'ocr') syncOcr(); $('sttBox').hidden = k !== 'stt'; if (k === 'stt') syncStt(); $('mdBox').hidden = k !== 'md'; if (k === 'md') syncMd(); $('avBox').hidden = k !== 'av'; if (k === 'av') syncAv(); $('dbBox').hidden = k !== 'db'; if (k === 'db') syncDb(); $('filesBox').hidden = k !== 'files'; if (k === 'files') syncFiles(); $('dlBox').hidden = k !== 'dl'; $('qrBox').hidden = k !== 'qr';
     if (isNew()) { if (k === 'edit') syncEdit(); if (k === 'dl') syncDl(); if (k === 'qr') syncQr(); return; }
     $('uniField').hidden = !uni; $('autoRow').hidden = !(uni && m !== 'doc');
     $('formatsField').hidden = !(pdf || k === 'photo');
@@ -1857,6 +1980,8 @@ ul.files .up { width: 40px; height: 40px; }
   function applyMode() {
     const m = mode(), k = MODES[m].kind;
     qs('input[name=mode][value=md]').closest('label').hidden = !(caps && caps.engines.mineru && caps.engines.mineru.supported && (caps.engines.mineru.local || caps.engines.mineru.basic));
+    qs('input[name=mode][value=db]').closest('label').hidden = !(caps && caps.engines.db && caps.engines.db.supported);
+    qs('input[name=mode][value=av]').closest('label').hidden = !(caps && caps.engines.av && caps.engines.av.supported && (caps.engines.av.available || caps.engines.av.local));
     qs('input[name=mode][value=reader]').closest('label').hidden = !(caps && caps.engines.reader && caps.engines.reader.local);    // читалка есть не везде
     $('title').textContent = MODES[m].title; $('subtitle').textContent = SUBS[m];
     const acc = { pdf: 'application/pdf,.pdf', pdft: 'application/pdf,.pdf', ocr: 'application/pdf,.pdf,image/*,.tif,.tiff,.jp2', md: 'application/pdf,.pdf,image/*,.docx,.doc,.rtf,.pptx,.ppt,.xlsx,.xls,.odt,.ods,.odp,.epub,.html,.htm,.mhtml,.csv,.tsv,.tif,.tiff,.jp2', stt: 'audio/*,video/*,.ogg,.oga,.opus,.amr,.m4a,.mkv', files: '', qr: '.txt,.csv,.docx', dl: '', edit: caps ? caps.categories.edit.inputs.map(e => '.' + e).join(',') : 'audio/*,video/*' }[m] || (isPhotoish() ? 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp' : (caps && caps.categories[m] ? caps.categories[m].inputs.map(e => '.' + e).join(',') : ''));
@@ -2000,6 +2125,8 @@ ul.files .up { width: 40px; height: 40px; }
       fd.append('srt', $('sttSrt').checked ? '1' : '0');
       fd.append('speakers', $('sttSpk').checked && !$('sttSpkRow').hidden ? $('sttSpkN').value : '0');
     }
+    else if (k === 'db') { url = '/api/db'; }
+    else if (k === 'av') { url = '/api/av'; fd.append('archives', $('avArchives').checked ? '1' : '0'); }
     else if (k === 'md') {
       url = '/api/md';
       fd.append('tier', qs('input[name=mdt]:checked').value); fd.append('images', $('mdImages').value);
@@ -2064,6 +2191,8 @@ ul.files .up { width: 40px; height: 40px; }
         html = `<div class="result"><span class="t-body-m">Готово: ${data.done} из ${data.total} фото, страниц A4: ${data.pages}.</span>${dl(single, single ? data.single_pdf : data.archive)}</div>`;
       } else if (k === 'qr') {
         html = data.done ? `<div class="result"><span class="t-body-m">Готово: ${data.done} из ${data.total} QR-кодов, в архиве ещё index.csv со списком.</span>${dl(false, data.archive)}</div>` : '';
+      } else if (k === 'db') {
+        showDb(data); return;
       } else if (k === 'uni') {
         const single = !!data.single_file;
         html = data.done ? `<div class="result"><span class="t-body-m">Готово: ${data.done} из ${data.total}.</span>${dl(single, single ? data.single_file : data.archive)}</div>` : '';
@@ -2130,6 +2259,13 @@ ul.files .up { width: 40px; height: 40px; }
       setTimeout(() => qsa('.stt-read').forEach(b => { b.onclick = () => openInReader(res.transcripts[+b.dataset.i].text, (res.transcripts[+b.dataset.i].name || 'голосовое').replace(/\.[^.]+$/, '') + '.md', b); }));
       if (caps && caps.engines.stt) { caps.engines.stt.models.forEach(x => { if (x.key === lastSttModel) x.downloaded = true; });
         if (caps.engines.stt.diarize && res.transcripts.some(t => t.speakers)) caps.engines.stt.diarize.downloaded = true; }
+    }
+    if (res.av) {
+      const a = res.av, bad = a.infected || [];
+      html += `<div class="result av-${bad.length ? 'bad' : 'ok'}"><span class="t-body-m"><b>${bad.length ? 'Найдено заражённых: ' + bad.length : 'Угроз не найдено'}</b>` +
+        ` · проверено ${plural(a.scanned, ['файл', 'файла', 'файлов'])}${a.db && a.db.updated ? ', базы от ' + new Date(a.db.updated * 1000).toLocaleDateString('ru-RU') : ''}.</span>` +
+        (bad.length ? '<ul class="names">' + bad.map(b => `<li><b>${esc(b.name)}</b>: ${esc(b.virus)}</li>`).join('') + '</ul>' +
+          '<span class="t-body-m">Файлы не тронуты. Не открывай их, а лучше удали.</span>' : '') + '</div>';
     }
     const errs = (d.failed || []).map(f => `<li><b>${esc(f.name)}</b>: ${esc(f.error)}</li>`);
     if (d.status === 'error' && !errs.length) errs.push(`<li>${esc(d.error)}</li>`);
@@ -2260,6 +2396,85 @@ ul.files .up { width: 40px; height: 40px; }
   $('mdInstBasic').onclick = () => mdInstall('basic');
   $('mdInstFull').onclick = () => mdInstall('full');
   $('mdBox').addEventListener('change', syncMd);
+
+  // проверка на вирусы: ClamAV и базы ставятся по запросу
+  function syncAv() {
+    const e = (caps && caps.engines.av) || {}, db = e.db || {}, busy = !$('avProg').hidden;
+    const age = db.updated ? Math.round((Date.now() / 1000 - db.updated) / 86400) : 0;
+    const txt = !e.available
+      ? (e.can_install && e.local ? 'ClamAV не установлен: приложение скачает его и базы вирусов одним нажатием.'
+        : e.hint ? `ClamAV не установлен. Поставь его системой: ${e.hint}` : 'ClamAV не установлен, а ставить его можно только на самом компьютере.')
+      : !db.ready ? 'ClamAV есть, но баз вирусов нет: скачай их (≈ 300 МБ, один раз).'
+        : `ClamAV готов, базы ${db.mb} МБ` + (age > 7 ? `, им ${age} дн.: лучше обновить.` : age >= 0 ? ', свежие.' : '.');
+    if (!busy) $('avEngineText').textContent = txt + (syncAv.note ? ' ' + syncAv.note : '');
+    const need = e.local && (e.available || e.can_install) && (!e.available || !db.ready || age > 7);
+    const upd = e.local && e.available && db.ready && !need;
+    $('avInstall').hidden = busy || !(need || upd);
+    $('avInstall').textContent = !e.available ? 'Поставить ClamAV и базы' : !db.ready ? 'Скачать базы вирусов' : 'Обновить базы';
+    updateGo();
+  }
+  // установка движка с полосой: ui = {txt, prog, cancel, btn}, after(note) вызывается, когда всё кончилось
+  function installUi(url, ui, after) {
+    const { txt, prog, cancel, btn } = ui;
+    prog.hidden = false; cancel.hidden = false; btn.hidden = true;
+    txt.textContent = 'Начинаю…'; prog.className = 'progress busy'; prog.innerHTML = '<i></i>';
+    const finish = note => { prog.hidden = true; cancel.hidden = true; fetch('/api/formats').then(r => r.json()).then(x => { caps = x; after(note || ''); }).catch(() => after(note || '')); };
+    fetch(url, { method: 'POST' }).then(r => r.json()).then(t => {
+      if (t.error) return finish(t.error);
+      cancel.onclick = () => { cancel.disabled = true; fetch('/api/task/' + t.task + '/cancel', { method: 'POST' }); };
+      const tick = () => fetch('/api/task/' + t.task).then(r => r.json()).then(d => {
+        if (['queued', 'running'].includes(d.status)) {
+          const p = d.progress == null ? null : Math.round(d.progress * 100);
+          prog.className = 'progress' + (p == null ? ' busy' : ''); prog.innerHTML = `<i style="width:${p ?? 0}%"></i>`; txt.textContent = d.message + (p == null ? '' : ` · ${p}%`);
+          setTimeout(tick, 700); return;
+        }
+        cancel.disabled = false;
+        finish(d.status === 'done' ? '' : d.status === 'cancelled' ? 'Остановлено.' : 'Не получилось: ' + (d.error || d.message));
+      }).catch(() => finish('Нет связи с приложением.'));
+      tick();
+    }).catch(() => finish('Нет связи с приложением.'));
+  }
+  function avInstall() {
+    syncAv.note = '';
+    installUi('/api/av/install', { txt: $('avEngineText'), prog: $('avProg'), cancel: $('avCancel'), btn: $('avInstall') }, note => { syncAv.note = note; syncAv(); });
+  }
+  $('avInstall').onclick = avInstall;
+
+  // базы данных: просмотр SQLite и DBeaver по требованию
+  function syncDb() {
+    const e = (caps && caps.engines.db) || {}, busy = !$('dbProg').hidden;
+    if (!busy) $('dbEngineText').textContent = (e.available ? 'DBeaver найден: любую базу ниже можно открыть в нём.'
+      : e.can_install && e.local ? 'DBeaver не установлен. Для просмотра он не нужен, а для правки и запросов его можно скачать одним нажатием.'
+        : e.hint ? `DBeaver не установлен. Для просмотра он не нужен; для правки и запросов поставь его системой: ${e.hint}` : 'DBeaver не установлен. Для просмотра он не нужен.') + (syncDb.note ? ' ' + syncDb.note : '');
+    $('dbInstall').hidden = busy || e.available || !(e.can_install && e.local);
+    updateGo();
+  }
+  $('dbInstall').onclick = () => { syncDb.note = ''; installUi('/api/engines/install/dbeaver', { txt: $('dbEngineText'), prog: $('dbProg'), cancel: $('dbCancel'), btn: $('dbInstall') }, note => { syncDb.note = note; syncDb(); }); };
+  function showDb(data) {
+    const e = (caps && caps.engines.db) || {}, canOpen = e.available && e.local;
+    const html = data.files.map((f, i) => f.error ? `<ul class="errs"><li><b>${esc(f.name)}</b>: ${esc(f.error)}</li></ul>` :
+      `<div class="result db-file" data-job="${data.job}" data-file="${esc(f.name)}"><div class="stt-head"><b>${esc(f.name)}</b><span class="muted">${fmtSize(f.size)} · таблиц: ${f.tables.length}</span>` +
+      `<a class="btn text state" href="/api/file/${data.job}/${encodeURIComponent(f.name)}" download>Скачать копию</a>` +
+      (canOpen ? '<button class="btn tonal state db-open" type="button">Открыть в DBeaver</button>' : '') + '</div>' +
+      `<div class="chips">${f.tables.map(t => `<button class="btn tonal state db-table" type="button" data-t="${esc(t.name)}">${esc(t.name)}<span class="muted"> · ${t.rows == null ? 'вид' : t.rows}</span></button>`).join('') || '<span class="muted">Таблиц нет</span>'}</div>` +
+      '<div class="db-rows"></div></div>').join('');
+    busy = false; updateGo(); setStatus(html);
+    qsa('.db-file').forEach(box => {
+      const job = box.dataset.job, file = box.dataset.file, out = box.querySelector('.db-rows');
+      box.querySelectorAll('.db-table').forEach(b => b.onclick = () => {
+        fetch(`/api/db/rows?job=${job}&file=${encodeURIComponent(file)}&table=${encodeURIComponent(b.dataset.t)}`).then(r => r.json()).then(d => {
+          if (d.error) { out.innerHTML = `<ul class="errs"><li>${esc(d.error)}</li></ul>`; return; }
+          const cell = v => v == null ? '<span class="muted">NULL</span>' : esc(String(v).slice(0, 200));
+          out.innerHTML = `<div class="hashes"><table><tr>${d.columns.map(c => `<th>${esc(c)}</th>`).join('')}</tr>` +
+            d.rows.map(r => '<tr>' + r.map(v => `<td>${cell(v)}</td>`).join('') + '</tr>').join('') + '</table></div>' +
+            `<span class="muted">Показано ${d.rows.length}${d.total != null ? ' из ' + d.total : ''}</span>`;
+        });
+      });
+      const op = box.querySelector('.db-open');
+      if (op) op.onclick = () => { op.disabled = true; const fd = new FormData(); fd.append('job', job); fd.append('file', file);
+        fetch('/api/db/open', { method: 'POST', body: fd }).then(r => r.json()).then(d => { op.disabled = false; op.textContent = d.error ? d.error : 'Открыто'; }).catch(() => { op.disabled = false; }); };
+    });
+  }
 
   function syncStt() {
     const c = caps && caps.engines.stt;

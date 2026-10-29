@@ -78,6 +78,18 @@ CATALOG = {
         "url": "https://github.com/Y2Z/monolith/releases/latest/download/{asset}", "asset_fn": "_monolith_asset",
         "for": "сохранить страницу сайта одним файлом",
     },
+    "clamav": {
+        # открытый антивирус (GPL-2.0): портативная сборка для Windows, базы вирусов качает freshclam (см. av.py)
+        "title": "ClamAV", "size": "≈ 70 МБ + базы ≈ 300 МБ", "exe": ["clamscan.exe", "freshclam.exe"],
+        "repo": "Cisco-Talos/clamav", "asset": r"\.win\.x64\.zip$",
+        "for": "проверка файлов на вирусы",
+    },
+    "dbeaver": {
+        # универсальный клиент баз данных (Apache-2.0); портативная сборка с Java внутри, только Windows (см. dbtools.py)
+        "title": "DBeaver", "size": "≈ 130 МБ", "exe": ["dbeaver.exe"],
+        "repo": "dbeaver/dbeaver", "asset": r"^dbeaver-ce-[\d.]+-win32\.win32\.x86_64\.zip$",
+        "for": "открыть базу данных",
+    },
     "ytdlp": {
         "title": "свежий yt-dlp", "size": "≈ 3 МБ", "exe": ["yt-dlp.zip"],
         "url": "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp",

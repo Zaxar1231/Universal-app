@@ -2487,3 +2487,210 @@ def test_offline_absent_is_noop(tmp_path, monkeypatch):
     monkeypatch.setattr(offline, "bundle_dir", lambda: None)
     monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
     assert offline.seed() == [] and offline.pending() == []
+
+
+# ---------- проверка на вирусы (ClamAV) ----------
+
+EICAR = rb"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+needs_clam = pytest.mark.skipif(not (shutil.which("clamscan") and shutil.which("freshclam")), reason="ClamAV не установлен")
+
+
+def _home_with_test_db(tmp_path, monkeypatch):
+    """Базы вирусов из одной сигнатуры (хеш EICAR): настоящие весят 300 МБ и качаются из сети."""
+    import hashlib
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
+    import av
+    d = av.db_dir()
+    d.mkdir(parents=True)
+    (d / "test.hdb").write_text(f"{hashlib.md5(EICAR).hexdigest()}:{len(EICAR)}:Eicar-Test-Signature\n")
+    return av
+
+
+@needs_clam
+def test_av_scan_finds_virus_and_keeps_clean(tmp_path, monkeypatch):
+    av = _home_with_test_db(tmp_path, monkeypatch)
+    job = tmp_path / "job"
+    (job / "in").mkdir(parents=True)
+    (job / "out").mkdir()
+    a, b = job / "in" / "письмо.txt", job / "in" / "вирус.com"
+    a.write_text("привет", encoding="utf-8")
+    b.write_bytes(EICAR)
+    from tasks import Task
+    t = Task("x", "av", job, "av")
+    av.run_av_task(t, [(a, "письмо"), (b, "вирус")], av.read_opts({}))
+    r = t.result["av"]
+    assert r["scanned"] == 2 and r["clean"] == 1
+    assert [i["virus"].split(".")[0] for i in r["infected"]] == ["Eicar-Test-Signature"]
+    assert r["infected"][0]["name"] == "вирус.com"            # показываем своё имя, а не служебное f0002
+    assert b.read_bytes() == EICAR and a.exists()              # ничего не удаляем и не меняем
+    assert not (job / "scan").exists()
+
+
+@needs_clam
+def test_av_route_end_to_end(tmp_path, monkeypatch):
+    av = _home_with_test_db(tmp_path, monkeypatch)
+    import app as webapp
+    c = webapp.app.test_client()
+    st = c.get("/api/av/engine").get_json()
+    assert st["available"] and st["db"]["ready"] and st["supported"]
+    assert c.post("/api/av", data={}).status_code == 400
+    r = c.post("/api/av", data={"files": [(io.BytesIO(EICAR), "eicar.txt"), (io.BytesIO(b"hello"), "ok.txt")]},
+               content_type="multipart/form-data")
+    assert r.status_code == 200, r.get_json()
+    d = wait_task(c, r.get_json()["task"])
+    assert d["status"] == "done", d
+    assert d["result"]["av"]["infected"][0]["name"] == "eicar.txt" and d["result"]["av"]["clean"] == 1
+
+
+def test_av_needs_engine_and_db(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
+    import av
+    import app as webapp
+    monkeypatch.setattr(av, "clamscan", lambda: None)
+    monkeypatch.setattr(av, "SYSTEM_DBS", ())
+    c = webapp.app.test_client()
+    r = c.post("/api/av", data={"files": [(io.BytesIO(b"x"), "a.txt")]}, content_type="multipart/form-data")
+    assert r.status_code == 400 and "ClamAV" in r.get_json()["error"]
+    assert c.get("/api/av/engine").get_json()["db"]["ready"] is False
+    assert c.get("/api/formats").get_json()["engines"]["av"]["available"] is False
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="поддельный freshclam — shell-скрипт")
+def test_av_update_db_with_fake_freshclam(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
+    import av
+    from tasks import Task
+    fake = tmp_path / "freshclam"
+    fake.write_text('#!/bin/sh\nfor a in "$@"; do case $a in --datadir=*) d=${a#--datadir=};; --config-file=*) c=${a#--config-file=};; esac; done\n'
+                    'grep -q "^DatabaseMirror database.clamav.net" "$c" || exit 3\n'
+                    'echo "Downloading daily.cvd [100%]"; echo "x" > "$d/daily.cvd"\n')
+    fake.chmod(0o755)
+    monkeypatch.setattr(av, "freshclam", lambda: str(fake))
+    job = tmp_path / "j"
+    job.mkdir()
+    t = Task("y", "avinstall", job, "av")
+    av.update_db(t)
+    assert av.db_info()["ready"] and (av.db_dir() / "daily.cvd").exists()
+    bad = tmp_path / "freshclam2"
+    bad.write_text("#!/bin/sh\necho 'ERROR: Can not reach database.clamav.net'\nexit 62\n")
+    bad.chmod(0o755)
+    (av.db_dir() / "daily.cvd").unlink()
+    monkeypatch.setattr(av, "freshclam", lambda: str(bad))
+    with pytest.raises(av.AvError) as e:
+        av.update_db(t)
+    assert "Не получилось скачать базы" in str(e.value) and "database.clamav.net" in str(e.value)
+
+
+@needs_clam
+@pytest.mark.skipif(not os.environ.get("AV_REAL"), reason="настоящие базы вирусов: AV_REAL=1 (качает ≈ 300 МБ)")
+def test_av_real_database_and_eicar(tmp_path, monkeypatch):
+    """freshclam скачивает настоящие базы нашей командой, и по ним находится тестовый вирус EICAR."""
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
+    import av
+    from tasks import Task
+    job = tmp_path / "job"
+    (job / "in").mkdir(parents=True)
+    (job / "out").mkdir()
+    t0 = Task("u", "avinstall", job, "av")
+    av.update_db(t0)
+    info = av.db_info()
+    assert info["ready"] and info["mb"] > 100, info
+    a, b = job / "in" / "a.txt", job / "in" / "eicar.com"
+    a.write_text("hello")
+    b.write_bytes(EICAR)
+    t = Task("v", "av", job, "av")
+    av.run_av_task(t, [(a, "a"), (b, "eicar")], av.read_opts({}))
+    r = t.result["av"]
+    assert r["clean"] == 1 and len(r["infected"]) == 1 and "EICAR" in r["infected"][0]["virus"].upper()
+
+
+# ---------- базы данных: просмотр SQLite и DBeaver ----------
+
+def _make_db(path):
+    import sqlite3
+    con = sqlite3.connect(path)
+    con.execute('create table "люди и ""кавычки""" (id integer primary key, имя text, фото blob)')
+    con.executemany('insert into "люди и ""кавычки""" (имя, фото) values (?, ?)', [("Аня", b"\x00\x01\x02"), ("Боря", None)] * 30)
+    con.execute("create table empty (a)")
+    con.execute('create view v as select имя from "люди и ""кавычки"""')
+    con.commit()
+    con.close()
+
+
+def test_db_inspect_and_rows(tmp_path):
+    import dbtools
+    f = tmp_path / "t.db"
+    _make_db(f)
+    info = dbtools.inspect(f)
+    names = {t["name"]: t for t in info["tables"]}
+    assert names['люди и "кавычки"']["rows"] == 60 and names['люди и "кавычки"']["columns"] == ["id", "имя", "фото"]
+    assert names["empty"]["rows"] == 0 and names["v"]["view"] and names["v"]["rows"] is None
+    r = dbtools.rows(f, 'люди и "кавычки"')
+    assert len(r["rows"]) == dbtools.PREVIEW_ROWS and r["total"] == 60
+    assert r["rows"][0][1] == "Аня" and r["rows"][0][2] == "<3 байт>" and r["rows"][1][2] is None
+    with pytest.raises(dbtools.DbError):
+        dbtools.rows(f, "нет такой")
+    junk = tmp_path / "x.db"
+    junk.write_bytes(b"not a database at all")
+    with pytest.raises(dbtools.DbError):
+        dbtools.inspect(junk)
+    # смотрим только на чтение: файл не меняется
+    before = f.read_bytes()
+    dbtools.inspect(f); dbtools.rows(f, "empty")
+    assert f.read_bytes() == before
+
+
+def test_db_routes_and_open_in_dbeaver(tmp_path, monkeypatch):
+    import app as webapp
+    import dbtools
+    src = tmp_path / "my data.sqlite3"
+    _make_db(src)
+    c = webapp.app.test_client()
+    assert c.post("/api/db", data={"files": [(io.BytesIO(b"x"), "a.txt")]}, content_type="multipart/form-data").status_code == 400
+    r = c.post("/api/db", data={"files": [(io.BytesIO(src.read_bytes()), "my data.sqlite3"), (io.BytesIO("плохой файл".encode()), "bad.db")]},
+               content_type="multipart/form-data")
+    d = r.get_json()
+    assert r.status_code == 200 and d["files"][0]["tables"] and "error" in d["files"][1]
+    job, name = d["job"], d["files"][0]["name"]
+    assert name.endswith(".sqlite3")                                  # расширение .sqlite3 не превращается в .bin
+    rows = c.get("/api/db/rows", query_string={"job": job, "file": name, "table": "empty"}).get_json()
+    assert rows["total"] == 0 and rows["columns"] == ["a"]
+    assert c.get("/api/db/rows", query_string={"job": job, "file": "../x", "table": "t"}).status_code == 404
+    assert c.get(f"/api/file/{job}/{name}").status_code == 200        # копию можно скачать
+    # DBeaver нет: понятная ошибка
+    monkeypatch.setattr(dbtools, "dbeaver_cmd", lambda: None)
+    assert "не установлен" in c.post("/api/db/open", data={"job": job, "file": name}).get_json()["error"]
+    if sys.platform != "win32":
+        log = tmp_path / "args.txt"
+        fake = tmp_path / "dbeaver"
+        fake.write_text(f'#!/bin/sh\nfor a in "$@"; do echo "$a"; done > "{log}"\n')
+        fake.chmod(0o755)
+        monkeypatch.setattr(dbtools, "dbeaver_cmd", lambda: [str(fake)])
+        assert c.post("/api/db/open", data={"job": job, "file": name}).get_json() == {"ok": True}
+        for _ in range(50):
+            if log.exists() and log.read_text():
+                break
+            time.sleep(0.1)
+        args = log.read_text().splitlines()
+        assert args[0] == "-con" and "driver=sqlite_jdbc" in args[1] and f"database={webapp.WORK_ROOT.resolve()}" in args[1] and name in args[1]
+        assert "connect=true" in args[1]
+
+
+def test_db_dbeaver_engine_entry():
+    import engines
+    spec = engines.CATALOG["dbeaver"]
+    assert spec["exe"] == ["dbeaver.exe"] and "dbeaver" in spec["repo"]
+    import re
+    assert re.search(spec["asset"], "dbeaver-ce-24.3.0-win32.win32.x86_64.zip")
+    assert not re.search(spec["asset"], "dbeaver-ce-24.3.0-linux.gtk.x86_64.tar.gz")
+    assert "dbeaver" not in engines.AUTO and "clamav" not in engines.AUTO
+
+
+def test_db_connection_arg_matches_dbeaver_spec():
+    """Формат -con сверен с исходниками DBeaver: драйвер sqlite_jdbc, параметры через |, обратный слэш удваивается."""
+    import dbtools
+    from pathlib import PureWindowsPath
+    arg = dbtools.connection_arg(PureWindowsPath(r"C:\Users\Аня\jobs\x.db"), "x.db")
+    assert arg == r"name=Universal: x.db|driver=sqlite_jdbc|database=C:\\Users\\Аня\\jobs\\x.db|connect=true|openConsole=false"
+    with pytest.raises(dbtools.DbError):
+        dbtools.connection_arg("/tmp/a|b.db", "a")
