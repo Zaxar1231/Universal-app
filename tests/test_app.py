@@ -39,6 +39,16 @@ def streams(path):
     return json.loads(res.stdout)
 
 
+@pytest.fixture(autouse=True)
+def _keep_path_clean():
+    """Установка движков (engines._register) дописывает папку в PATH процесса. Папки временные, и поддельный magick.exe одного
+    теста перехватывал бы настоящий в следующих (на Windows это WinError 216), поэтому PATH после каждого теста возвращается."""
+    saved = os.environ.get("PATH")
+    yield
+    if saved is not None:
+        os.environ["PATH"] = saved
+
+
 @pytest.fixture(scope="session")
 def media(tmp_path_factory):
     d = tmp_path_factory.mktemp("media")
@@ -2579,3 +2589,260 @@ def test_db_connection_arg_matches_dbeaver_spec():
     assert arg == r"name=Universal: x.db|driver=sqlite_jdbc|database=C:\\Users\\Аня\\jobs\\x.db|connect=true|openConsole=false"
     with pytest.raises(dbtools.DbError):
         dbtools.connection_arg("/tmp/a|b.db", "a")
+
+
+# ---------- запуск окна: заставка, потом приложение ----------
+
+class _FakeWindow:
+    def __init__(self, html):
+        self.html, self.loaded, self.destroyed, self.said = html, [], False, []
+
+    def load_url(self, url):
+        self.loaded.append(url)
+
+    def evaluate_js(self, js):
+        self.said.append(js)
+
+    def destroy(self):
+        self.destroyed = True
+
+
+def _fake_webview(monkeypatch, order):
+    import types
+    wv = types.SimpleNamespace(settings={}, windows=[])
+
+    def create_window(title, url=None, html=None, js_api=None, **kw):
+        order.append("окно")
+        wv.window = _FakeWindow(html)
+        return wv.window
+
+    def start(func=None, **kw):
+        order.append("start")
+        if func:
+            func()                      # настоящий pywebview запускает её в потоке, когда окно готово
+    wv.create_window, wv.start = create_window, start
+    monkeypatch.setitem(sys.modules, "webview", wv)
+    return wv
+
+
+def test_window_shows_splash_before_the_heavy_boot(tmp_path, monkeypatch):
+    import desktop
+    order, stopped = [], []
+
+    class Srv:
+        def shutdown(self):
+            stopped.append(1)
+
+    def boot(say=None):
+        order.append("загрузка")
+        say("Раскладываю набор: 1 из 2")
+        return object(), Srv(), "http://127.0.0.1:47615/"
+    monkeypatch.setattr(desktop, "_boot", boot)
+    wv = _fake_webview(monkeypatch, order)
+    desktop._run_window(tmp_path)
+    assert order == ["окно", "start", "загрузка"]                    # окно со заставкой раньше тяжёлой загрузки
+    assert "Universal" in wv.window.html and 'id="m"' in wv.window.html
+    assert wv.window.loaded == ["http://127.0.0.1:47615/"]           # потом в него подставляется приложение
+    assert any("Раскладываю набор" in js for js in wv.window.said)    # сообщения идут на заставку
+    assert stopped == [1]                                             # сервер закрывается вместе с окном
+
+
+def test_window_boot_error_closes_splash_and_is_reported(tmp_path, monkeypatch):
+    import desktop
+
+    def boot(say=None):
+        raise RuntimeError("нет места на диске")
+    monkeypatch.setattr(desktop, "_boot", boot)
+    wv = _fake_webview(monkeypatch, [])
+    with pytest.raises(RuntimeError, match="нет места"):
+        desktop._run_window(tmp_path)
+    assert wv.window.destroyed and not wv.window.loaded               # заставка не зависает, причина доходит до _crash
+
+
+def test_offline_seed_reports_progress(tmp_path, monkeypatch):
+    import offline
+    b = _fake_bundle(tmp_path / "app")
+    monkeypatch.setattr(offline, "bundle_dir", lambda: b)
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path / "home"))
+    steps = []
+    offline.seed(lambda i, n, name: steps.append((i, n)))
+    assert steps == [(1, 3), (2, 3), (3, 3)]
+
+
+# ---------- скорость на слабых ПК ----------
+
+def test_perf_machine_profile_and_thread_budget(monkeypatch):
+    import perf
+    monkeypatch.setattr(perf, "_machine", {"cores": 2, "ram_mb": 3900, "slow": True})
+    assert perf.slow() and perf.default_preset() == "veryfast" and perf.whisper_beam() == 1
+    assert perf.heavy_workers() == 1 and perf.split_threads(2) == 1
+    monkeypatch.setattr(perf, "_machine", {"cores": 8, "ram_mb": 16000, "slow": False})
+    assert not perf.slow() and perf.default_preset() == "medium" and perf.whisper_beam() == 5
+    assert perf.heavy_workers() == 2 and perf.split_threads(4) == 2
+    monkeypatch.setenv("UNIVERSAL_SLOW", "1")
+    monkeypatch.setattr(perf, "_machine", None)
+    assert perf.machine()["slow"]
+    monkeypatch.setenv("UNIVERSAL_SLOW", "0")
+    monkeypatch.setattr(perf, "_machine", None)
+    assert not perf.machine()["slow"]
+    monkeypatch.setattr(perf, "_machine", None)
+
+
+def test_perf_thread_limit_goes_to_child_processes():
+    import perf
+    perf.set_threads(None)
+    assert perf.child_env() is None
+    perf.set_threads(2)
+    env = perf.child_env()
+    perf.set_threads(None)
+    assert env["MAGICK_THREAD_LIMIT"] == "2" and env["OMP_NUM_THREADS"] == "2"
+
+
+def test_perf_detect_tests_each_encoder_and_remembers(tmp_path, monkeypatch):
+    import perf
+    monkeypatch.setenv("UNIVERSAL_HOME", str(tmp_path))
+    monkeypatch.delenv("UNIVERSAL_HW", raising=False)
+    monkeypatch.setattr(perf, "_hw", None)
+    monkeypatch.setattr(perf, "_ffmpeg", lambda: sys.executable)
+    monkeypatch.setattr(perf, "_platform", lambda: "win32")
+    tried = []
+    monkeypatch.setattr(perf, "_encoders", lambda f: {"h264_nvenc", "h264_qsv", "hevc_qsv", "hevc_amf"})
+    monkeypatch.setattr(perf, "_works", lambda f, enc, args: tried.append(enc) or enc in ("h264_qsv", "hevc_amf"))
+    found = perf.detect()
+    assert found["h264"]["encoder"] == "h264_qsv" and found["h265"]["encoder"] == "hevc_amf"   # NVENC не открылся: берём следующий
+    assert tried == ["h264_nvenc", "h264_qsv", "hevc_qsv", "hevc_amf"] or "h264_nvenc" in tried
+    q = perf.hw_args("h264", quality=23)
+    assert q[:2] == ["-c:v", "h264_qsv"] and "23" in q and "-global_quality" in q
+    b = perf.hw_args("h264", kbps=1500)
+    assert "-b:v" in b and "1500k" in b
+    assert perf.hw_args("av1") is None
+    # второй запуск берёт запомненное и не пробует заново
+    monkeypatch.setattr(perf, "_hw", None)
+    tried.clear()
+    assert perf.detect()["h264"]["encoder"] == "h264_qsv" and tried == []
+    monkeypatch.setattr(perf, "_hw", None)
+
+
+def test_perf_disabled_by_env(monkeypatch):
+    import perf
+    monkeypatch.setenv("UNIVERSAL_HW", "0")
+    monkeypatch.setattr(perf, "_hw", None)
+    assert perf.detect(force=True) == {} and perf.hw_args("h264") is None
+    monkeypatch.setattr(perf, "_hw", None)
+
+
+def test_hw_variant_replaces_x264_settings():
+    import perf
+    import converters as c
+    base = ["ffmpeg", "-i", "a.mp4", "-c:v", "libx264", "-c:a", "aac", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "23", "-b:a", "128k", "o.mp4"]
+    perf._hw = {"h264": {"label": "T", "encoder": "h264_nvenc", "q": ["-preset", "p4", "-cq", "{q}"], "b": ["-b:v", "{b}k"]}}
+    try:
+        v = c._hw_variant(base)
+    finally:
+        perf._hw = None
+    assert v == ["ffmpeg", "-i", "a.mp4", "-c:v", "h264_nvenc", "-preset", "p4", "-cq", "23", "-c:a", "aac", "-pix_fmt", "yuv420p", "-b:a", "128k", "o.mp4"]
+    assert c._hw_variant(["ffmpeg", "-c:v", "libvpx", "o.webm"]) is None
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or "libx264" not in __import__("editor").encoders(), reason="нужен ffmpeg с libx264")
+def test_video_uses_hw_encoder_and_falls_back_to_cpu(tmp_path):
+    """«Видеокарта» подменена libx264 (настоящей у CI нет): кодирование идёт по её ветке; сломанная видеокарта даёт тот же результат процессором."""
+    import perf
+    import converters as c
+    src = tmp_path / "in.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25:duration=2", "-pix_fmt", "yuv420p", str(src)], check=True)
+
+    def codec(p):
+        return subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", str(p)],
+                              capture_output=True, text=True).stdout.strip()
+    try:
+        perf._hw = {"h264": {"label": "T", "encoder": "libx264", "q": ["-preset", "ultrafast", "-crf", "{q}"], "b": ["-b:v", "{b}k"]}}
+        out = c.convert_media(src, tmp_path, "good", "mp4")
+        assert out.exists() and codec(out) == "h264"
+        perf._hw = {"h264": {"label": "T", "encoder": "h264_нет_такого", "q": ["-q", "{q}"], "b": ["-b:v", "{b}k"]}}
+        out = c.convert_media(src, tmp_path, "fallback", "mp4")
+        assert out.exists() and out.stat().st_size > 0 and codec(out) == "h264"
+        out = c.convert_media(src, tmp_path, "nohw", "mp4", hw=False)
+        assert out.exists()
+    finally:
+        perf._hw = None
+
+
+@needs_ffmpeg
+def test_editor_uses_hw_encoder_and_falls_back(media, tmp_path):
+    import perf
+    try:
+        perf._hw = {"h264": {"label": "T", "encoder": "libx264", "q": ["-preset", "ultrafast", "-crf", "{q}"], "b": ["-b:v", "{b}k"]}}
+        out = editor.edit_file(media / "a.mp4", tmp_path, "hw", opts(out="mp4", vcodec="h264"))
+        assert out.exists() and out.stat().st_size > 0
+        out = editor.edit_file(media / "a.mp4", tmp_path, "hw_size", opts(out="mp4", vcodec="h264", target_mb="1"))
+        assert out.exists()
+        perf._hw = {"h264": {"label": "T", "encoder": "h264_нет_такого", "q": ["-q", "{q}"], "b": ["-b:v", "{b}k"]}}
+        out = editor.edit_file(media / "a.mp4", tmp_path, "broken", opts(out="mp4", vcodec="h264"))
+        assert out.exists() and out.stat().st_size > 0                  # сломанная видеокарта: тот же результат процессором
+        out = editor.edit_file(media / "a.mp4", tmp_path, "off", opts(out="mp4", vcodec="h264", hw="0"))
+        assert out.exists()
+    finally:
+        perf._hw = None
+
+
+# ---------- файлы по пути (без копирования через браузер) ----------
+
+def test_paths_are_refused_without_the_window_token(tmp_path, monkeypatch):
+    import app as webapp
+    src = tmp_path / "a.png"
+    from PIL import Image
+    Image.new("RGB", (40, 30), (200, 20, 20)).save(src)
+    c = webapp.app.test_client()
+    data = {"to": "jpg", "paths": str(src)}
+    monkeypatch.delenv("UNIVERSAL_DESKTOP", raising=False)
+    assert c.post("/api/universal", data=data, headers={"X-Universal-Token": webapp.LOCAL_TOKEN}).status_code == 403   # не настольная версия
+    monkeypatch.setenv("UNIVERSAL_DESKTOP", "1")
+    assert c.post("/api/universal", data=data).status_code == 403                                                        # нет токена (чужой сайт)
+    assert c.post("/api/universal", data=data, headers={"X-Universal-Token": "x" * 32}).status_code == 403              # неверный токен
+    assert c.post("/api/universal", data=data, headers={"X-Universal-Token": webapp.LOCAL_TOKEN},
+                  environ_overrides={"REMOTE_ADDR": "192.168.1.5"}).status_code == 403                                  # не этот компьютер
+
+
+def test_paths_convert_without_copying_and_never_touch_the_original(tmp_path, monkeypatch):
+    import app as webapp
+    from PIL import Image
+    monkeypatch.setenv("UNIVERSAL_DESKTOP", "1")
+    src = tmp_path / "фото.png"
+    Image.new("RGB", (80, 60), (10, 200, 30)).save(src)
+    before = src.read_bytes()
+    c = webapp.app.test_client()
+    h = {"X-Universal-Token": webapp.LOCAL_TOKEN}
+    assert c.post("/api/universal", data={"to": "jpg", "paths": "relative/a.png"}, headers=h).status_code == 400    # только абсолютные пути
+    assert c.post("/api/universal", data={"to": "jpg", "paths": str(tmp_path / "нет.png")}, headers=h).status_code == 400
+    r = c.post("/api/universal", data={"to": "jpg", "paths": str(src)}, headers=h)
+    assert r.status_code == 200, r.get_data(as_text=True)
+    d = wait_task(c, r.get_json()["task"])
+    assert d["status"] == "done" and d["done"] == 1, d
+    assert src.exists() and src.read_bytes() == before                   # оригинал на месте и не изменился
+    # вместе с загруженным браузером файлом
+    r = c.post("/api/universal", data={"to": "jpg", "paths": str(src), "files": (io.BytesIO(before), "второй.png")},
+               headers=h, content_type="multipart/form-data")
+    d = wait_task(c, r.get_json()["task"])
+    assert d["status"] == "done" and d["done"] == 2
+
+
+def test_local_file_links_instead_of_copying(tmp_path):
+    import app as webapp
+    src = tmp_path / "big.bin"
+    src.write_bytes(b"x" * 1000)
+    dst = tmp_path / "in.bin"
+    webapp.LocalFile(str(src)).save(dst)
+    assert dst.read_bytes() == src.read_bytes()
+    if hasattr(os, "link"):
+        assert os.path.samefile(src, dst) or dst.stat().st_ino != src.stat().st_ino   # ссылка, а если диски разные, то копия
+
+
+def test_page_gets_token_only_in_the_desktop_window(monkeypatch):
+    import app as webapp
+    c = webapp.app.test_client()
+    monkeypatch.delenv("UNIVERSAL_DESKTOP", raising=False)
+    assert webapp.LOCAL_TOKEN not in c.get("/").get_data(as_text=True)
+    monkeypatch.setenv("UNIVERSAL_DESKTOP", "1")
+    assert webapp.LOCAL_TOKEN in c.get("/").get_data(as_text=True)
+    assert webapp.LOCAL_TOKEN not in c.get("/", environ_overrides={"REMOTE_ADDR": "192.168.1.5"}).get_data(as_text=True)   # телефон по сети

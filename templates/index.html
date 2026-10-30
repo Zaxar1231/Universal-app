@@ -735,6 +735,9 @@ ul.files .up { width: 40px; height: 40px; }
         <label class="sw" id="metaRow" hidden><span class="txt"><span class="t-body-m">Сохранять метаданные</span><span class="hint">Теги, обложка, EXIF</span></span>
           <input type="checkbox" id="keepMeta" checked><span class="track"></span></label>
 
+        <label class="sw" id="hwRow" hidden><span class="txt"><span class="t-body-m">Кодировать видеокартой</span><span class="hint hw-hint"></span></span>
+          <input type="checkbox" class="hw-sw" id="hwUni" checked><span class="track"></span></label>
+
         <label class="tf" id="nameRow" hidden><span>Имя результата</span>
           <input type="text" id="nameTpl" value="%name%" spellcheck="false" autocomplete="off"></label>
         <p class="hint" id="nameHint" hidden style="margin-top:-16px">%name% заменяется на имя исходного файла, например VERT_%name%.</p>
@@ -1027,6 +1030,8 @@ ul.files .up { width: 40px; height: 40px; }
               <label class="tf"><span>Видеокодек</span><select id="eCodec"><option value="auto">Авто</option><option value="h264">H.264 (везде)</option><option value="h265">H.265 (меньше)</option><option value="vp9">VP9</option><option value="av1">AV1 (самый лёгкий)</option></select></label>
               <label class="tf"><span>Скорость сжатия</span><select id="ePreset"><option value="veryfast">Быстро</option><option value="medium" selected>Обычно</option><option value="slow">Медленно, но меньше</option></select></label>
             </div>
+            <label class="sw" id="eHwRow" hidden><span class="txt"><span class="t-body-m">Кодировать видеокартой</span><span class="hint hw-hint"></span></span>
+          <input type="checkbox" class="hw-sw" id="hwEdit" checked><span class="track"></span></label>
             <div class="slider-row" id="eCrfRow">
               <div class="top"><label class="t-label-l muted" for="eCrf">Качество видео</label><span class="t-label-l" id="eCrfVal">23 · хорошее</span></div>
               <input type="range" id="eCrf" min="14" max="40" step="1" value="23" style="direction:rtl">
@@ -1272,6 +1277,7 @@ ul.files .up { width: 40px; height: 40px; }
 {% endif %}
 <script src="{{ url_for('static', filename='hints.js') }}"></script>
 <script>
+window.UNIVERSAL_TOKEN = {{ token|tojson }};   // только в окне приложения на этом компьютере: пускает отправлять файлы путями
 
 (() => {
   const $ = id => document.getElementById(id);
@@ -1719,6 +1725,24 @@ ul.files .up { width: 40px; height: 40px; }
     addFiles(dirPicker.files); dirPicker.value = '';
   });
 
+  // окно приложения выбирает файлы само и отдаёт пути: большое видео не копируется через браузер (на старом диске это минуты)
+  const PATH_KINDS = ['uni', 'pdf', 'ocr', 'stt', 'md'];       // режимы, где файл только читается
+  const nativePick = () => !!(window.UNIVERSAL_TOKEN && window.pywebview && window.pywebview.api && window.pywebview.api.pick_files);
+  function appendFiles(fd, list) {
+    list.forEach(f => { if (f._path) fd.append('paths', f._path); else fd.append('files', f, f.name); });
+  }
+  async function pickNative() {
+    const got = await window.pywebview.api.pick_files();
+    addFiles((got || []).map(g => {
+      const f = new File([], g.name); Object.defineProperty(f, 'size', { value: g.size }); f._path = g.path; return f;     // имя и размер настоящие, содержимое не нужно
+    }));
+  }
+  $('drop').addEventListener('click', e => {
+    if (e.target.closest('#pickDir') || !nativePick() || !PATH_KINDS.includes(MODES[mode()].kind)) return;
+    e.preventDefault(); e.stopPropagation();
+    pickNative().catch(() => picker.click());
+  }, true);
+
   // drag & drop, включая папки
   const drop = $('drop');
   ['dragenter', 'dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
@@ -1745,6 +1769,21 @@ ul.files .up { width: 40px; height: 40px; }
   });
   addEventListener('dragover', e => e.preventDefault());
   addEventListener('drop', e => e.preventDefault());
+
+  /* ---------- видеокарта и слабый ПК ---------- */
+  const hwOn = () => { try { return localStorage.getItem('hw') !== '0'; } catch (_) { return true; } };
+  function syncHw() {
+    const p = (caps && caps.engines.perf) || {}, labels = Object.values(p.hw || {}), has = labels.length > 0;
+    const m = typeof mode === 'function' ? mode() : '';
+    const text = has ? `Найдено: ${[...new Set(labels)].join(', ')}. Видео кодируется в разы быстрее, файл выходит чуть крупнее. Выключи, если на картинке артефакты.` : '';
+    [['hwRow', 'hwUni', m === 'video'], ['eHwRow', 'hwEdit', true]].forEach(([row, box, here]) => {
+      const r = $(row); if (!r) return;
+      r.hidden = !(has && here); r.querySelector('.hw-hint').textContent = text; $(box).checked = hwOn();
+    });
+    const sel = $('ePreset');      // слабый ПК: по умолчанию быстрое сжатие, пока человек не выбрал сам
+    if (sel && p.slow && !sel.dataset.set) { sel.value = 'veryfast'; sel.dataset.set = '1'; }
+  }
+  document.querySelectorAll('.hw-sw').forEach(b => b.addEventListener('change', () => { try { localStorage.setItem('hw', b.checked ? '1' : '0'); } catch (_) {} syncHw(); }));
 
   /* ---------- колесо форматов (как в Filee): зажми Ctrl, перетащи файлы и брось на нужный формат ---------- */
   const WHEEL = {
@@ -1805,9 +1844,9 @@ ul.files .up { width: 40px; height: 40px; }
     if (busy) return;
     if (!statusEl.offsetParent) goMode(kind === 'pdf' ? 'pdf' : kind === 'unknown' ? 'image' : kind);     // результат должен быть на виду
     busy = true; updateGo();
-    const fd = new FormData(); list.forEach(f => fd.append('files', f, f.name));
+    const fd = new FormData(); appendFiles(fd, list);
     if (kind === 'pdf') { fd.append('format', to); fd.append('dpi', '150'); fd.append('quality', '90'); fd.append('all_pages', '1'); }
-    else { fd.append('to', to); fd.append('quality', '90'); fd.append('density', '150'); fd.append('keep_metadata', '1'); }
+    else { fd.append('to', to); fd.append('quality', '90'); fd.append('density', '150'); fd.append('keep_metadata', '1'); fd.append('hw', hwOn() ? '1' : '0'); }
     setStatus('<span class="t-body-m">Отправляю файлы…</span><div class="progress busy"><i></i></div>');
     fetch(kind === 'pdf' ? '/api/convert' : '/api/universal', { method: 'POST', body: fd }).then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => {
       if (!ok || d.error) { busy = false; updateGo(); setStatus(`<ul class="errs"><li>${esc(d.error || 'Сервер вернул ошибку')}</li></ul>`); return; }
@@ -1911,7 +1950,7 @@ ul.files .up { width: 40px; height: 40px; }
       showDpi = !vector.includes(f); showQ = !noQuality.includes(f) || topdf;
     }
     $('dpiField').hidden = !showDpi; $('qField').hidden = !showQ; $('resizeRow').hidden = m !== 'image';
-    $('avBox').hidden = !showAV; $('metaRow').hidden = !showMeta;
+    $('avBox').hidden = !showAV; $('metaRow').hidden = !showMeta; syncHw();
     $('nameRow').hidden = !showName; $('nameHint').hidden = !showName;
     $('grayRow').hidden = noGray.includes(f) || uni;
 
@@ -2076,7 +2115,7 @@ ul.files .up { width: 40px; height: 40px; }
     if (k === 'qr' && qrKind() === 'doc') { qrDocApply(); return; }
     if (k === 'qr' && qrKind() !== 'list') { qrDownload(); return; }
     if (!files.length && !['dl', 'qr'].includes(k)) return;
-    files.forEach(f => fd.append('files', f, f.name));
+    appendFiles(fd, files);
     const dirs = [...new Set(files.map(f => f._dir).filter(Boolean))];
     if (dirs.length) fd.append('archive_name', dirs.length === 1 ? dirs[0] : `${dirs[0]} (+${dirs.length - 1})`);
 
@@ -2125,7 +2164,7 @@ ul.files .up { width: 40px; height: 40px; }
       fd.append('density', $('dpi').value);
       fd.append('bitrate', $('bitrate').value);
       fd.append('sample_rate', $('sampleRate').value);
-      fd.append('keep_metadata', $('keepMeta').checked ? '1' : '0');
+      fd.append('keep_metadata', $('keepMeta').checked ? '1' : '0'); fd.append('hw', hwOn() ? '1' : '0');
       fd.append('name_template', $('nameTpl').value || '%name%');
       fd.append('resize', m === 'image' ? ($('uniResize').value || 0) : 0);
     } else {
@@ -2150,6 +2189,7 @@ ul.files .up { width: 40px; height: 40px; }
     busy = true; updateGo();
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
+    if (fd.has('paths')) xhr.setRequestHeader('X-Universal-Token', window.UNIVERSAL_TOKEN || '');
     xhr.upload.onprogress = e => {
       if (!e.lengthComputable) return;
       const p = Math.round(e.loaded / e.total * 100);
@@ -2250,6 +2290,7 @@ ul.files .up { width: 40px; height: 40px; }
   const AUDIO_OUT = ['mp3', 'm4a', 'wav', 'flac', 'ogg', 'opus'];
   const CRF_NAMES = [[17, 'почти без потерь'], [20, 'отличное'], [24, 'хорошее'], [28, 'среднее'], [33, 'низкое'], [99, 'очень низкое']];
   function syncEdit() {
+    syncHw();
     const o = eOut(), audioOnly = AUDIO_OUT.includes(o), gif = o === 'gif';
     const anyVideo = files.some(f => (caps ? caps.categories.video.inputs : []).includes(extOf(f.name)));
     $('eVideoSect').hidden = audioOnly || (o === 'same' && files.length > 0 && !anyVideo);
@@ -2277,7 +2318,7 @@ ul.files .up { width: 40px; height: 40px; }
     fd.append('speed', v('eSpeed')); fd.append('volume', v('eVol'));
     fd.append('normalize', $('eNorm').checked ? '1' : '0'); fd.append('mute', $('eMute').checked ? '1' : '0');
     fd.append('fade_in', v('eFadeIn') || 0); fd.append('fade_out', v('eFadeOut') || 0);
-    fd.append('vcodec', v('eCodec')); fd.append('preset', v('ePreset')); fd.append('crf', v('eCrf'));
+    fd.append('vcodec', v('eCodec')); fd.append('preset', v('ePreset')); fd.append('hw', hwOn() ? '1' : '0'); fd.append('crf', v('eCrf'));
     fd.append('target_mb', v('eTarget')); fd.append('abitrate', v('eAbr'));
     fd.append('name_template', v('eName') || '%name%_edit');
     if (files[0]) fd.append('merge_name', files[0].name.replace(/\.[^.]+$/, '') + '_merged');
@@ -2756,7 +2797,12 @@ ul.files .up { width: 40px; height: 40px; }
   $('qrLinks').addEventListener('input', updateGo);
 
   /* ---------- старт ---------- */
-  fetch('/api/formats').then(r => r.json()).then(d => { caps = d; applyMode(); }).catch(() => { applyMode(); });
+  // пока ищется видеокарта для кодирования (пробы идут в фоне), спрашиваем ещё раз, но недолго
+  const loadCaps = (tries = 0) => fetch('/api/formats').then(r => r.json()).then(d => {
+    caps = d; applyMode();
+    if (d.engines.perf && d.engines.perf.checking && tries < 6) setTimeout(() => loadCaps(tries + 1), 3000);
+  }).catch(() => { applyMode(); });
+  loadCaps();
 
   /* ---------- первый запуск: недостающие движки ставятся сами, здесь только прогресс ---------- */
   function watchSetup(d) {

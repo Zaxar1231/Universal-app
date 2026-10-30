@@ -20,6 +20,7 @@ import tempfile
 from functools import lru_cache
 from pathlib import Path
 
+import perf
 from converters import AUDIO, AUDIO_CODECS, AUDIO_MUXER, OUT_EXT, VIDEO, ConvertError
 from tasks import Cancelled, Task
 
@@ -195,7 +196,8 @@ def read_opts(form) -> dict:
         "out": (form.get("out") or "same").lower(),
         "vcodec": (form.get("vcodec") or "auto").lower(),
         "crf": num("crf", 23, 0, 51, int),
-        "preset": form.get("preset") or "medium",
+        "preset": form.get("preset") or perf.default_preset(),
+        "hw": form.get("hw", "1") != "0",
         "target_mb": num("target_mb", 0, 0, 100000),
         "height": num("height", 0, 0, 4320, int),
         "fps": num("fps", 0, 0, 240),
@@ -249,6 +251,33 @@ def _pick_vcodec(to: str, wanted: str) -> str:
     allowed = CONTAINER_VCODECS[to]
     codec = wanted if wanted in allowed else allowed[0]
     return codec
+
+
+def _hw_video_args(codec: str, o: dict, out_dur: float, a_kbps: int) -> list[str] | None:
+    """То же, что _video_codec_args, но кодирует видеокарта (None: нет видеокарты или выключено)."""
+    if not o.get("hw", True) or codec not in ("h264", "h265"):
+        return None
+    if o["target_mb"] > 0 and out_dur > 0:
+        v_kbps = int(o["target_mb"] * 8192 / out_dur * 0.97 - a_kbps)
+        args = perf.hw_args(codec, kbps=v_kbps) if v_kbps >= 50 else None
+        return args + ["-maxrate", f"{int(v_kbps * 1.4)}k", "-bufsize", f"{v_kbps * 2}k", "-pix_fmt", "yuv420p"] if args else None
+    args = perf.hw_args(codec, quality=o["crf"])
+    return args + ["-pix_fmt", "yuv420p"] if args else None
+
+
+def _run_with_hw(cmd: list[str], alt: list[str] | None, out: Path, out_dur: float, task, base: float = 0.0, span: float = 1.0) -> None:
+    """Сначала с видеокартой (alt), если она не справилась, то тот же файл процессором."""
+    if alt:
+        try:
+            run_ffmpeg(alt, out_dur, task, base, span)
+            if out.exists() and out.stat().st_size > 0:
+                return
+        except ConvertError:
+            pass
+        out.unlink(missing_ok=True)
+        if task:
+            task.update(base)
+    run_ffmpeg(cmd, out_dur, task, base, span)
 
 
 def _video_codec_args(codec: str, o: dict, out_dur: float, a_kbps: int) -> list[str]:
@@ -430,12 +459,16 @@ def edit_file(src: Path, out_dir: Path, stem: str, o: dict, task: Task | None = 
     if to == "gif":
         cmd += ["-loop", "0"]
     elif video_out:
-        cmd += _video_codec_args(_pick_vcodec(to, o["vcodec"]), o, out_dur, a_kbps if use_audio else 0)
+        vcodec = _pick_vcodec(to, o["vcodec"])
+        vpos, sw = len(cmd), _video_codec_args(vcodec, o, out_dur, a_kbps if use_audio else 0)
+        hw = _hw_video_args(vcodec, o, out_dur, a_kbps if use_audio else 0)
+        cmd += sw
         if to in ("mp4", "mov"):
             cmd += ["-movflags", "+faststart"]
     cmd += a_args
     cmd += ["-map_metadata", "0", str(out)]
-    run_ffmpeg(cmd, out_dur, task, base, span)
+    alt = (cmd[:vpos] + hw + cmd[vpos + len(sw):]) if (video_out and to != "gif" and hw) else None
+    _run_with_hw(cmd, alt, out, out_dur, task, base, span)
     if not out.exists() or out.stat().st_size == 0:
         out.unlink(missing_ok=True)
         raise ConvertError("ffmpeg ничего не записал")
@@ -507,13 +540,17 @@ def merge_files(srcs: list[Path], out_dir: Path, stem: str, o: dict, task: Task 
     if to == "gif":
         cmd += ["-loop", "0"]
     elif video_out:
-        cmd += _video_codec_args(_pick_vcodec(to, o["vcodec"]), o, out_dur, a_kbps)
+        vcodec = _pick_vcodec(to, o["vcodec"])
+        vpos, sw = len(cmd), _video_codec_args(vcodec, o, out_dur, a_kbps)
+        hw = _hw_video_args(vcodec, o, out_dur, a_kbps)
+        cmd += sw
         if to in ("mp4", "mov"):
             cmd += ["-movflags", "+faststart"]
     cmd += a_args
     out = out_dir / f"{stem}.{OUT_EXT.get(to, to)}"
     cmd.append(str(out))
-    run_ffmpeg(cmd, out_dur, task)
+    alt = (cmd[:vpos] + hw + cmd[vpos + len(sw):]) if (video_out and to != "gif" and hw) else None
+    _run_with_hw(cmd, alt, out, out_dur, task)
     return out
 
 

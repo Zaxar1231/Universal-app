@@ -16,6 +16,7 @@ import urllib.request
 from pathlib import Path
 
 import diarize
+import perf
 import engines
 import net
 from tasks import Task
@@ -229,7 +230,7 @@ def transcribe(src: Path, key: str, lang: str, task: Task | None = None, base: f
         raise SttError("в файле нет звука или он короче 0,1 секунды")
     model = _model(key)
     try:
-        segments, info = model.transcribe(audio, language=lang or None, beam_size=5,
+        segments, info = model.transcribe(audio, language=lang or None, beam_size=perf.whisper_beam(),
                                           condition_on_previous_text=False)
     except Exception as e:
         raise SttError(f"распознавание не удалось ({e.__class__.__name__}: {str(e)[:120]})")

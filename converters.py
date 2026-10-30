@@ -19,6 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import perf
+
 # ----------------------------------------------------------------------------
 # Наборы форматов (из VERT)
 # ----------------------------------------------------------------------------
@@ -164,7 +166,8 @@ class ConvertError(Exception):
 def _run(cmd: list[str], timeout: int = 3600) -> subprocess.CompletedProcess:
     # вывод программ читаем как UTF-8: с кодировкой Windows (cp1252) поток чтения падал, и stdout терялся
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+        return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
+                              env=perf.child_env())
     except subprocess.TimeoutExpired:
         raise ConvertError("Слишком долго конвертируется (таймаут)")
     except FileNotFoundError:
@@ -249,6 +252,27 @@ def _duration(path: Path) -> float:
         return 0.0
 
 
+def _hw_variant(cmd: list[str]) -> list[str] | None:
+    """Та же команда ffmpeg, но H.264/H.265 кодирует видеокарта (если она есть). Настройки x264 (preset, crf) убираются."""
+    try:
+        i = cmd.index("-c:v")
+    except ValueError:
+        return None
+    codec = {"libx264": "h264", "libx265": "h265"}.get(cmd[i + 1] if i + 1 < len(cmd) else "")
+    hw = perf.hw_args(codec, quality=23) if codec else None
+    if not hw:
+        return None
+    rest, skip = [], False
+    for a in cmd[i + 2:]:
+        if skip:
+            skip = False
+        elif a in ("-preset", "-crf"):
+            skip = True
+        else:
+            rest.append(a)
+    return cmd[:i] + hw + rest
+
+
 def _run_progress(cmd: list[str], duration: float, progress) -> subprocess.CompletedProcess:
     """ffmpeg с -progress: progress(доля 0..1) по мере кодирования. Ошибки — как у _run."""
     import tempfile
@@ -284,7 +308,7 @@ def _has_video_stream(path: Path) -> bool:
 
 def convert_media(src: Path, dst_dir: Path, stem: str, to: str, *,
                   bitrate: str = "auto", sample_rate: str = "auto",
-                  keep_metadata: bool = True, progress=None) -> Path:
+                  keep_metadata: bool = True, progress=None, hw: bool = True) -> Path:
     """Аудио/видео -> аудио/видео. Логика выбора параметров повторяет VERT."""
     if not _which("ffmpeg"):
         raise ConvertError("ffmpeg не найден в PATH")
@@ -339,6 +363,7 @@ def convert_media(src: Path, dst_dir: Path, stem: str, to: str, *,
                   if a not in ("-b:a",) and not (i and a_args[i - 1] == "-b:a")]
 
     base = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"]
+    try_hw = False
 
     if src_is_video and not dst_is_video:
         # видео -> аудио: вытаскиваем первую звуковую дорожку
@@ -364,10 +389,11 @@ def convert_media(src: Path, dst_dir: Path, stem: str, to: str, *,
         cmd += meta_args + a_args
     elif dst_is_video:
         # видео -> видео
+        try_hw = hw
         vcodec, acodec = VIDEO_CODECS.get(to, ("libx264", "aac"))
         cmd = base + ["-i", str(src), "-c:v", vcodec, "-c:a", acodec]
         if vcodec == "libx264" or vcodec == "libx265":
-            cmd += ["-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "23"]
+            cmd += ["-pix_fmt", "yuv420p", "-preset", perf.default_preset(), "-crf", "23"]
         if vcodec == "libvpx":
             cmd += ["-b:v", "2M", "-crf", "10"]
         if vcodec == "mpeg2video" and to == "mxf":
@@ -397,7 +423,14 @@ def convert_media(src: Path, dst_dir: Path, stem: str, to: str, *,
         cmd += ["-f", VIDEO_MUXER[to]]
     cmd.append(str(out))
     duration = _duration(src) if progress else 0.0
-    res = _run_progress(cmd, duration, progress) if duration > 0 else _run(cmd)
+
+    def encode(c):
+        return _run_progress(c, duration, progress) if duration > 0 else _run(c)
+    hw_cmd = _hw_variant(cmd) if try_hw else None
+    res = encode(hw_cmd or cmd)
+    if hw_cmd and (res.returncode != 0 or not out.exists() or out.stat().st_size == 0):
+        out.unlink(missing_ok=True)         # видеокарта не справилась (драйвер, редкий формат): тот же файл процессором
+        res = encode(cmd)
     if res.returncode != 0 or not out.exists() or out.stat().st_size == 0:
         out.unlink(missing_ok=True)
         err = _last_error(res, "ffmpeg завершился с ошибкой")
@@ -711,7 +744,7 @@ def convert_any(src: Path, dst_dir: Path, stem: str, to: str, opts: dict, progre
         return convert_media(src, dst_dir, stem, to,
                              bitrate=str(opts.get("bitrate", "auto")),
                              sample_rate=str(opts.get("sample_rate", "auto")),
-                             keep_metadata=common_meta, progress=progress)
+                             keep_metadata=common_meta, progress=progress, hw=bool(opts.get("hw", True)))
     if cat == "image":
         if dst_cat != "image":
             raise ConvertError(f"Из картинки нельзя сделать .{to}")

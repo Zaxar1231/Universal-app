@@ -9,12 +9,15 @@ import io
 import re
 from pathlib import Path
 
-try:
-    from pypdf import PdfReader, PdfWriter  # type: ignore
+import lazy
+
+pypdf = lazy.Module("pypdf")            # грузится при первой работе с PDF, а не при запуске приложения
+
+
+def _errors():
+    """(PdfReadError, DependencyError) из pypdf."""
     from pypdf.errors import DependencyError, PdfReadError  # type: ignore
-except ImportError:
-    PdfReader = PdfWriter = None
-    PdfReadError = DependencyError = Exception
+    return PdfReadError, DependencyError
 
 from tasks import Task
 
@@ -26,7 +29,7 @@ class PdfError(Exception):
 
 
 def available() -> bool:
-    return PdfReader is not None
+    return bool(pypdf)
 
 
 def parse_ranges(spec: str, total: int) -> list[int]:
@@ -56,10 +59,10 @@ def parse_ranges(spec: str, total: int) -> list[int]:
     return pages
 
 
-def _open(path: Path, password: str = "") -> "PdfReader":
+def _open(path: Path, password: str = "") -> "pypdf.PdfReader":
     try:
-        r = PdfReader(str(path))
-    except (PdfReadError, ValueError, OSError) as e:
+        r = pypdf.PdfReader(str(path))
+    except (_errors()[0], ValueError, OSError) as e:
         raise PdfError(f"Не открылся как PDF: {str(e)[:120]}")
     if r.is_encrypted:
         if not password:
@@ -73,7 +76,7 @@ def _open(path: Path, password: str = "") -> "PdfReader":
     return r
 
 
-def _save(w: "PdfWriter", out: Path) -> Path:
+def _save(w: "pypdf.PdfWriter", out: Path) -> Path:
     w.compress_identical_objects()
     with out.open("wb") as f:
         w.write(f)
@@ -81,7 +84,7 @@ def _save(w: "PdfWriter", out: Path) -> Path:
 
 
 def merge(srcs: list[Path], out: Path, password: str = "") -> Path:
-    w = PdfWriter()
+    w = pypdf.PdfWriter()
     for p in srcs:
         w.append(_open(p, password))
     return _save(w, out)
@@ -93,7 +96,7 @@ def split(src: Path, out_dir: Path, stem: str, password: str = "", ranges: str =
     width = len(str(len(r.pages)))
     outs = []
     for i in pages:
-        w = PdfWriter()
+        w = pypdf.PdfWriter()
         w.add_page(r.pages[i])
         outs.append(_save(w, out_dir / f"{stem}_p{i + 1:0{width}d}.pdf"))
     return outs
@@ -101,7 +104,7 @@ def split(src: Path, out_dir: Path, stem: str, password: str = "", ranges: str =
 
 def extract(src: Path, out: Path, ranges: str, password: str = "") -> Path:
     r = _open(src, password)
-    w = PdfWriter()
+    w = pypdf.PdfWriter()
     for i in parse_ranges(ranges, len(r.pages)):
         w.add_page(r.pages[i])
     return _save(w, out)
@@ -112,7 +115,7 @@ def rotate(src: Path, out: Path, angle: int, ranges: str = "", password: str = "
         raise PdfError("Поворот бывает 90, 180 или 270 градусов")
     r = _open(src, password)
     chosen = set(parse_ranges(ranges, len(r.pages)))
-    w = PdfWriter()
+    w = pypdf.PdfWriter()
     for i, page in enumerate(r.pages):
         w.add_page(page)
         if i in chosen:
@@ -125,7 +128,7 @@ def compress(src: Path, out: Path, quality: int = 70, max_px: int = 1600, passwo
     from PIL import Image
 
     r = _open(src, password)
-    w = PdfWriter(clone_from=r)
+    w = pypdf.PdfWriter(clone_from=r)
     for page in w.pages:
         page.compress_content_streams()
         for img in page.images:
@@ -153,7 +156,7 @@ def protect(src: Path, out: Path, new_password: str, password: str = "") -> Path
     if not new_password:
         raise PdfError("Придумай пароль")
     r = _open(src, password)
-    w = PdfWriter(clone_from=r)
+    w = pypdf.PdfWriter(clone_from=r)
     w.encrypt(user_password=new_password, owner_password=new_password, algorithm="AES-256")
     with out.open("wb") as f:
         w.write(f)
@@ -162,7 +165,7 @@ def protect(src: Path, out: Path, new_password: str, password: str = "") -> Path
 
 def unlock(src: Path, out: Path, password: str) -> Path:
     r = _open(src, password)
-    w = PdfWriter(clone_from=r)
+    w = pypdf.PdfWriter(clone_from=r)
     return _save(w, out)
 
 
@@ -230,7 +233,7 @@ def run_pdf_task(task: Task, items: list[tuple[Path, str]], o: dict, merge_name:
                 task.done += 1
             except PdfError as e:
                 task.failed.append({"name": src.name, "error": str(e)})
-            except DependencyError:
+            except _errors()[1]:
                 task.failed.append({"name": src.name, "error": "Для шифрованных PDF нужен пакет cryptography: pip install cryptography"})
             except Exception as e:  # битый PDF не должен валить пачку
                 task.failed.append({"name": src.name, "error": f"Не удалось обработать: {str(e)[:150]}"})
