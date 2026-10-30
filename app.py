@@ -828,7 +828,9 @@ def run_convert_task(task: Task, items: list, to: str, opts: dict, template: str
         except conv.ConvertError as e:
             return {"name": src.name, "error": str(e)}
         except Exception as e:  # неожиданная ошибка одного файла не должна валить пачку
-            return {"name": src.name, "error": f"Внутренняя ошибка: {e.__class__.__name__}"}
+            import traceback
+            traceback.print_exc()           # причину надо видеть в журнале, а не только название ошибки
+            return {"name": src.name, "error": f"Внутренняя ошибка: {e.__class__.__name__}: {str(e)[:160]}"}
         finally:
             partial.pop(key, None)
         return {}
