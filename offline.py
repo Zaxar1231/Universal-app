@@ -49,14 +49,17 @@ def pending(bundle: Path | None = None) -> list[tuple[Path, Path]]:
     return [(s, d) for s, d in _units(bundle) if not d.exists()] if bundle else []
 
 
-def seed() -> list[str]:
+def seed(progress=None) -> list[str]:
     """Раскладывает офлайн-набор. -> имена того, что разложено. Ошибка одной части не мешает остальным."""
     bundle = bundle_dir()
     if not bundle:
         return []
     move = _installed(bundle)
     done = []
-    for src, dst in pending(bundle):
+    todo = pending(bundle)
+    for n, (src, dst) in enumerate(todo, 1):
+        if progress:
+            progress(n, len(todo), dst.name)
         try:
             dst.parent.mkdir(parents=True, exist_ok=True)
             tmp = dst.with_name(dst.name + ".seed")

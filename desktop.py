@@ -242,19 +242,57 @@ def main() -> None:
         os.environ["PATH"] = os.pathsep.join(extra + [os.environ.get("PATH", "")])
     os.environ.setdefault("WORK_DIR", str(home / "jobs"))
     os.environ["UNIVERSAL_DESKTOP"] = "1"
-    import offline
-    offline.seed()                # офлайн-сборка: движки и модели из папки приложения, до проверки «чего не хватает»
-    engines.activate()            # PATH к движкам и свежий yt-dlp, до импорта app
+    if "--smoke" in sys.argv or "--browser" in sys.argv:
+        webapp, server, url = _boot()
+        if "--smoke" in sys.argv:
+            code = smoke(url)
+            server.shutdown()
+            sys.exit(code)
+        _browser_mode(url, "запуск с --browser", webapp)
+        server.shutdown()
+        return
+    if sys.platform == "win32" and not _ensure_webview2():
+        webapp, server, url = _boot()
+        _browser_mode(url, "нет Microsoft WebView2", webapp)
+        server.shutdown()
+        return
+    _run_window(home)
 
+
+SPLASH = """<!doctype html><meta charset="utf-8"><title>Universal</title>
+<style>
+html,body{height:100%;margin:0}
+body{display:grid;place-items:center;background:#F4FBFA;color:#161d1c;font:15px/1.4 system-ui,Segoe UI,sans-serif}
+@media (prefers-color-scheme:dark){body{background:#0e1514;color:#dde4e2}}
+main{text-align:center}
+h1{font-size:28px;font-weight:600;margin:0 0 18px}
+i{display:block;width:34px;height:34px;margin:0 auto 14px;border:3px solid #006a6044;border-top-color:#006a60;border-radius:50%;animation:s 0.9s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+p{margin:0;opacity:.7}
+</style><main><h1>Universal</h1><i></i><p id="m">Запускаю…</p></main>"""
+
+
+def _boot(progress=None):
+    """Всё тяжёлое при запуске: набор офлайн, движки, сервер. -> (webapp, server, url).
+    Окно к этому моменту уже может быть открыто (заставка), поэтому на медленном ПК человек сразу видит приложение."""
+    say = progress or (lambda _m: None)
+    import offline
+    offline.seed(lambda i, n, name: say(f"Раскладываю набор для работы без интернета, один раз: {i} из {n}"))   # до проверки «чего не хватает»
+    say("Запускаю…")
+    engines.activate()            # PATH к движкам и свежий yt-dlp, до импорта app
     import app as webapp
 
     server, port = _listen(webapp.app)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{port}/"
     _wait(url + "api/engines")
+    import perf
+    perf.warm()                   # есть ли видеокарта для кодирования: пробы идут в фоне, пока человек выбирает файлы
+
     def quit_app():
         # обновление на Windows: установщик ждёт, пока приложение закроется
         try:
+            import webview  # type: ignore
             for w in list(webview.windows):
                 w.destroy()
         finally:
@@ -264,33 +302,71 @@ def main() -> None:
         import phoneserver
         phoneserver.autostart(webapp.app)     # «Сервер для телефона» был включён — включаем снова
         webapp.start_setup()                  # первый запуск: недостающие движки докачиваются сами
-    if "--smoke" in sys.argv:
-        code = smoke(url)
-        server.shutdown()
-        sys.exit(code)
+    return webapp, server, url
 
-    if "--browser" in sys.argv:
-        _browser_mode(url, "запуск с --browser", webapp)
-        server.shutdown()
-        return
-    if sys.platform == "win32" and not _ensure_webview2():
-        _browser_mode(url, "нет Microsoft WebView2", webapp)
-        server.shutdown()
-        return
+
+class Api:
+    """Что страница может попросить у окна приложения. Публичные методы доступны из JavaScript: pywebview.api.pick_files()."""
+
+    def __init__(self):
+        self._window = None                # с подчёркиванием: pywebview не должен выставлять окно в страницу
+
+    def pick_files(self):
+        """Диалог выбора файлов самой системы. Возвращает пути: файл читается на месте, без копирования через браузер."""
+        import webview  # type: ignore
+        kind = webview.FileDialog.OPEN if hasattr(webview, "FileDialog") else webview.OPEN_DIALOG
+        chosen = self._window.create_file_dialog(kind, allow_multiple=True) if self._window else None
+        out = []
+        for p in chosen or []:
+            try:
+                out.append({"path": str(p), "name": os.path.basename(str(p)), "size": os.path.getsize(p)})
+            except OSError:
+                continue
+        return out
+
+
+def _run_window(home) -> None:
+    """Окно с заставкой открывается сразу, сервер поднимается рядом и потом подставляет в окно приложение."""
+    state: dict = {}
     try:
         import webview  # type: ignore
         webview.settings["ALLOW_DOWNLOADS"] = True
-        webview.create_window("Universal", url, width=1280, height=860, min_size=(420, 600),
-                              background_color="#F4FBFA", text_select=True)
+        api = Api()
+        window = webview.create_window("Universal", html=SPLASH, width=1280, height=860, min_size=(420, 600),
+                                       background_color="#F4FBFA", text_select=True, js_api=api)
+        api._window = window
+
+        def say(msg: str) -> None:
+            try:
+                window.evaluate_js(f"document.getElementById('m').textContent={json_str(msg)}")
+            except Exception:
+                pass
+
+        def boot() -> None:
+            try:
+                state["webapp"], state["server"], state["url"] = _boot(say)
+                window.load_url(state["url"])
+            except BaseException as e:
+                state["error"] = e
+                try:
+                    window.destroy()
+                except Exception:
+                    pass
         # private_mode=False: localStorage (цвет оформления) переживает перезапуск;
         # edgechromium: никогда не откатываться на Internet Explorer
         gui = "edgechromium" if sys.platform == "win32" else None
-        webview.start(gui=gui, private_mode=False, storage_path=str(home / "webview"))
+        webview.start(boot, gui=gui, private_mode=False, storage_path=str(home / "webview"))
     except Exception as e:
         import traceback
         traceback.print_exc()
-        _browser_mode(url, f"{e.__class__.__name__}: {str(e)[:150]}", webapp)
-    server.shutdown()
+        if "error" not in state:
+            if "url" not in state:
+                state["webapp"], state["server"], state["url"] = _boot()
+            _browser_mode(state["url"], f"{e.__class__.__name__}: {str(e)[:150]}", state["webapp"])
+    if "server" in state:
+        state["server"].shutdown()
+    if "error" in state:
+        raise state["error"]
 
 
 def _crash(e: BaseException) -> None:

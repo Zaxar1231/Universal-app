@@ -21,6 +21,7 @@ import io
 import mimetypes
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -50,6 +51,7 @@ import filetools
 import engines as engine_store
 import ocr
 import pdftools
+import perf
 import phoneserver
 import qrdoc
 import qrtools
@@ -86,6 +88,51 @@ def _local_only() -> None:
     """Включать и выключать сервер для телефона можно только с самого компьютера, не с телефона."""
     if request.environ.get(phoneserver.MARK) or request.remote_addr not in ("127.0.0.1", "::1"):
         abort(403)
+
+# ---------- файлы по пути (окно приложения на этом компьютере): без копирования через браузер ----------
+
+LOCAL_TOKEN = secrets.token_hex(16)      # страница получает его только в окне приложения; чужие сайты его не знают
+
+
+def _paths_allowed() -> bool:
+    """Пути к файлам принимаем только от окна приложения: настольная версия, этот же компьютер, свой токен в заголовке."""
+    if not os.environ.get("UNIVERSAL_DESKTOP") or request.environ.get(phoneserver.MARK):
+        return False
+    if request.remote_addr not in ("127.0.0.1", "::1"):
+        return False
+    return hmac.compare_digest(request.headers.get("X-Universal-Token", ""), LOCAL_TOKEN)
+
+
+class LocalFile:
+    """Как загруженный файл, но лежит на этом компьютере: save() делает жёсткую ссылку (мгновенно, места не занимает),
+    а если диски разные, копирует. Исходный файл только читается."""
+
+    def __init__(self, path: str):
+        self.path = Path(path)
+        self.filename = self.path.name
+
+    def save(self, dst) -> None:
+        try:
+            os.link(self.path, dst)
+        except OSError:
+            shutil.copyfile(self.path, dst)
+
+
+def _uploaded() -> list:
+    """Файлы запроса: загруженные браузером и (для окна приложения) переданные путями. Только для маршрутов,
+    которые файл лишь читают: ссылка на оригинал не должна меняться."""
+    files = [f for f in request.files.getlist("files") if f.filename]
+    paths = request.form.getlist("paths")
+    if paths:
+        if not _paths_allowed():
+            abort(403)
+        for p in paths[:1000]:
+            lf = LocalFile(p)
+            if not lf.path.is_absolute() or not lf.path.is_file():
+                abort(400, description=f"Файл не найден: {p}")
+            files.append(lf)
+    return files
+
 
 # формат -> (расширение, аргументы pdftoppm / pdftocairo)
 # pdftoppm умеет png, jpeg, tiff. Остальное делаем через pdftocairo.
@@ -327,8 +374,10 @@ def convert_one(pdf: Path, out_dir: Path, fmt: str, dpi: int, quality: int,
 
 @app.route("/")
 def index():
+    local = bool(os.environ.get("UNIVERSAL_DESKTOP")) and request.remote_addr in ("127.0.0.1", "::1") \
+        and not request.environ.get(phoneserver.MARK)
     return render_template("index.html", formats=list(FORMATS.keys()), poppler=poppler_ok(),
-                           android=bool(os.environ.get("UNIVERSAL_ANDROID")))
+                           android=bool(os.environ.get("UNIVERSAL_ANDROID")), token=LOCAL_TOKEN if local else "")
 
 
 @app.route("/api/status")
@@ -362,7 +411,7 @@ def convert():
     if a4_orient not in ("auto", "portrait", "landscape"):
         a4_orient = "auto"
 
-    files = [f for f in request.files.getlist("files") if f.filename]
+    files = _uploaded()
     if not files:
         return jsonify({"error": "Файлы не выбраны"}), 400
 
@@ -696,7 +745,7 @@ def formats():
                 "platform": sys.platform,
                 "deno": bool(shutil.which("deno")),
                 "ocr": ocr.available(), "ocrmypdf": bool(ocr.version()), "tesseract": bool(ocr.tesseract()),
-                "ocr_info": ocr.status(), "stt": stt.caps(),
+                "ocr_info": ocr.status(), "stt": stt.caps(), "perf": perf.status(),
                 "desktop": bool(os.environ.get("UNIVERSAL_DESKTOP")), "version": updater.VERSION})
     cats = {}
     for name, table in conv.CATEGORIES.items():
@@ -732,6 +781,7 @@ def universal():
             "sample_rate": request.form.get("sample_rate", "auto"),
             "keep_metadata": request.form.get("keep_metadata", "1") == "1",
             "resize": num("resize", 0, 0, 20000),
+            "hw": request.form.get("hw", "1") != "0",
         }
         if opts["bitrate"] != "auto":
             opts["bitrate"] = str(num("bitrate", 128, 8, 640))
@@ -741,7 +791,7 @@ def universal():
         return jsonify({"error": "Числовые настройки заданы неверно"}), 400
     template = request.form.get("name_template", "%name%")
 
-    files = [f for f in request.files.getlist("files") if f.filename]
+    files = _uploaded()
     if not files:
         return jsonify({"error": "Файлы не выбраны"}), 400
 
@@ -766,6 +816,7 @@ def run_convert_task(task: Task, items: list, to: str, opts: dict, template: str
         src, stem = t
         if task.cancel_event.is_set():
             return None
+        perf.set_threads(threads)
         out_stem = apply_name_template(template, stem)
         key = id(t)
 
@@ -784,7 +835,8 @@ def run_convert_task(task: Task, items: list, to: str, opts: dict, template: str
 
     # видео тяжёлое: меньше потоков, чтобы не съесть весь процессор
     heavy = any(conv.category_of(t[0].suffix) in ("video",) for t in items)
-    workers = max(1, min(2 if heavy else 8, os.cpu_count() or 2))
+    workers = max(1, min(perf.heavy_workers() if heavy else 8, perf.machine()["cores"]))
+    threads = perf.split_threads(workers)       # каждой программе доля ядер, а не все ядра сразу: так быстрее
     finished = 0
     task.update(0, f"Конвертирую {n} файлов в {to.upper()}…" if n > 1 else f"Конвертирую в {to.upper()}…")
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -1296,7 +1348,7 @@ def ocr_run():
         opts = ocr.read_opts(request.form)
     except ocr.OcrError as e:
         return jsonify({"error": str(e)}), 400
-    files = [f for f in request.files.getlist("files") if f.filename]
+    files = _uploaded()
     if not files:
         return jsonify({"error": "Файлы не выбраны"}), 400
     job_id, job_dir, archive = new_job(request.form.get("archive_name", "") or "ocr")
@@ -1314,7 +1366,7 @@ def stt_run():
         opts = stt.read_opts(request.form)
     except stt.SttError as e:
         return jsonify({"error": str(e)}), 400
-    files = [f for f in request.files.getlist("files") if f.filename]
+    files = _uploaded()
     if not files:
         return jsonify({"error": "Файлы не выбраны"}), 400
     job_id, job_dir, archive = new_job(request.form.get("archive_name", "") or "text")
@@ -1357,7 +1409,7 @@ def md_run():
     if not mdconv.supported():
         return jsonify({"error": "Здесь этот режим недоступен"}), 400
     opts = mdconv.read_opts(request.form)
-    files = [f for f in request.files.getlist("files") if f.filename]
+    files = _uploaded()
     if not files:
         return jsonify({"error": "Файлы не выбраны"}), 400
     bad = [f.filename for f in files if not mdconv.can_read(f.filename)]

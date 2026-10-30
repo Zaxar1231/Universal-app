@@ -24,12 +24,18 @@ if __name__ == "__main__" and "--worker" in sys.argv:
 
 from tasks import Cancelled, Task, kill_tree
 
-try:
-    import yt_dlp  # type: ignore
-    from yt_dlp.utils import DownloadCancelled, DownloadError  # type: ignore
-except ImportError:  # интерфейс покажет баннер
-    yt_dlp = None
-    DownloadCancelled = DownloadError = Exception
+import lazy
+
+yt_dlp = lazy.Module("yt_dlp")          # грузится при первом скачивании, а не при запуске (секунды на старом ПК)
+
+
+def _download_error() -> type:
+    """Исключение yt-dlp (если библиотеки нет, интерфейс покажет баннер и до сюда дело не дойдёт)."""
+    try:
+        from yt_dlp.utils import DownloadError  # type: ignore
+        return DownloadError
+    except ImportError:
+        return Exception
 
 QUALITIES = ["best", "2160", "1440", "1080", "720", "480", "360"]
 CONTAINERS = ["mp4", "mkv", "webm"]
@@ -42,7 +48,7 @@ class DownloadFail(Exception):
 
 
 def available() -> bool:
-    return yt_dlp is not None
+    return bool(yt_dlp)
 
 
 def version() -> str:
@@ -190,7 +196,7 @@ def probe_url(url: str, cookiefile: Path | None = None, net: dict | None = None)
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
             break
-        except DownloadError as e:
+        except _download_error() as e:
             err = opts["logger"].last_error or str(e)
             if k + 1 == len(attempts) or not _is_net_error(err.lower()):
                 raise DownloadFail(_human_error(err))
@@ -405,7 +411,7 @@ def _download_all(urls: list[str], o: dict, out: Path, cookiefile: Path | None, 
                 emit({"done": url})
                 break
             except Exception as e:  # одна ссылка не должна валить всю пачку
-                err = (logger.last_error or str(e)) if isinstance(e, DownloadError) else str(e)
+                err = (logger.last_error or str(e)) if isinstance(e, _download_error()) else str(e)
                 if k + 1 < len(attempts) and _is_net_error(err.lower()):
                     emit({"message": f"Через системный прокси не вышло, пробую напрямую: {state['title']}"})
                     continue
