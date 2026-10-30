@@ -39,6 +39,16 @@ def streams(path):
     return json.loads(res.stdout)
 
 
+@pytest.fixture(autouse=True)
+def _keep_path_clean():
+    """Установка движков (engines._register) дописывает папку в PATH процесса. Папки временные, и поддельный magick.exe одного
+    теста перехватывал бы настоящий в следующих (на Windows это WinError 216), поэтому PATH после каждого теста возвращается."""
+    saved = os.environ.get("PATH")
+    yield
+    if saved is not None:
+        os.environ["PATH"] = saved
+
+
 @pytest.fixture(scope="session")
 def media(tmp_path_factory):
     d = tmp_path_factory.mktemp("media")
